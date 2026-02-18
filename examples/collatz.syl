@@ -1,0 +1,11 @@
+external print_int : int -> unit = syl_print_int;;
+
+fun collatz (x : int) : int =
+  if x == 1
+  then 0
+  else if x % 2 == 0
+       then 1 + collatz (x / 2)
+       else 1 + collatz (3 * x + 1)
+;;
+ 
+let _ = print_int (collatz 27);;

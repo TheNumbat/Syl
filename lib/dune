@@ -1,0 +1,5 @@
+(library
+ (name syl)
+ (libraries core core_kernel.nonempty_list core_kernel.vec)
+ (preprocess
+  (pps ppx_jane)))

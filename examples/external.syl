@@ -1,0 +1,2 @@
+external f : int -> int = syl_print_int;;
+let _ = (f @ erased) 0;;

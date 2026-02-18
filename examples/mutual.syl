@@ -1,0 +1,15 @@
+external print_int : int -> unit = syl_print_int;;
+
+fun first (x : int) : int =
+    if x == 1 then 0
+    else if x % 2 == 0
+         then 1 + first (x / 2)
+         else 1 + second (3 * x + 1)
+and second (x : int) : int =
+    if x == 1 then 0
+    else if x % 2 == 0
+         then 1 + second (x / 2)
+         else 1 + first (3 * x + 1)
+;;
+
+let _ = print_int (first 27);;

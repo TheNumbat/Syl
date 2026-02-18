@@ -1,0 +1,12 @@
+let dynamize =
+    fn (static poly_f : static erased type \ t -> static (t -> t)) ->
+        fn (static erased t : type) -> poly_f t
+;;
+
+let static_poly_id = fn (static erased t : type) -> (fn (x : t) -> x);;
+let dyn_poly_id = dynamize static_poly_id;;
+
+let dyn_int_id = dyn_poly_id int;;
+let dyn_int = dyn_int_id 10;;
+
+let dyn_bool = dyn_poly_id bool true;;
