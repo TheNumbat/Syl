@@ -21,7 +21,7 @@ module Error = struct
     | Recursion_limit of int
     | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
     | Inline_self
-    | Static_external
+    | Bad_external
   [@@deriving sexp]
 end
 
@@ -35,7 +35,7 @@ module Fail = struct
   let unbound_ident ~loc id = raise (Error { loc; reason = Unbound_ident id })
   let recursion_limit ~loc limit = raise (Error { loc; reason = Recursion_limit limit })
   let inline_self ~loc = raise (Error { loc; reason = Inline_self })
-  let static_external ~loc = raise (Error { loc; reason = Static_external })
+  let bad_external ~loc = raise (Error { loc; reason = Bad_external })
 
   let unreachable ~loc =
     Lazy.from_fun (fun () -> raise_s [%message "Bug: forced dynamic" (loc : Lex.Location.t)])
@@ -49,7 +49,7 @@ module State = struct
     }
 
   let recursion_limit = 1000
-  let initial () = { next_id = 0; recursion_depth = 0 }
+  let create () = { next_id = 0; recursion_depth = 0 }
   let monomorphizing t = t.recursion_depth > 0
 
   let recur ~loc t ~f =
@@ -87,7 +87,7 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
   | _ -> None
 ;;
 
-let weaken ~loc expr { Desc.id; ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
+let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
   let expr : Expr.t =
     if (not (Modes.is_erased src_mode)) && Modes.is_erased dst_mode
     then
@@ -101,7 +101,7 @@ let weaken ~loc expr { Desc.id; ty = src_ty; mode = src_mode; static } ~ty:dst_t
     then Fail.unreachable ~loc
     else static
   in
-  Expr.with_ expr ~ty:dst_ty ~mode:dst_mode, { Desc.id; ty = dst_ty; mode = dst_mode; static }
+  Expr.with_ expr ~ty:dst_ty ~mode:dst_mode, { Desc.ty = dst_ty; mode = dst_mode; static }
 ;;
 
 let bind_unop ~(op : Cst.Unop.t) v =
@@ -192,8 +192,8 @@ and require_static_type ~loc state (desc : Desc.t) =
 and require_dynamic_arrow ~loc (ty : Value.t) =
   match ty with
   | Type (Arrow { arg_mode; ret_mode; _ } | Pi { arg_mode; ret_mode; _ }) ->
-    if Modes.is_static arg_mode || Modes.is_static ret_mode then Fail.static_external ~loc
-  | _ -> ()
+    if Modes.is_static arg_mode || Modes.is_static ret_mode then Fail.bad_external ~loc
+  | _ -> Fail.bad_external ~loc
 
 and require_static ~loc (desc : Desc.t) =
   require_mode ~loc desc.mode (Modes.top ~staticity:Static ())
@@ -206,12 +206,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
   | Join (a, b) -> Option.value_exn (join_value state (eval state a arg_val) (eval state b arg_val))
   | Reduce { env; arg; arg_ty; arg_mode; memo; ret_ty } ->
     let reduce () =
-      let env =
-        Env.bind
-          env
-          arg
-          { id = Some arg; ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
-      in
+      let env = Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val } in
       let ret_ty_desc = reduce state env ret_ty in
       Lazy.force ret_ty_desc.static
     in
@@ -223,12 +218,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
      | None -> reduce ())
   | Typecheck { env; arg; arg_ty; arg_mode; memo; body } ->
     let reduce () =
-      let env =
-        Env.bind
-          env
-          arg
-          { id = Some arg; ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
-      in
+      let env = Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val } in
       let body_desc = reduce state env body in
       body_desc.ty
     in
@@ -605,7 +595,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
     let ty = Value.Type (Ty.of_literal value) in
     let value = Value.of_literal value in
     let mode = Modes.create ~staticity:Static ~erasure:Unerased in
-    Literal { value; ty; mode; loc }, { id = None; ty; mode; static = Lazy.from_val value }
+    Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
   | Var { id; loc } ->
     let desc : Desc.t = require_var ~loc env id in
     (match desc.mode.staticity, desc.mode.erasure with
@@ -627,7 +617,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
         Type Bool
     in
     let static = bind_unop ~op desc.static in
-    Unop { op; arg; ty; mode; loc }, { id = None; ty; mode; static }
+    Unop { op; arg; ty; mode; loc }, { ty; mode; static }
   | Binop { op; lhs; rhs; loc } ->
     let lhs, lhs_desc = typecheck state env lhs in
     let rhs, rhs_desc = typecheck state env rhs in
@@ -650,7 +640,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
         Type Bool
     in
     let static = bind_binop ~op lhs_desc.static rhs_desc.static in
-    Binop { op; lhs; rhs; ty; mode; loc }, { id = None; ty; mode; static }
+    Binop { op; lhs; rhs; ty; mode; loc }, { ty; mode; static }
   | If { cond; then_; else_; static; loc } ->
     let cond, cond_desc = typecheck state env cond in
     require_exists ~loc cond_desc.mode;
@@ -680,7 +670,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
           else Fail.unreachable ~loc
         in
         let ty = Value.If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty } in
-        If { cond; then_; else_; ty; mode; loc }, { id = None; ty; mode; static })
+        If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
     else (
       let then_, then_desc = typecheck state env then_ in
       let else_, else_desc = typecheck state env else_ in
@@ -698,10 +688,10 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
         else Fail.unreachable ~loc
       in
       let ty = require_join state ~loc then_desc.ty else_desc.ty in
-      If { cond; then_; else_; ty; mode; loc }, { id = None; ty; mode; static })
+      If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
   | Let { var; bind; rest; loc } ->
     let bind, bind_desc = typecheck state env bind in
-    let env = Env.bind env var { bind_desc with id = Some var } in
+    let env = Env.bind env var bind_desc in
     let rest, rest_desc = typecheck state env rest in
     Let { var; bind; rest; ty = rest_desc.ty; mode = rest_desc.mode; loc }, rest_desc
   | Lambda { arg; erased; arg_mode; arg_ty; body; loc } ->
@@ -716,10 +706,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
     (match arg_mode.staticity with
      | Dynamic ->
        let env =
-         Env.bind
-           env
-           arg
-           { id = Some arg; ty = arg_ty; mode = arg_mode; static = Fail.unreachable ~loc }
+         Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Fail.unreachable ~loc }
        in
        let body, body_desc = typecheck state env body in
        let ty =
@@ -735,18 +722,14 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
          Modes.return { mode with erasure = Erasure.join mode.erasure erased } ~ret:body_desc.mode
        in
        let static = Lazy.from_val (Value.Closure { arg; ty; body; env }) in
-       Lambda { arg; ty; body; mode; loc }, { id = None; ty; mode; static }
+       Lambda { arg; ty; body; mode; loc }, { ty; mode; static }
      | Static ->
        let body_desc =
          let env =
            Env.bind
              env
              arg
-             { id = Some arg
-             ; ty = arg_ty
-             ; mode = arg_mode
-             ; static = Lazy.from_val (State.fresh state)
-             }
+             { ty = arg_ty; mode = arg_mode; static = Lazy.from_val (State.fresh state) }
          in
          reduce state env body
        in
@@ -757,7 +740,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
        in
        let mono = Hashtbl.create (module Value.Concrete) in
        let static = Lazy.from_val (Value.Binder { arg; ty; body; mono; env }) in
-       Binder { arg; ty; body; mono; mode; loc }, { id = None; ty; mode; static })
+       Binder { arg; ty; body; mono; mode; loc }, { ty; mode; static })
   | Apply { fn; arg; loc } ->
     let fn, fn_desc = typecheck state env fn in
     let arg, arg_desc = typecheck state env arg in
@@ -780,30 +763,25 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
                      Env.bind
                        binder.env
                        binder.arg
-                       { id = Some binder.arg
-                       ; ty = arg_ty
-                       ; mode = arg_mode
-                       ; static = Lazy.from_val arg_val
-                       }
+                       { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
                    in
                    let body, body_desc =
                      State.recur ~loc state ~f:(fun () -> typecheck state env binder.body)
                    in
                    let body, body_desc = weaken ~loc body body_desc ~ty:ret_ty ~mode:ret_mode in
-                   { arg = binder.arg; arg_mode; arg_ty; arg_val; body; body_desc }
+                   { arg = binder.arg; arg_mode; arg_desc; body; body_desc }
                  | Some x -> x)
              in
-             (match fn_desc.id, Modes.is_erased fn_desc.mode with
-              | None, _ | _, true ->
-                let body = inline ~loc ~env:binder.env ~arg_id:binder.arg ~arg ~arg_mode body in
-                body, body_desc
-              | Some id, false ->
-                ( Symbol { id; arg = arg_concrete; ty = body_desc.ty; mode = body_desc.mode; loc }
-                , body_desc ))
+             if Modes.is_erased fn_desc.mode
+             then (
+               let body = inline ~loc ~env:binder.env ~arg_id:binder.arg ~arg ~arg_mode body in
+               body, body_desc)
+             else
+               ( Symbol { fn; key = arg_concrete; ty = body_desc.ty; mode = body_desc.mode; loc }
+               , body_desc )
            | None ->
              ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-             , { id = None
-               ; ty = ret_ty
+             , { ty = ret_ty
                ; mode = ret_mode
                ; static = Lazy.from_val (Value.Apply { fn = Binder binder; arg = arg_val })
                } ))
@@ -822,7 +800,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
             body, body_desc)
           else
             ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-            , { id = None; ty = ret_ty; mode = ret_mode; static = Fail.unreachable ~loc } )
+            , { ty = ret_ty; mode = ret_mode; static = Fail.unreachable ~loc } )
         | _ ->
           let static =
             if Modes.is_static ret_mode
@@ -833,7 +811,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
             else Fail.unreachable ~loc
           in
           ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-          , { id = None; ty = ret_ty; mode = ret_mode; static } ))
+          , { ty = ret_ty; mode = ret_mode; static } ))
      | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode }) ->
        require_mode ~loc arg_desc.mode arg_mode;
        require_leq state ~loc arg_desc.ty arg_ty;
@@ -854,10 +832,10 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
            body, body_desc
          | _ ->
            ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-           , { id = None; ty = ret_ty; mode = ret_mode; static = Fail.unreachable ~loc } ))
+           , { ty = ret_ty; mode = ret_mode; static = Fail.unreachable ~loc } ))
        else
          ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-         , { id = None; ty = ret_ty; mode = ret_mode; static = Fail.unreachable ~loc } )
+         , { ty = ret_ty; mode = ret_mode; static = Fail.unreachable ~loc } )
      | ty -> raise_s [%message "Expected function type" (loc : Lex.Location.t) (ty : Value.t)])
   | Mode_annotation { expr; mode; loc } ->
     let expr, desc = typecheck state env expr in
@@ -876,11 +854,11 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
     let value =
       typecheck_arrow state ~loc env ~arg_id ~arg_ty:arg ~arg_mode ~ret_ty:ret ~ret_mode
     in
-    Literal { value; ty; mode; loc }, { id = None; ty; mode; static = Lazy.from_val value }
+    Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
   | Fun { funs; rest; loc } ->
     let funs, env = typecheck_funs state env funs in
     let rest, rest_desc = typecheck state env rest in
-    Fun { funs; rest; loc }, rest_desc
+    Fun { funs; rest; ty = rest_desc.ty; mode = rest_desc.mode; loc }, rest_desc
 
 and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode : Value.t =
   let arg_desc = reduce state env arg_ty in
@@ -895,10 +873,7 @@ and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode :
   | Static ->
     let arg = Option.value arg_id ~default:(Ident.of_string "_") in
     let env =
-      Env.bind
-        env
-        arg
-        { id = Some arg; ty = arg_ty; mode = arg_mode; static = Lazy.from_val (State.fresh state) }
+      Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val (State.fresh state) }
     in
     let ret_desc = reduce state env ret_ty in
     let ty = require_static_type state ~loc ret_desc in
@@ -912,7 +887,7 @@ and typecheck_funs state env (funs : Cst.Expr.fun_ Nonempty_list.t) =
   let mode =
     let init = Modes.bottom () in
     Nonempty_list.fold funs ~init ~f:(fun acc { Cst.Expr.arg; body; loc; _ } ->
-      let fvs = Set.remove (Set.diff (Cst.Expr.free_vars body) ids) arg in
+      let fvs = Set.diff (Set.remove (Cst.Expr.free_vars body) arg) ids in
       Set.fold fvs ~init:acc ~f:(fun acc id ->
         Modes.capture acc ~var:(require_var ~loc env id).mode))
   in
@@ -942,7 +917,7 @@ and typecheck_funs state env (funs : Cst.Expr.fun_ Nonempty_list.t) =
                   Env.bind
                     !env_rec
                     arg
-                    { id = Some arg; ty = arg_ty; mode = arg_mode; static = Fail.unreachable ~loc }
+                    { ty = arg_ty; mode = arg_mode; static = Fail.unreachable ~loc }
                 in
                 typecheck state env body
               in
@@ -951,22 +926,19 @@ and typecheck_funs state env (funs : Cst.Expr.fun_ Nonempty_list.t) =
               Value.Closure { arg; ty; body; env })
           | _ -> assert false
         in
-        Env.bind acc var { id = Some var; ty; mode; static })
+        Env.bind acc var { ty; mode; static })
   in
   env_rec := env;
   let funs =
     Nonempty_list.map funs ~f:(fun { var; loc; _ } : Expr.fun_ ->
-      let { Desc.id = _; ty; mode; static } = require_var ~loc env var in
+      let { Desc.ty; mode; static } = require_var ~loc env var in
       try
         match ty, Lazy.force static with
         | Type (Arrow _), Closure { arg; ty; body; _ } -> Lambda { var; arg; body; ty; mode; loc }
         | Type (Pi { arg_ty; arg_mode; ret_mode; ret_ty }), Binder { arg; ty; body; mono; _ } ->
           let arg_val = State.fresh state in
           let env =
-            Env.bind
-              env
-              arg
-              { id = Some arg; ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
+            Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
           in
           let body_desc = reduce state env body in
           require_mode ~loc body_desc.mode ret_mode;
@@ -983,7 +955,7 @@ let typecheck_top_level state env (cst : Cst.Top_level.t) : Top_level.t * Env.t 
   match cst with
   | Let { var; bind; loc } ->
     let bind, bind_desc = typecheck state env bind in
-    let env = Env.bind env var { bind_desc with id = Some var } in
+    let env = Env.bind env var bind_desc in
     Let { var; bind; loc }, env
   | Fun { funs; loc } ->
     let funs, env = typecheck_funs state env funs in
@@ -994,11 +966,11 @@ let typecheck_top_level state env (cst : Cst.Top_level.t) : Top_level.t * Env.t 
     require_dynamic_arrow ~loc ty;
     let mode = Modes.bottom () in
     let static = Lazy.from_val (Value.External { symbol; ty }) in
-    External { var; symbol; ty; loc }, Env.bind env var { Desc.id = Some var; ty; mode; static }
+    External { var; symbol; ty; loc }, Env.bind env var { Desc.ty; mode; static }
 ;;
 
 let typecheck_exn (cst : Cst.Program.t) =
-  let state = State.initial () in
+  let state = State.create () in
   let env = Env.initial in
   let bindings, _ =
     List.fold cst ~init:([], env) ~f:(fun (acc, env) top_level ->

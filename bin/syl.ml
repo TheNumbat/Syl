@@ -1,5 +1,4 @@
 open! Core
-open! Core_unix
 
 let unwrap ~f result =
   let open Syl in
@@ -12,7 +11,7 @@ let unwrap ~f result =
 let dump_cst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the concrete syntax tree"
+    ~summary:"print the concrete IR"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -22,27 +21,37 @@ let dump_cst =
 let dump_tst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the concrete syntax tree"
+    ~summary:"print the typed IR"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
        unwrap (Syl.to_tst contents) ~f:(fun tst -> print_s [%message (tst : Syl.Tst.Program.t)]))
 ;;
 
-let dump_ir =
+let dump_sst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the concrete syntax tree"
+    ~summary:"print the simplified IR"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
-       unwrap (Syl.to_ir contents) ~f:(fun ir -> print_s [%message (ir : Syl.Ir.Program.t)]))
+       unwrap (Syl.to_sst contents) ~f:(fun ir -> print_s [%message (ir : Syl.Sst.Program.t)]))
+;;
+
+let dump_lst =
+  let open Command.Let_syntax in
+  Command.basic
+    ~summary:"print the linearized IR"
+    (let%map_open file = anon ("file" %: string) in
+     fun () ->
+       let contents = In_channel.read_all file in
+       unwrap (Syl.to_lst contents) ~f:(fun ir -> print_s [%message (ir : Syl.Lst.Program.t)]))
 ;;
 
 let dump_c =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the concrete syntax tree"
+    ~summary:"print the C output"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -52,24 +61,22 @@ let dump_c =
 let dump =
   Command.group
     ~summary:"print an IR"
-    [ "cst", dump_cst; "tst", dump_tst; "ir", dump_ir; "c", dump_c ]
+    [ "cst", dump_cst; "tst", dump_tst; "sst", dump_sst; "lst", dump_lst; "c", dump_c ]
 ;;
 
 let default_output file = Filename.basename (Filename.chop_extension file) ^ ".exe"
 
 let compile_to_exe file output =
   let contents = In_channel.read_all file in
-  let ok = ref false in
   unwrap (Syl.to_c contents) ~f:(fun c_code ->
     let c_file = Stdlib.Filename.temp_file "syl" ".c" in
     Out_channel.write_all c_file ~data:c_code;
-    let cmd = sprintf "clang -o %s %s -O2" (Filename.quote output) (Filename.quote c_file) in
+    let cmd = sprintf "clang -g -o %s %s" (Filename.quote output) (Filename.quote c_file) in
     (match Core_unix.system cmd with
-     | Ok () -> ok := true
-     | Error (`Exit_non_zero _) -> eprintf "clang failed\n"
-     | Error (`Signal _) -> eprintf "clang killed by signal\n");
-    Core_unix.unlink c_file);
-  !ok
+     | Ok () -> ()
+     | Error (`Exit_non_zero exit_code) -> print_s [%message "Clang failed" (exit_code : int)]
+     | Error (`Signal signal) -> print_s [%message "Clang killed" (signal : Signal.t)]);
+    Core_unix.unlink c_file)
 ;;
 
 let build =
@@ -80,8 +87,7 @@ let build =
      and output = flag "-o" (optional string) ~doc:"FILE output executable path" in
      fun () ->
        let output = Option.value output ~default:(default_output file) in
-       let (_ : bool) = compile_to_exe file output in
-       ())
+       compile_to_exe file output)
 ;;
 
 let run =
@@ -91,14 +97,13 @@ let run =
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let exe = Stdlib.Filename.temp_file "syl" ".exe" in
-       if compile_to_exe file exe
-       then (
-         let status = Core_unix.system exe in
-         Core_unix.unlink exe;
-         match status with
-         | Ok () -> ()
-         | Error (`Exit_non_zero n) -> Core_unix.exit_immediately n
-         | Error (`Signal _) -> eprintf "program killed by signal\n"))
+       compile_to_exe file exe;
+       let status = Core_unix.system exe in
+       Core_unix.unlink exe;
+       match status with
+       | Ok () -> ()
+       | Error (`Exit_non_zero exit_code) -> print_s [%message "Program failed" (exit_code : int)]
+       | Error (`Signal signal) -> print_s [%message "Program killed" (signal : Signal.t)])
 ;;
 
 let () =

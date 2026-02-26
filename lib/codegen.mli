@@ -1,3 +1,3 @@
 open! Core
 
-val codegen : Ir.Program.t -> string
+val c : Lst.Program.t -> string

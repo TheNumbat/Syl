@@ -1,6 +1,6 @@
 open! Core
 
-module rec Ty : sig
+module Ty : sig
   type t =
     | Unit
     | Bool
@@ -9,77 +9,61 @@ module rec Ty : sig
         { arg_ty : t
         ; ret_ty : t
         }
-    | Pack
+    | Pack of ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
   [@@deriving sexp]
+
+  val arg : t -> t
+  val ret : t -> t
+  val find : t -> Tst.Value.Concrete.t -> t
 end
 
-and Closure : sig
-  type t =
-    { arg : Ident.t
-    ; ty : Ty.t
-    ; body : Expr.t
-    }
-  [@@deriving sexp]
-end
-
-and Pack : sig
-  module Mono : sig
-    type t =
-      { arg : Tst.Value.Concrete.t
-      ; ty : Ty.t
-      ; body : Expr.t
-      }
-    [@@deriving sexp]
-  end
-
-  type t = Mono.t Vec.t [@@deriving sexp]
-end
-
-and Value : sig
+module Scalar : sig
   type t =
     | Unit
     | Bool of bool
     | Int of int64
-    | Closure of Closure.t
-    | Pack of Pack.t
-    | External of
-        { symbol : string
-        ; ty : Ty.t
-        }
   [@@deriving sexp]
 end
 
-and Expr : sig
-  type fun_ =
+module Expr : sig
+  type pack = ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
+
+  and fun_ =
     | Mono of
         { var : Ident.t
         ; arg : Ident.t
         ; body : t
+        ; fvs : Ty.t Ident.Map.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Pack of
         { var : Ident.t
-        ; pack : Pack.t
+        ; pack : pack
+        ; fvs : Ty.t Ident.Map.t
+        ; ty : Ty.t
         ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 
   and t =
-    | Literal of
-        { value : Value.t
+    | Scalar of
+        { value : Scalar.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Fun of
         { funs : fun_ Nonempty_list.t
         ; rest : t
+        ; fvs : Ty.t Ident.Map.t
+        ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Lambda of
         { arg : Ident.t
-        ; ty : Ty.t
         ; body : t
+        ; fvs : Ty.t Ident.Map.t
+        ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Apply of
@@ -92,6 +76,7 @@ and Expr : sig
         { var : Ident.t
         ; bind : t
         ; rest : t
+        ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Unop of
@@ -120,16 +105,27 @@ and Expr : sig
         ; loc : Lex.Location.t
         }
     | Pack of
-        { pack : Pack.t
+        { pack : pack
+        ; fvs : Ty.t Ident.Map.t
+        ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Symbol of
-        { id : Ident.t
+        { fn : t
         ; arg : Tst.Value.Concrete.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | External of
+        { symbol : string
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
+
+  val ty : t -> Ty.t
+  val loc : t -> Lex.Location.t
+  val free_keys : t -> Tst.Value.Concrete.Set.t Ident.Map.t
 end
 
 module Top_level : sig
@@ -141,6 +137,7 @@ module Top_level : sig
         }
     | Fun of
         { funs : Expr.fun_ Nonempty_list.t
+        ; fvs : Ty.t Ident.Map.t
         ; loc : Lex.Location.t
         }
     | External of

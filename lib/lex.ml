@@ -53,6 +53,7 @@ module Kind = struct
     | Else : unit t
     | Fn : unit t
     | Let : unit t
+    | In : unit t
     | Fun : unit t
     | And : unit t
     | Static : unit t
@@ -83,6 +84,7 @@ module Token = struct
     | Else
     | Fn
     | Let
+    | In
     | Fun
     | And
     | Static
@@ -112,6 +114,7 @@ module Token = struct
     | Else, Else -> Some ()
     | Fn, Fn -> Some ()
     | Let, Let -> Some ()
+    | In, In -> Some ()
     | Fun, Fun -> Some ()
     | And, And -> Some ()
     | Static, Static -> Some ()
@@ -138,6 +141,7 @@ module Token = struct
         | Else
         | Fn
         | Let
+        | In
         | Fun
         | And
         | Static
@@ -168,6 +172,7 @@ module Token = struct
     | Else -> "else"
     | Fn -> "fn"
     | Let -> "let"
+    | In -> "in"
     | Fun -> "fun"
     | And -> "and"
     | Static -> "static"
@@ -215,6 +220,7 @@ module Token = struct
     | Else, _
     | Fn, _
     | Let, _
+    | In, _
     | Fun, _
     | And, _
     | Static, _
@@ -312,6 +318,7 @@ module Tokenizer = struct
     | "else" -> Else
     | "fn" -> Fn
     | "let" -> Let
+    | "in" -> In
     | "fun" -> Fun
     | "and" -> And
     | "static" -> Static

@@ -1,12 +1,14 @@
 open! Core
 module Cst = Cst
 module Tst = Tst
-module Ir = Ir
+module Sst = Sst
+module Lst = Lst
 module Loc = Loc
 module Lex = Lex
 module Parse = Parse
 module Typecheck = Typecheck
 module Simplify = Simplify
+module Linearize = Linearize
 module Codegen = Codegen
 
 module Result = struct
@@ -53,14 +55,20 @@ let to_tst input =
   Typecheck.typecheck cst |> Result.typechecked
 ;;
 
-let to_ir input =
+let to_sst input =
   let open Result.Let_syntax in
   let%bind tst = to_tst input in
   Simplify.simplify tst |> Result.return
 ;;
 
+let to_lst input =
+  let open Result.Let_syntax in
+  let%bind sst = to_sst input in
+  Linearize.linearize sst |> Result.return
+;;
+
 let to_c input =
   let open Result.Let_syntax in
-  let%bind ir = to_ir input in
-  Codegen.codegen ir |> Result.return
+  let%bind llir = to_lst input in
+  Codegen.c llir |> Result.return
 ;;

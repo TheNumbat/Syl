@@ -1,12 +1,14 @@
 open! Core
 module Cst = Cst
 module Tst = Tst
-module Ir = Ir
+module Sst = Sst
+module Lst = Lst
 module Loc = Loc
 module Lex = Lex
 module Parse = Parse
 module Typecheck = Typecheck
 module Simplify = Simplify
+module Linearize = Linearize
 module Codegen = Codegen
 
 module Result : sig
@@ -19,5 +21,6 @@ end
 
 val to_cst : string -> Cst.Program.t Result.t
 val to_tst : string -> Tst.Program.t Result.t
-val to_ir : string -> Ir.Program.t Result.t
+val to_sst : string -> Sst.Program.t Result.t
+val to_lst : string -> Lst.Program.t Result.t
 val to_c : string -> string Result.t

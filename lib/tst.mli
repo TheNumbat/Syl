@@ -47,9 +47,6 @@ and Dependent : sig
         }
   [@@deriving sexp]
 
-  val is_concrete : t -> bool
-  val is_abstract : t -> bool
-
   (* Smart constructors fold concrete types *)
   val meet : t -> t -> t
   val join : t -> t -> t
@@ -114,9 +111,8 @@ and Binder : sig
   module Mono : sig
     type t =
       { arg : Ident.t
-      ; arg_val : Value.t
-      ; arg_ty : Value.t
       ; arg_mode : Modes.t
+      ; arg_desc : Desc.t
       ; body : Expr.t
       ; body_desc : Desc.t
       }
@@ -150,7 +146,10 @@ and Value : sig
           ; ret : t
           ; ret_mode : Modes.t
           }
-    [@@deriving sexp, hash, compare]
+    [@@deriving sexp, hash, compare, equal]
+
+    include Comparable.S with type t := t
+    include Hashable.S with type t := t
   end
 
   type t =
@@ -176,21 +175,18 @@ and Value : sig
         }
   [@@deriving sexp]
 
-  val is_concrete : t -> bool
-  val is_abstract : t -> bool
   val of_literal : Cst.Literal.t -> t
 end
 
 and Desc : sig
   type t =
-    { id : Ident.t option
-    ; ty : Value.t
+    { ty : Value.t
     ; mode : Modes.t
     ; static : Value.t Lazy.t
     }
   [@@deriving sexp]
 
-  val of_type : Ident.t -> Ty.t -> t
+  val of_type : Ty.t -> t
 end
 
 and Env : sig
@@ -199,6 +195,7 @@ and Env : sig
   val initial : t
   val bind : t -> Ident.t -> Desc.t -> t
   val find : t -> Ident.t -> Desc.t Option.t
+  val find_exn : t -> Ident.t -> Desc.t
 end
 
 and Expr : sig
@@ -232,20 +229,22 @@ and Expr : sig
     | Fun of
         { funs : fun_ Nonempty_list.t
         ; rest : t
+        ; ty : Value.t
+        ; mode : Modes.t
         ; loc : Lex.Location.t
         }
     | Lambda of
         { arg : Ident.t
-        ; ty : Value.t
         ; body : t
+        ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
     | Binder of
         { arg : Ident.t
-        ; ty : Value.t
         ; body : Cst.Expr.t
         ; mono : (Value.Concrete.t, Binder.Mono.t) Hashtbl.t
+        ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
@@ -294,10 +293,10 @@ and Expr : sig
         ; loc : Lex.Location.t
         }
     | Symbol of
-        { id : Ident.t
-        ; arg : Value.Concrete.t
-        ; mode : Modes.t
+        { fn : t
+        ; key : Value.Concrete.t
         ; ty : Value.t
+        ; mode : Modes.t
         ; loc : Lex.Location.t
         }
     | Erased of

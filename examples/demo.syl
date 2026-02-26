@@ -9,7 +9,7 @@ let b = true;;
 let i = 123;;
 
 let _ =
-  let x = 0;
+  let x = 0 in
   x + x
 ;;
 
@@ -65,7 +65,7 @@ let _ = (1 + 2) @ unerased;;
 (* Modes on parameters *)
 
 let take_static = fn (static x : int) -> x + 1;;
-let take_erased = fn (erased y : int) -> let _ = y; 42;;
+let take_erased = fn (erased y : int) -> let _ = y in 42;;
 let take_static_erased = fn (static erased x : int) -> x;;
 
 (* Modes in arrows types *)
@@ -111,7 +111,7 @@ let _ = (fn (_ : unit) -> int) @ erased;;
 
 (* Functions that cpature erased are _not_ erased *)
 
-let _ = (fn (_ : unit) -> let _ = int; ()) @ unerased;;
+let _ = (fn (_ : unit) -> let _ = int in ()) @ unerased;;
 
 (* -----------------------------------------------------
    Inlining with erasure

@@ -143,7 +143,7 @@ let%expect_test "arrow" =
 ;;
 
 let%expect_test "funs" =
-  go "let _ = fun x (_ : unit) : unit = (); x;;";
+  go "let _ = fun x (_ : unit) : unit = () in x;;";
   [%expect
     {|
     let _ = fun x ( _ : unit) : unit = (); x;;
@@ -159,7 +159,7 @@ let%expect_test "funs" =
             (ret_ty (Var (id unit) (loc ((line 1) (column 27)))))
             (body (Literal (value Unit) (loc ((line 1) (column 34)))))
             (loc ((line 1) (column 12))))))
-         (rest (Var (id x) (loc ((line 1) (column 38)))))
+         (rest (Var (id x) (loc ((line 1) (column 40)))))
          (loc ((line 1) (column 8)))))
        (loc ((line 1) (column 0))))))
     |}]
@@ -610,7 +610,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  go "let _ = let x = false; x;;";
+  go "let _ = let x = false in x;;";
   [%expect
     {|
     let _ = let x = false; x;;
@@ -619,7 +619,7 @@ let%expect_test _ =
        (bind
         (Let (var x)
          (bind (Literal (value (Bool false)) (loc ((line 1) (column 16)))))
-         (rest (Var (id x) (loc ((line 1) (column 23)))))
+         (rest (Var (id x) (loc ((line 1) (column 25)))))
          (loc ((line 1) (column 8)))))
        (loc ((line 1) (column 0))))))
     |}]
@@ -772,7 +772,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  go "let _ = (let x = fn (y : bool) -> fn (z : bool) -> y; x true) false;;";
+  go "let _ = (let x = fn (y : bool) -> fn (z : bool) -> y in x true) false;;";
   [%expect
     {|
     let _ = (let x = fn (y : bool) -> fn (z : bool) -> y; x true) false;;
@@ -796,19 +796,19 @@ let%expect_test _ =
                  (loc ((line 1) (column 34)))))
                (loc ((line 1) (column 17)))))
              (rest
-              (Apply (fn (Var (id x) (loc ((line 1) (column 54)))))
-               (arg (Literal (value (Bool true)) (loc ((line 1) (column 56)))))
-               (loc ((line 1) (column 54)))))
+              (Apply (fn (Var (id x) (loc ((line 1) (column 56)))))
+               (arg (Literal (value (Bool true)) (loc ((line 1) (column 58)))))
+               (loc ((line 1) (column 56)))))
              (loc ((line 1) (column 9)))))
            (loc ((line 1) (column 8)))))
-         (arg (Literal (value (Bool false)) (loc ((line 1) (column 62)))))
+         (arg (Literal (value (Bool false)) (loc ((line 1) (column 64)))))
          (loc ((line 1) (column 8)))))
        (loc ((line 1) (column 0))))))
     |}]
 ;;
 
 let%expect_test _ =
-  go "let _ = let a = (let x = fn (y : bool) -> fn (z : bool) -> y; x true); a false;;";
+  go "let _ = let a = (let x = fn (y : bool) -> fn (z : bool) -> y in x true) in a false;;";
   [%expect
     {|
     let _ = let a = (let x = fn (y : bool) -> fn (z : bool) -> y; x true); a false;;
@@ -832,22 +832,22 @@ let%expect_test _ =
                  (loc ((line 1) (column 42)))))
                (loc ((line 1) (column 25)))))
              (rest
-              (Apply (fn (Var (id x) (loc ((line 1) (column 62)))))
-               (arg (Literal (value (Bool true)) (loc ((line 1) (column 64)))))
-               (loc ((line 1) (column 62)))))
+              (Apply (fn (Var (id x) (loc ((line 1) (column 64)))))
+               (arg (Literal (value (Bool true)) (loc ((line 1) (column 66)))))
+               (loc ((line 1) (column 64)))))
              (loc ((line 1) (column 17)))))
            (loc ((line 1) (column 16)))))
          (rest
-          (Apply (fn (Var (id a) (loc ((line 1) (column 71)))))
-           (arg (Literal (value (Bool false)) (loc ((line 1) (column 73)))))
-           (loc ((line 1) (column 71)))))
+          (Apply (fn (Var (id a) (loc ((line 1) (column 75)))))
+           (arg (Literal (value (Bool false)) (loc ((line 1) (column 77)))))
+           (loc ((line 1) (column 75)))))
          (loc ((line 1) (column 8)))))
        (loc ((line 1) (column 0))))))
     |}]
 ;;
 
 let%expect_test _ =
-  go "let _ = let x = fn (y : bool) -> y; x true;;";
+  go "let _ = let x = fn (y : bool) -> y in x true;;";
   [%expect
     {|
     let _ = let x = fn (y : bool) -> y; x true;;
@@ -862,16 +862,16 @@ let%expect_test _ =
            (body (Var (id y) (loc ((line 1) (column 33)))))
            (loc ((line 1) (column 16)))))
          (rest
-          (Apply (fn (Var (id x) (loc ((line 1) (column 36)))))
-           (arg (Literal (value (Bool true)) (loc ((line 1) (column 38)))))
-           (loc ((line 1) (column 36)))))
+          (Apply (fn (Var (id x) (loc ((line 1) (column 38)))))
+           (arg (Literal (value (Bool true)) (loc ((line 1) (column 40)))))
+           (loc ((line 1) (column 38)))))
          (loc ((line 1) (column 8)))))
        (loc ((line 1) (column 0))))))
     |}]
 ;;
 
 let%expect_test _ =
-  go "let _ = let x = fn (y : lol) -> y; x true;;";
+  go "let _ = let x = fn (y : lol) -> y in x true;;";
   [%expect
     {|
     let _ = let x = fn (y : lol) -> y; x true;;
@@ -886,16 +886,16 @@ let%expect_test _ =
            (body (Var (id y) (loc ((line 1) (column 32)))))
            (loc ((line 1) (column 16)))))
          (rest
-          (Apply (fn (Var (id x) (loc ((line 1) (column 35)))))
-           (arg (Literal (value (Bool true)) (loc ((line 1) (column 37)))))
-           (loc ((line 1) (column 35)))))
+          (Apply (fn (Var (id x) (loc ((line 1) (column 37)))))
+           (arg (Literal (value (Bool true)) (loc ((line 1) (column 39)))))
+           (loc ((line 1) (column 37)))))
          (loc ((line 1) (column 8)))))
        (loc ((line 1) (column 0))))))
     |}]
 ;;
 
 let%expect_test _ =
-  go "let _ = let x ? fn (y : lol) -> y; x true;;";
+  go "let _ = let x ? fn (y : lol) -> y in x true;;";
   [%expect {| ((loc ((line 1) (column 14))) (reason (Unexpected (Unknown ?)))) |}]
 ;;
 
@@ -903,7 +903,7 @@ let%expect_test _ =
   go
     {|
 let a =
-    let second = fn (y : bool) -> y;
+    let second = fn (y : bool) -> y in
     second (second (true))
 ;;|};
   [%expect
@@ -942,7 +942,7 @@ let%expect_test _ =
   go
     {|
 let a = (
-    let second = fn (y : bool) -> y;
+    let second = fn (y : bool) -> y in
     second (second (true))
 );;|};
   [%expect
@@ -1143,7 +1143,7 @@ let%expect_test _ =
   let _ =
     fun aux (x : int) : int = (
       x
-    );
+    ) in
     aux 1
   ;;
 |};
@@ -1177,12 +1177,12 @@ let%expect_test _ =
   go
     {|
   let _ =
-    let capture = 10;
+    let capture = 10 in
     fun aux (x : int) : int = (
       if x > 0
       then aux (x - 1)
       else capture
-    );
+    ) in
     print_int (aux 5)
   ;;
 |};
@@ -1455,8 +1455,8 @@ let%expect_test "mutual inner" =
     {|
 let _ =
   fun f (x : int) : int = g x
-  and g (x : int) : int = f x;
-  print_int (f 0)
+  and g (x : int) : int = f x
+  in print_int (f 0)
 ;;
   |};
   [%expect
@@ -1488,15 +1488,15 @@ let _ =
               (loc ((line 4) (column 26)))))
             (loc ((line 4) (column 6))))))
          (rest
-          (Apply (fn (Var (id print_int) (loc ((line 5) (column 2)))))
+          (Apply (fn (Var (id print_int) (loc ((line 5) (column 5)))))
            (arg
             (Paren
              (expr
-              (Apply (fn (Var (id f) (loc ((line 5) (column 13)))))
-               (arg (Literal (value (Int 0)) (loc ((line 5) (column 15)))))
-               (loc ((line 5) (column 13)))))
-             (loc ((line 5) (column 12)))))
-           (loc ((line 5) (column 2)))))
+              (Apply (fn (Var (id f) (loc ((line 5) (column 16)))))
+               (arg (Literal (value (Int 0)) (loc ((line 5) (column 18)))))
+               (loc ((line 5) (column 16)))))
+             (loc ((line 5) (column 15)))))
+           (loc ((line 5) (column 5)))))
          (loc ((line 3) (column 2)))))
        (loc ((line 2) (column 0))))))
     |}]
@@ -1511,8 +1511,8 @@ let _ =
     else (fn (_ : unit) -> 1 + g (x - 1) ())
   and g (x : int) : (unit -> int) =
     if x == 0 then (fn (_ : unit) -> 0)
-    else (fn (_ : unit) -> 1 + f (x - 1) ());
-  print_int (f 10 ())
+    else (fn (_ : unit) -> 1 + f (x - 1) ())
+  in print_int (f 10 ())
 ;;
   |};
   [%expect
@@ -1642,19 +1642,19 @@ let _ =
               (static false) (loc ((line 7) (column 4)))))
             (loc ((line 6) (column 6))))))
          (rest
-          (Apply (fn (Var (id print_int) (loc ((line 9) (column 2)))))
+          (Apply (fn (Var (id print_int) (loc ((line 9) (column 5)))))
            (arg
             (Paren
              (expr
               (Apply
                (fn
-                (Apply (fn (Var (id f) (loc ((line 9) (column 13)))))
-                 (arg (Literal (value (Int 10)) (loc ((line 9) (column 15)))))
-                 (loc ((line 9) (column 13)))))
-               (arg (Literal (value Unit) (loc ((line 9) (column 18)))))
-               (loc ((line 9) (column 13)))))
-             (loc ((line 9) (column 12)))))
-           (loc ((line 9) (column 2)))))
+                (Apply (fn (Var (id f) (loc ((line 9) (column 16)))))
+                 (arg (Literal (value (Int 10)) (loc ((line 9) (column 18)))))
+                 (loc ((line 9) (column 16)))))
+               (arg (Literal (value Unit) (loc ((line 9) (column 21)))))
+               (loc ((line 9) (column 16)))))
+             (loc ((line 9) (column 15)))))
+           (loc ((line 9) (column 5)))))
          (loc ((line 3) (column 2)))))
        (loc ((line 2) (column 0))))))
     |}]

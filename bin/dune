@@ -1,6 +1,6 @@
 (executable
  (name syl)
- (libraries core_unix core_unix.command_unix syl)
+ (libraries core core_unix core_unix.command_unix syl)
  (promote (until-clean))
  (preprocess
   (pps ppx_jane)))

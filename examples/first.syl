@@ -2,27 +2,27 @@ external print_bool : bool -> unit = syl_print_bool;;
 external print_int : int -> unit = syl_print_int;;
 
 fun first (x : bool) : bool =
-    let id = fn (y : bool) -> y;
+    let id = fn (y : bool) -> y in
     if x
     then first false
     else id false
 ;;
 
 fun second (x : bool) : bool =
-  let f = first;
+  let f = first in
   f x
 ;;
 
 let ok =
-  let not_ok = let x = true; x;
+  let not_ok = let x = true in x in
   not_ok
 ;;
 
 let _ = print_bool (second true);;
 
 let _ =
-  let f = fn (x : bool) -> fn (y : bool) -> print_bool x;
-  let g = f false;
+  let f = fn (x : bool) -> fn (y : bool) -> print_bool x in
+  let g = f false in
   g true
 ;;
 

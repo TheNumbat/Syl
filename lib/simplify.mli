@@ -1,4 +1,4 @@
 open! Core
-open Ir
+open Sst
 
 val simplify : Tst.Program.t -> Program.t

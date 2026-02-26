@@ -124,17 +124,15 @@ and binder =
 
 and mono =
   { arg : Ident.t
-  ; arg_val : value
-  ; arg_ty : value
   ; arg_mode : Modes.t
+  ; arg_desc : desc
   ; body : expr
   ; body_desc : desc
   }
 [@@deriving sexp]
 
 and desc =
-  { id : Ident.t option
-  ; ty : value
+  { ty : value
   ; mode : Modes.t
   ; static : (value Lazy.t[@sexp.opaque])
   }
@@ -149,7 +147,7 @@ and fun_ =
       ; body : expr
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Binder of
       { var : Ident.t
@@ -158,7 +156,7 @@ and fun_ =
       ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
 [@@deriving sexp]
 
@@ -167,34 +165,36 @@ and expr =
       { value : value
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Fun of
       { funs : fun_ Nonempty_list.t
       ; rest : expr
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
       }
   | Lambda of
       { arg : Ident.t
-      ; ty : value
       ; body : expr
+      ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Binder of
       { arg : Ident.t
-      ; ty : value
       ; body : Cst.Expr.t
       ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
+      ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Apply of
       { fn : expr
       ; arg : expr
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Let of
       { var : Ident.t
@@ -202,14 +202,14 @@ and expr =
       ; rest : expr
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Unop of
       { op : Cst.Unop.t
       ; arg : expr
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Binop of
       { op : Cst.Binop.t
@@ -217,7 +217,7 @@ and expr =
       ; rhs : expr
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | If of
       { cond : expr
@@ -225,25 +225,25 @@ and expr =
       ; else_ : expr
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Var of
       { id : Ident.t
       ; ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
   | Symbol of
-      { id : Ident.t
-      ; arg : concrete
-      ; mode : Modes.t
+      { fn : expr
+      ; key : concrete
       ; ty : value
+      ; mode : Modes.t
       ; loc : Lex.Location.t
       }
   | Erased of
       { ty : value
       ; mode : Modes.t
-      ; loc : (Lex.Location.t[@sexp.opaque])
+      ; loc : Lex.Location.t
       }
 [@@deriving sexp]
 
@@ -425,16 +425,14 @@ and meet_concrete_dependent (a : dependent) (b : dependent) : value option =
 
 module Desc = struct
   type t = desc =
-    { id : Ident.t option
-    ; ty : value
+    { ty : value
     ; mode : Modes.t
     ; static : (value Lazy.t[@sexp.opaque])
     }
   [@@deriving sexp]
 
-  let of_type id ty =
-    { id = Some id
-    ; ty = Type Type
+  let of_type ty =
+    { ty = Type Type
     ; mode = Modes.create ~staticity:Static ~erasure:Erased
     ; static = Lazy.from_val (Type ty : value)
     }
@@ -446,17 +444,14 @@ module Env = struct
 
   let bind t id value = if Ident.is_anon id then t else Map.set t ~key:id ~data:value
   let find t id = Map.find t id
+  let find_exn t id = Map.find_exn t id
 
   let initial =
     Ident.Map.of_alist_exn
-      [ (let id = Ident.of_string "type" in
-         id, Desc.of_type id Type)
-      ; (let id = Ident.of_string "unit" in
-         id, Desc.of_type id Unit)
-      ; (let id = Ident.of_string "bool" in
-         id, Desc.of_type id Bool)
-      ; (let id = Ident.of_string "int" in
-         id, Desc.of_type id Int)
+      [ Ident.of_string "type", Desc.of_type Type
+      ; Ident.of_string "unit", Desc.of_type Unit
+      ; Ident.of_string "bool", Desc.of_type Bool
+      ; Ident.of_string "int", Desc.of_type Int
       ]
   ;;
 end
@@ -517,22 +512,28 @@ end
 
 module Value = struct
   module Concrete = struct
-    type t = concrete =
-      | Unit
-      | Bool of bool
-      | Int of int64
-      | Closure of int
-      | UnitT
-      | BoolT
-      | IntT
-      | TypeT
-      | ArrowT of
-          { arg : t
-          ; arg_mode : Modes.t
-          ; ret : t
-          ; ret_mode : Modes.t
-          }
-    [@@deriving sexp, hash, compare]
+    module T = struct
+      type t = concrete =
+        | Unit
+        | Bool of bool
+        | Int of int64
+        | Closure of int
+        | UnitT
+        | BoolT
+        | IntT
+        | TypeT
+        | ArrowT of
+            { arg : t
+            ; arg_mode : Modes.t
+            ; ret : t
+            ; ret_mode : Modes.t
+            }
+      [@@deriving sexp, hash, compare, equal]
+    end
+
+    include T
+    include Comparable.Make (T)
+    include Hashable.Make (T)
   end
 
   type t = value =
@@ -557,9 +558,6 @@ module Value = struct
         ; ty : t
         }
   [@@deriving sexp]
-
-  let is_concrete = is_concrete_value
-  let is_abstract t = not (is_concrete t)
 
   let of_literal : Cst.Literal.t -> t = function
     | Unit -> Unit
@@ -590,9 +588,6 @@ module Dependent = struct
         ; body : Cst.Expr.t
         }
   [@@deriving sexp]
-
-  let is_concrete = is_concrete_dependent
-  let is_abstract t = not (is_concrete t)
 
   let join a b =
     Option.map (join_concrete_dependent a b) ~f:(fun v : t -> T v)
@@ -633,9 +628,8 @@ module Binder = struct
   module Mono = struct
     type t = mono =
       { arg : Ident.t
-      ; arg_val : value
-      ; arg_ty : value
       ; arg_mode : Modes.t
+      ; arg_desc : desc
       ; body : expr
       ; body_desc : desc
       }
@@ -658,34 +652,36 @@ module Expr = struct
         { value : value
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Fun of
         { funs : fun_ Nonempty_list.t
         ; rest : t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
         }
     | Lambda of
         { arg : Ident.t
-        ; ty : value
         ; body : t
+        ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Binder of
         { arg : Ident.t
-        ; ty : value
         ; body : Cst.Expr.t
         ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
+        ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Apply of
         { fn : t
         ; arg : t
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Let of
         { var : Ident.t
@@ -693,14 +689,14 @@ module Expr = struct
         ; rest : t
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Unop of
         { op : Cst.Unop.t
         ; arg : t
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Binop of
         { op : Cst.Binop.t
@@ -708,7 +704,7 @@ module Expr = struct
         ; rhs : t
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | If of
         { cond : t
@@ -716,25 +712,25 @@ module Expr = struct
         ; else_ : t
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Var of
         { id : Ident.t
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Symbol of
-        { id : Ident.t
-        ; arg : concrete
-        ; mode : Modes.t
+        { fn : expr
+        ; key : concrete
         ; ty : value
+        ; mode : Modes.t
         ; loc : Lex.Location.t
         }
     | Erased of
         { ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 
@@ -745,7 +741,7 @@ module Expr = struct
         ; body : t
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Binder of
         { var : Ident.t
@@ -754,14 +750,15 @@ module Expr = struct
         ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
         ; ty : value
         ; mode : Modes.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
     | Literal _ | Erased _ -> Ident.Set.empty
-    | Var { id; _ } | Symbol { id; _ } -> Ident.Set.singleton id
+    | Var { id; _ } -> Ident.Set.singleton id
+    | Symbol { fn; _ } -> free_vars fn
     | Unop { arg; _ } -> free_vars arg
     | Binop { lhs; rhs; _ } -> Set.union (free_vars lhs) (free_vars rhs)
     | Apply { fn; arg; _ } -> Set.union (free_vars fn) (free_vars arg)
@@ -798,8 +795,8 @@ module Expr = struct
     | Binder { ty; _ }
     | Erased { ty; _ }
     | Let { ty; _ }
+    | Fun { ty; _ }
     | Symbol { ty; _ } -> ty
-    | Fun _ -> assert false
   ;;
 
   let mode = function
@@ -813,11 +810,11 @@ module Expr = struct
     | Binder { mode; _ }
     | Erased { mode; _ }
     | Let { mode; _ }
+    | Fun { mode; _ }
     | Symbol { mode; _ } -> mode
-    | Fun _ -> assert false
   ;;
 
-  let desc t static = { Desc.id = None; ty = ty t; mode = mode t; static }
+  let desc t static = { ty = ty t; mode = mode t; static }
 
   let with_ t ~ty ~mode =
     match t with
@@ -831,8 +828,8 @@ module Expr = struct
     | Binder t -> Binder { t with ty; mode }
     | Erased t -> Erased { t with ty; mode }
     | Let t -> Let { t with ty; mode }
+    | Fun t -> Fun { t with ty; mode }
     | Symbol t -> Symbol { t with ty; mode }
-    | Fun _ -> assert false
   ;;
 
   let with_ty t ty =
@@ -847,8 +844,8 @@ module Expr = struct
     | Binder t -> Binder { t with ty }
     | Erased t -> Erased { t with ty }
     | Let t -> Let { t with ty }
+    | Fun t -> Fun { t with ty }
     | Symbol t -> Symbol { t with ty }
-    | Fun _ -> assert false
   ;;
 
   let with_mode t mode =
@@ -863,8 +860,8 @@ module Expr = struct
     | Binder t -> Binder { t with mode }
     | Erased t -> Erased { t with mode }
     | Let t -> Let { t with mode }
+    | Fun t -> Fun { t with mode }
     | Symbol t -> Symbol { t with mode }
-    | Fun _ -> assert false
   ;;
 end
 
@@ -873,11 +870,11 @@ module Top_level = struct
     | Let of
         { var : Ident.t
         ; bind : Expr.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | Fun of
         { funs : Expr.fun_ Nonempty_list.t
-        ; loc : (Lex.Location.t[@sexp.opaque])
+        ; loc : Lex.Location.t
         }
     | External of
         { var : Ident.t

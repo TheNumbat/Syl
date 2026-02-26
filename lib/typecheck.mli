@@ -19,7 +19,7 @@ module Error : sig
     | Recursion_limit of int
     | Dynamic_erased
     | Inline_self
-    | Static_external
+    | Bad_external
   [@@deriving sexp]
 end
 

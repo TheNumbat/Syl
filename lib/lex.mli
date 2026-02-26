@@ -29,6 +29,7 @@ module Kind : sig
     | Else : unit t
     | Fn : unit t
     | Let : unit t
+    | In : unit t
     | Fun : unit t
     | And : unit t
     | Static : unit t
@@ -59,6 +60,7 @@ module Token : sig
     | Else
     | Fn
     | Let
+    | In
     | Fun
     | And
     | Static

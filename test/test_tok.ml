@@ -67,7 +67,7 @@ let%expect_test _ =
     (token Rparen)
     (token Lparen)
     (token (Op Arrow))
-    (token (Ident in))
+    (token In)
     (token Rparen)
     (token Asn)
     (token Unit)

@@ -296,7 +296,7 @@ and expr_primary t : Expr.t =
     let var = expect t ~kind:Ident |> Ident.of_string in
     expect t ~kind:Asn;
     let bind = expr t in
-    expect t ~kind:Semicolon;
+    expect t ~kind:In;
     let rest = expr t in
     Let { var; bind; rest; loc }
   | Lparen ->
@@ -333,7 +333,7 @@ and expr_funs ~loc t fs : Expr.fun_ Nonempty_list.t =
   let f = expr_fun t in
   match Tokenizer.next t.tokens with
   | And -> expr_funs ~loc t (f :: fs)
-  | Semicolon -> Nonempty_list.reverse (f :: fs)
+  | In -> Nonempty_list.reverse (f :: fs)
   | tok -> Fail.unexpected ~loc tok
 ;;
 

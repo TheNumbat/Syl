@@ -26,48 +26,57 @@ let _ = 123 @ dynamic;;|};
      ((Let (var _)
        (bind
         (Literal (value Unit) (ty (Type Unit))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 123))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))
       (Let (var _)
        (bind
         (Literal (value Unit) (ty (Type Unit))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 5) (column 11)))))
+       (loc ((line 5) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 6) (column 13)))))
+       (loc ((line 6) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 123))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 7) (column 12)))))
+       (loc ((line 7) (column 0))))
       (Let (var _)
        (bind
         (Literal (value Unit) (ty (Type Unit))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 8) (column 8)))))
+       (loc ((line 8) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 9) (column 8)))))
+       (loc ((line 9) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 123))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 10) (column 8)))))
+       (loc ((line 10) (column 0))))))
     |}]
 ;;
 
@@ -83,8 +92,9 @@ let _ =
      ((Let (var _)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -100,8 +110,9 @@ let _ =
      ((Let (var _)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -134,13 +145,14 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 6)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -157,13 +169,15 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 12)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Erased)))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -180,13 +194,15 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Var (id dyn) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -203,13 +219,14 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 6)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -288,10 +305,11 @@ let _ =
         (Unop (op Not)
          (arg
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 3)))))
          (ty (Type Bool)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -309,10 +327,11 @@ let _ =
         (Unop (op Not)
          (arg
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 4)))))
          (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -328,8 +347,9 @@ let _ =
      ((Let (var _)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -345,8 +365,8 @@ let _ =
      ((Let (var _)
        (bind
         (Erased (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -362,8 +382,9 @@ let _ =
      ((Let (var _)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Erased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -380,17 +401,19 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Unop (op Not)
          (arg
           (Var (id dyn) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 3)))))
          (ty (Type Bool)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -407,17 +430,19 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 15)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Unop (op Not)
          (arg
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 4) (column 3)))))
          (ty (Type Bool)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -434,17 +459,19 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 15)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Unop (op Not)
          (arg
           (Literal (value (Bool (T false))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 4) (column 9)))))
          (ty (Type Bool)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -461,17 +488,19 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Unop (op Not)
          (arg
           (Var (id dyn) (ty (Type Bool))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 3)))))
          (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -494,13 +523,14 @@ let x = !dyn @ erased;;|};
      ((Let (var dyn)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var x)
        (bind
         (Erased (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 13)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -518,13 +548,15 @@ let _ =
         (Binop (op Add)
          (lhs
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 2)))))
          (rhs
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 6)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 4)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -542,13 +574,15 @@ let _ =
         (Binop (op Add)
          (lhs
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 2)))))
          (rhs
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 9)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 4)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -586,18 +620,21 @@ let _ =
           (Binop (op Add)
            (lhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 2)))))
            (rhs
             (Literal (value (Int (T 2))) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 3) (column 7)))))
            (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 3) (column 4)))))
          (rhs
           (Literal (value (Int (T 3))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 25)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 20)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -615,13 +652,15 @@ let _ =
         (Binop (op Add)
          (lhs
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 2)))))
          (rhs
           (Literal (value (Int (T 5))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 15)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 4)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -638,20 +677,23 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 2))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Binop (op Add)
          (lhs
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 2)))))
          (rhs
           (Var (id dyn) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 6)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 4)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -668,20 +710,23 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Binop (op Add)
          (lhs
           (Var (id dyn) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 2)))))
          (rhs
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 6)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -699,25 +744,29 @@ let _ =
      ((Let (var dyn1)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 11)))))
+       (loc ((line 2) (column 0))))
       (Let (var dyn2)
        (bind
         (Literal (value (Int (T 2))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 3) (column 11)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Binop (op Add)
          (lhs
           (Var (id dyn1) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 2)))))
          (rhs
           (Var (id dyn2) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 9)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 5) (column 7)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -735,25 +784,29 @@ let _ =
      ((Let (var dyn1)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 13)))))
+       (loc ((line 2) (column 0))))
       (Let (var dyn2)
        (bind
         (Literal (value (Int (T 2))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 3) (column 11)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Binop (op Add)
          (lhs
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 5) (column 2)))))
          (rhs
           (Var (id dyn2) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 9)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 5) (column 7)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -771,25 +824,29 @@ let _ =
      ((Let (var dyn1)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 13)))))
+       (loc ((line 2) (column 0))))
       (Let (var dyn2)
        (bind
         (Literal (value (Int (T 2))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 3) (column 13)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Binop (op Add)
          (lhs
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 5) (column 2)))))
          (rhs
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 5) (column 9)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 5) (column 7)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -807,16 +864,19 @@ let _ =
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 5)))))
          (then_
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 15)))))
          (else_
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 22)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -834,16 +894,19 @@ let _ =
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 6)))))
          (then_
           (Literal (value (Type Int)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 16)))))
          (else_
           (Literal (value (Type Int)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 25)))))
          (ty (Type Type)) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 3)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -860,23 +923,27 @@ let _ =
      ((Let (var x)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 22)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 4) (column 5)))))
          (then_
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 12)))))
          (else_
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 19)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -903,23 +970,27 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 5)))))
          (then_
           (Var (id dyn) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 15)))))
          (else_
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 24)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -936,23 +1007,27 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Var (id dyn) (ty (Type Bool))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 5)))))
          (then_
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 14)))))
          (else_
           (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 21)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -969,20 +1044,23 @@ let _ =
      ((Let (var x)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Binop (op Add)
          (lhs
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 2)))))
          (rhs
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 4) (column 28)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 4)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1055,21 +1133,25 @@ let _ = if 1==2 then unit else int;;|};
           (Binop (op Eq)
            (lhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 2) (column 11)))))
            (rhs
             (Literal (value (Int (T 2))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 2) (column 14)))))
            (ty (Type Bool)) (mode ((staticity Static) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 2) (column 12)))))
          (then_
           (Literal (value (Type Unit)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 21)))))
          (else_
           (Literal (value (Type Int)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 31)))))
          (ty (Type Type)) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1084,23 +1166,27 @@ let t = if cond then unit else int;;|};
      ((Let (var cond)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 11)))))
+       (loc ((line 2) (column 0))))
       (Let (var t)
        (bind
         (If
          (cond
           (Var (id cond) (ty (Type Bool))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 11)))))
          (then_
           (Literal (value (Type Unit)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 21)))))
          (else_
           (Literal (value (Type Int)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 31)))))
          (ty (Type Type)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1115,13 +1201,14 @@ let t = (if cond then false else cond) @ erased;;|};
      ((Let (var cond)
        (bind
         (Literal (value (Bool (T true))) (ty (Type Bool))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 11)))))
+       (loc ((line 2) (column 0))))
       (Let (var t)
        (bind
         (Erased (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 39)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1129,7 +1216,7 @@ let%expect_test "Let static" =
   go
     {|
 let _ =
-  let x = 1;
+  let x = 1 in
   x
 ;;|};
   [%expect
@@ -1140,13 +1227,15 @@ let _ =
         (Let (var x)
          (bind
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
          (rest
           (Var (id x) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 2)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1155,7 +1244,7 @@ let%expect_test "Let dynamic" =
     {|
 let dyn = 1 @ dynamic;;
 let _ =
-  let x = dyn;
+  let x = dyn in
   x
 ;;|};
   [%expect
@@ -1164,20 +1253,23 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Let (var x)
          (bind
           (Var (id dyn) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 10)))))
          (rest
           (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 2)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1186,7 +1278,7 @@ let%expect_test "Let dynamic" =
     {|
 let dyn = 1 @ erased;;
 let _ =
-  let x = dyn + 1 @ dynamic;
+  let x = dyn + 1 @ dynamic in
   x
 ;;|};
   [%expect
@@ -1195,8 +1287,9 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 12)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Let (var x)
@@ -1204,18 +1297,21 @@ let _ =
           (Binop (op Add)
            (lhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Erased)))
+             (loc ((line 4) (column 10)))))
            (rhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 16)))))
            (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 14)))))
          (rest
           (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 2)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1224,7 +1320,7 @@ let%expect_test "Let erased" =
     {|
 let dyn = 1 @ erased;;
 let _ =
-  let x = dyn;
+  let x = dyn in
   x
 ;;|};
   [%expect
@@ -1233,20 +1329,23 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 12)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Let (var x)
          (bind
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 4) (column 10)))))
          (rest
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 5) (column 2)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1254,7 +1353,7 @@ let%expect_test "Let erased" =
   go
     {|
 let _ =
-  let x = 1 @ erased;
+  let x = 1 @ erased in
   x + 1
 ;;|};
   [%expect
@@ -1265,20 +1364,23 @@ let _ =
         (Let (var x)
          (bind
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 12)))))
          (rest
           (Binop (op Add)
            (lhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Erased)))
+             (loc ((line 4) (column 2)))))
            (rhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 6)))))
            (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 4)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1286,8 +1388,8 @@ let%expect_test "Let erased" =
   go
     {|
 let _ =
-  let x = 1 @ erased;
-  let y = 1 @ dynamic;
+  let x = 1 @ erased in
+  let y = 1 @ dynamic in
   x + y
 ;;|};
   [%expect
@@ -1298,27 +1400,31 @@ let _ =
         (Let (var x)
          (bind
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 12)))))
          (rest
           (Let (var y)
            (bind
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 4) (column 10)))))
            (rest
             (Binop (op Add)
              (lhs
               (Literal (value (Int (T 1))) (ty (Type Int))
-               (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Erased)))
+               (loc ((line 5) (column 2)))))
              (rhs
               (Var (id y) (ty (Type Int))
-               (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+               (mode ((staticity Dynamic) (erasure Unerased)))
+               (loc ((line 5) (column 6)))))
              (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-             (loc <opaque>)))
+             (loc ((line 5) (column 4)))))
            (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 2)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1326,8 +1432,8 @@ let%expect_test "Let erased" =
   go
     {|
 let _ =
-  let x = 1 @ erased;
-  let y = 1 @ erased;
+  let x = 1 @ erased in
+  let y = 1 @ erased in
   0 + (x + y)
 ;;|};
   [%expect
@@ -1338,34 +1444,39 @@ let _ =
         (Let (var x)
          (bind
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 12)))))
          (rest
           (Let (var y)
            (bind
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Erased)))
+             (loc ((line 4) (column 12)))))
            (rest
             (Binop (op Add)
              (lhs
               (Literal (value (Int (T 0))) (ty (Type Int))
-               (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Unerased)))
+               (loc ((line 5) (column 2)))))
              (rhs
               (Binop (op Add)
                (lhs
                 (Literal (value (Int (T 1))) (ty (Type Int))
-                 (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+                 (mode ((staticity Static) (erasure Erased)))
+                 (loc ((line 5) (column 7)))))
                (rhs
                 (Literal (value (Int (T 1))) (ty (Type Int))
-                 (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+                 (mode ((staticity Static) (erasure Erased)))
+                 (loc ((line 5) (column 11)))))
                (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-               (loc <opaque>)))
+               (loc ((line 5) (column 9)))))
              (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-             (loc <opaque>)))
+             (loc ((line 5) (column 4)))))
            (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 2)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1373,8 +1484,8 @@ let%expect_test "Let erased" =
   go
     {|
 let _ =
-  let x = 1;
-  let y = 1;
+  let x = 1 in
+  let y = 1 in
   0 + ((x + y) @ erased)
 ;;|};
   [%expect
@@ -1385,27 +1496,31 @@ let _ =
         (Let (var x)
          (bind
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
          (rest
           (Let (var y)
            (bind
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 10)))))
            (rest
             (Binop (op Add)
              (lhs
               (Literal (value (Int (T 0))) (ty (Type Int))
-               (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Unerased)))
+               (loc ((line 5) (column 2)))))
              (rhs
               (Literal (value (Int (T 2))) (ty (Type Int))
-               (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Erased)))
+               (loc ((line 5) (column 15)))))
              (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-             (loc <opaque>)))
+             (loc ((line 5) (column 4)))))
            (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 2)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1421,17 +1536,19 @@ let _ =
      ((Let (var _)
        (bind
         (Lambda (arg x)
+         (body
+          (Var (id x) (ty (Type Int))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 19)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 3)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1458,7 +1575,8 @@ let _ =
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
             (body
              (Var (id x) (ty (Type Int))
-              (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Dynamic) (erasure Unerased)))
+              (loc ((line 3) (column 19)))))
             (env <opaque>))))
          (ty
           (Type
@@ -1466,8 +1584,9 @@ let _ =
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 3) (column 22)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1483,17 +1602,19 @@ let _ =
      ((Let (var _)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Type Int)) (ty (Type Type))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 19)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Type))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Literal (value (Type Int)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 3) (column 3)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1510,29 +1631,33 @@ let _ =
      ((Let (var y)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Lambda (arg x)
+         (body
+          (Binop (op Add)
+           (lhs
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 4) (column 19)))))
+           (rhs
+            (Var (id y) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 4) (column 23)))))
+           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 21)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Binop (op Add)
-           (lhs
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (rhs
-            (Var (id y) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 4) (column 3)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1564,21 +1689,22 @@ let _ = f 0;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
+           (loc ((line 2) (column 31)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 2) (column 31)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1594,16 +1720,18 @@ let _ = f 0;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 31)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -1615,13 +1743,15 @@ let _ = f 0;;
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1637,16 +1767,18 @@ let _ = f 0;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 31)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -1658,20 +1790,22 @@ let _ = f 0;;
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
 let%expect_test "erased closure arg" =
   go
     {|
-let f = fn (g : int -> erased int) -> let _ = g 1; 2;;
+let f = fn (g : int -> erased int) -> let _ = g 1 in 2;;
 let _ = f (fn (x : int) -> 0 @ erased);;
 |};
   [%expect
@@ -1695,6 +1829,10 @@ let _ = f ((fn (x : int) -> x + 1) @ erased);;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 38)))))
          (ty
           (Type
            (Arrow
@@ -1706,11 +1844,9 @@ let _ = f ((fn (x : int) -> x + 1) @ erased);;
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -1728,7 +1864,8 @@ let _ = f ((fn (x : int) -> x + 1) @ erased);;
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
          (arg
           (Literal
            (value
@@ -1744,12 +1881,14 @@ let _ = f ((fn (x : int) -> x + 1) @ erased);;
                (Binop (op Add)
                 (lhs
                  (Var (id x) (ty (Type Int))
-                  (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+                  (mode ((staticity Dynamic) (erasure Unerased)))
+                  (loc ((line 3) (column 28)))))
                 (rhs
                  (Literal (value (Int (T 1))) (ty (Type Int))
-                  (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+                  (mode ((staticity Static) (erasure Unerased)))
+                  (loc ((line 3) (column 32)))))
                 (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-                (loc <opaque>)))
+                (loc ((line 3) (column 30)))))
               (env <opaque>))))
            (ty
             (Type
@@ -1757,10 +1896,11 @@ let _ = f ((fn (x : int) -> x + 1) @ erased);;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 35)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -1790,16 +1930,17 @@ let _ =
     (tst
      ((Let (var _)
        (bind
-        (Binder (arg x)
+        (Binder (arg x) (body (Var (id x) (loc ((line 3) (column 33)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id x) (loc ((line 3) (column 33))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 3) (column 3)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1815,17 +1956,19 @@ let _ =
      ((Let (var _)
        (bind
         (Lambda (arg x)
+         (body
+          (Var (id x) (ty (Type Type))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 20)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Type))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Type))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Var (id x) (ty (Type Type))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 3)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1851,7 +1994,8 @@ let x = (fn (x : int) -> x) @ erased;;
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
             (body
              (Var (id x) (ty (Type Int))
-              (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Dynamic) (erasure Unerased)))
+              (loc ((line 2) (column 25)))))
             (env <opaque>))))
          (ty
           (Type
@@ -1859,8 +2003,9 @@ let x = (fn (x : int) -> x) @ erased;;
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 28)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1875,8 +2020,8 @@ let x = (fn (erased x : int) -> x) 0;;
      ((Let (var x)
        (bind
         (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 2) (column 32)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1893,22 +2038,25 @@ let x = (fn (erased x : int) -> 1) 0;;
         (Apply
          (fn
           (Lambda (arg x)
+           (body
+            (Literal (value (Int (T 1))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 2) (column 32)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 9)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 35)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -1925,29 +2073,33 @@ let _ = (if true @ dynamic then f else g) 0;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 2))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -1955,7 +2107,8 @@ let _ = (if true @ dynamic then f else g) 0;;
           (If
            (cond
             (Literal (value (Bool (T true))) (ty (Type Bool))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 4) (column 12)))))
            (then_
             (Var (id f)
              (ty
@@ -1964,7 +2117,8 @@ let _ = (if true @ dynamic then f else g) 0;;
                 (arg_mode ((staticity Dynamic) (erasure Erased)))
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 32)))))
            (else_
             (Var (id g)
              (ty
@@ -1973,20 +2127,23 @@ let _ = (if true @ dynamic then f else g) 0;;
                 (arg_mode ((staticity Dynamic) (erasure Erased)))
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 39)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 9)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 42)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2003,35 +2160,39 @@ let _ = if true then f else g;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg x)
+         (body (Literal (value (Int 2)) (loc ((line 3) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value (Int 2)) (loc ((line 3) (column 32)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 11)))))
          (then_
           (Var (id f)
            (ty
@@ -2040,7 +2201,8 @@ let _ = if true then f else g;;
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 21)))))
          (else_
           (Var (id g)
            (ty
@@ -2049,15 +2211,17 @@ let _ = if true then f else g;;
               (arg_mode ((staticity Static) (erasure Unerased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 28)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2074,35 +2238,38 @@ let _ = if true then f else g;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body (Literal (value (Int 1)) (loc ((line 2) (column 39)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value (Int 1)) (loc ((line 2) (column 39)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg x)
+         (body (Literal (value (Int 2)) (loc ((line 3) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value (Int 2)) (loc ((line 3) (column 32)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 11)))))
          (then_
           (Var (id f)
            (ty
@@ -2111,7 +2278,8 @@ let _ = if true then f else g;;
               (arg_mode ((staticity Static) (erasure Erased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 21)))))
          (else_
           (Var (id g)
            (ty
@@ -2120,15 +2288,17 @@ let _ = if true then f else g;;
               (arg_mode ((staticity Static) (erasure Unerased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 28)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2145,35 +2315,38 @@ let _ = if true then f else g;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body (Literal (value (Int 1)) (loc ((line 2) (column 39)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value (Int 1)) (loc ((line 2) (column 39)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg x)
+         (body (Literal (value (Int 2)) (loc ((line 3) (column 39)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value (Int 2)) (loc ((line 3) (column 39)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 11)))))
          (then_
           (Var (id f)
            (ty
@@ -2182,7 +2355,8 @@ let _ = if true then f else g;;
               (arg_mode ((staticity Static) (erasure Erased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 21)))))
          (else_
           (Var (id g)
            (ty
@@ -2191,15 +2365,17 @@ let _ = if true then f else g;;
               (arg_mode ((staticity Static) (erasure Erased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 28)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2217,43 +2393,49 @@ let _ = (if c () then f else g) 0;;
      ((Let (var c)
        (bind
         (Lambda (arg _)
+         (body
+          (Literal (value (Bool (T true))) (ty (Type Bool))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 25)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Unit))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Bool))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))
       (Let (var g)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 2))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 9)))))
+       (loc ((line 4) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -2269,12 +2451,14 @@ let _ = (if c () then f else g) 0;;
                   (arg_mode ((staticity Dynamic) (erasure Unerased)))
                   (ret_ty (Type Bool))
                   (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-               (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Unerased)))
+               (loc ((line 5) (column 12)))))
              (arg
               (Literal (value Unit) (ty (Type Unit))
-               (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Unerased)))
+               (loc ((line 5) (column 14)))))
              (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Unerased)))
-             (loc <opaque>)))
+             (loc ((line 5) (column 12)))))
            (then_
             (Var (id f)
              (ty
@@ -2283,7 +2467,8 @@ let _ = (if c () then f else g) 0;;
                 (arg_mode ((staticity Dynamic) (erasure Erased)))
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 5) (column 22)))))
            (else_
             (Var (id g)
              (ty
@@ -2292,20 +2477,23 @@ let _ = (if c () then f else g) 0;;
                 (arg_mode ((staticity Dynamic) (erasure Erased)))
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 5) (column 29)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 9)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 5) (column 32)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 5) (column 8)))))
+       (loc ((line 5) (column 0))))))
     |}]
 ;;
 
@@ -2323,44 +2511,50 @@ let _ = (if c () then f else g) 0;;
      ((Let (var c)
        (bind
         (Lambda (arg _)
+         (body
+          (Literal (value (Bool (T true))) (ty (Type Bool))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 25)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Unit))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Bool))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 25)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))
       (Let (var g)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 2))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 2))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 9)))))
+       (loc ((line 4) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -2376,12 +2570,14 @@ let _ = (if c () then f else g) 0;;
                   (arg_mode ((staticity Dynamic) (erasure Unerased)))
                   (ret_ty (Type Bool))
                   (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-               (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Unerased)))
+               (loc ((line 5) (column 12)))))
              (arg
               (Literal (value Unit) (ty (Type Unit))
-               (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+               (mode ((staticity Static) (erasure Unerased)))
+               (loc ((line 5) (column 14)))))
              (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Unerased)))
-             (loc <opaque>)))
+             (loc ((line 5) (column 12)))))
            (then_
             (Var (id f)
              (ty
@@ -2390,7 +2586,8 @@ let _ = (if c () then f else g) 0;;
                 (arg_mode ((staticity Dynamic) (erasure Unerased)))
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 5) (column 22)))))
            (else_
             (Var (id g)
              (ty
@@ -2399,20 +2596,23 @@ let _ = (if c () then f else g) 0;;
                 (arg_mode ((staticity Dynamic) (erasure Erased)))
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 5) (column 29)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 9)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 5) (column 32)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 5) (column 8)))))
+       (loc ((line 5) (column 0))))))
     |}]
 ;;
 
@@ -2429,20 +2629,40 @@ let _ = g f;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 24)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Lambda (arg f)
+         (body
+          (Apply
+           (fn
+            (Var (id f)
+             (ty
+              (Type
+               (Arrow (arg_ty (Type Int))
+                (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                (ret_ty (Type Int))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 3) (column 31)))))
+           (arg
+            (Literal (value (Int (T 0))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 33)))))
+           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 31)))))
          (ty
           (Type
            (Arrow
@@ -2455,24 +2675,9 @@ let _ = g f;;
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply
-           (fn
-            (Var (id f)
-             (ty
-              (Type
-               (Arrow (arg_ty (Type Int))
-                (arg_mode ((staticity Dynamic) (erasure Unerased)))
-                (ret_ty (Type Int))
-                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (arg
-            (Literal (value (Int (T 0))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -2490,7 +2695,8 @@ let _ = g f;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
          (arg
           (Var (id f)
            (ty
@@ -2499,10 +2705,11 @@ let _ = g f;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2519,20 +2726,27 @@ let _ = g f;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 24)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg f)
+         (body
+          (Apply (fn (Var (id f) (loc ((line 3) (column 38)))))
+           (arg (Literal (value (Int 0)) (loc ((line 3) (column 40)))))
+           (loc ((line 3) (column 38)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -2545,19 +2759,32 @@ let _ = g f;;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id f) (loc ((line 3) (column 38)))))
-           (arg (Literal (value (Int 0)) (loc ((line 3) (column 40)))))
-           (loc ((line 3) (column 38)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id g) (arg (Closure 1))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id g)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Arrow (arg_ty (Type Int))
+                 (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                 (ret_ty (Type Int))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
+         (key (Closure 1)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 4) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2621,7 +2848,8 @@ let _ = g f1;;
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
             (body
              (Literal (value (Int (T 1))) (ty (Type Int))
-              (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Static) (erasure Unerased)))
+              (loc ((line 2) (column 26)))))
             (env <opaque>))))
          (ty
           (Type
@@ -2629,11 +2857,17 @@ let _ = g f1;;
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 29)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg f2)
+         (body
+          (Apply (fn (Var (id f2) (loc ((line 3) (column 46)))))
+           (arg (Literal (value (Int 0)) (loc ((line 3) (column 49)))))
+           (loc ((line 3) (column 46)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -2646,19 +2880,32 @@ let _ = g f1;;
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id f2) (loc ((line 3) (column 46)))))
-           (arg (Literal (value (Int 0)) (loc ((line 3) (column 49)))))
-           (loc ((line 3) (column 46)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id g) (arg (Closure 1))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id g)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Arrow (arg_ty (Type Int))
+                 (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                 (ret_ty (Type Int))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
+         (key (Closure 1)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 4) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2675,19 +2922,39 @@ let _ = g f1;;
      ((Let (var f1)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Lambda (arg f2)
+         (body
+          (Apply
+           (fn
+            (Var (id f2)
+             (ty
+              (Type
+               (Arrow (arg_ty (Type Int))
+                (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                (ret_ty (Type Int))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 3) (column 32)))))
+           (arg
+            (Literal (value (Int (T 0))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 35)))))
+           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 32)))))
          (ty
           (Type
            (Arrow
@@ -2700,24 +2967,9 @@ let _ = g f1;;
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply
-           (fn
-            (Var (id f2)
-             (ty
-              (Type
-               (Arrow (arg_ty (Type Int))
-                (arg_mode ((staticity Dynamic) (erasure Unerased)))
-                (ret_ty (Type Int))
-                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (arg
-            (Literal (value (Int (T 0))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -2735,7 +2987,8 @@ let _ = g f1;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
          (arg
           (Var (id f1)
            (ty
@@ -2744,10 +2997,11 @@ let _ = g f1;;
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2764,19 +3018,39 @@ let _ = g f1;;
      ((Let (var f1)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Lambda (arg f2)
+         (body
+          (Apply
+           (fn
+            (Var (id f2)
+             (ty
+              (Type
+               (Arrow (arg_ty (Type Int))
+                (arg_mode ((staticity Dynamic) (erasure Erased)))
+                (ret_ty (Type Int))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 3) (column 39)))))
+           (arg
+            (Literal (value (Int (T 0))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 42)))))
+           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 39)))))
          (ty
           (Type
            (Arrow
@@ -2789,24 +3063,9 @@ let _ = g f1;;
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply
-           (fn
-            (Var (id f2)
-             (ty
-              (Type
-               (Arrow (arg_ty (Type Int))
-                (arg_mode ((staticity Dynamic) (erasure Erased)))
-                (ret_ty (Type Int))
-                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (arg
-            (Literal (value (Int (T 0))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -2824,7 +3083,8 @@ let _ = g f1;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
          (arg
           (Var (id f1)
            (ty
@@ -2833,10 +3093,11 @@ let _ = g f1;;
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2853,19 +3114,26 @@ let _ = g f1;;
      ((Let (var f1)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg f2)
+         (body
+          (Apply (fn (Var (id f2) (loc ((line 3) (column 46)))))
+           (arg (Literal (value (Int 0)) (loc ((line 3) (column 49)))))
+           (loc ((line 3) (column 46)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -2878,19 +3146,32 @@ let _ = g f1;;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id f2) (loc ((line 3) (column 46)))))
-           (arg (Literal (value (Int 0)) (loc ((line 3) (column 49)))))
-           (loc ((line 3) (column 46)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id g) (arg (Closure 1))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id g)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Arrow (arg_ty (Type Int))
+                 (arg_mode ((staticity Dynamic) (erasure Erased)))
+                 (ret_ty (Type Int))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
+         (key (Closure 1)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 4) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2907,19 +3188,26 @@ let _ = g f1;;
      ((Let (var f1)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg f2)
+         (body
+          (Apply (fn (Var (id f2) (loc ((line 3) (column 53)))))
+           (arg (Literal (value (Int 0)) (loc ((line 3) (column 56)))))
+           (loc ((line 3) (column 53)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -2932,19 +3220,32 @@ let _ = g f1;;
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id f2) (loc ((line 3) (column 53)))))
-           (arg (Literal (value (Int 0)) (loc ((line 3) (column 56)))))
-           (loc ((line 3) (column 53)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id g) (arg (Closure 1))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id g)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Arrow (arg_ty (Type Int))
+                 (arg_mode ((staticity Dynamic) (erasure Erased)))
+                 (ret_ty (Type Int))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
+         (key (Closure 1)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 4) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -2958,16 +3259,22 @@ let x = (fn (static x : int) -> x) 0;;
     (tst
      ((Let (var x)
        (bind
-        (Let (var x)
-         (bind
-          (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (rest
-          (Var (id x) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+        (Symbol
+         (fn
+          (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 32)))))
+           (mono <opaque>)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 9)))))
+         (key (Int 0)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -3018,9 +3325,23 @@ let x = (fn (static erased x : int) -> 1) 0;;
     (tst
      ((Let (var x)
        (bind
-        (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+        (Symbol
+         (fn
+          (Binder (arg x)
+           (body (Literal (value (Int 1)) (loc ((line 2) (column 39)))))
+           (mono <opaque>)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 9)))))
+         (key (Int 0)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -3053,18 +3374,21 @@ let _ = 0 : t;;
         (Let (var x)
          (bind
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 37)))))
          (rest
           (Literal (value (Type Int)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 32)))))
          (ty (Type Type)) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 0))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3093,13 +3417,15 @@ let _ = 0 : t;;
      ((Let (var t)
        (bind
         (Literal (value (Type Int)) (ty (Type Type))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 39)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 0))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3117,22 +3443,25 @@ let _ =
         (Apply
          (fn
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 3) (column 19)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 3)))))
          (arg
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 22)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -3148,8 +3477,9 @@ let _ =
      ((Let (var _)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 3) (column 33)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -3166,29 +3496,33 @@ let _ =
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
          (fn
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 4) (column 19)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 3)))))
          (arg
           (Var (id dyn) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 22)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3223,41 +3557,47 @@ let _ = y @ unerased;;|};
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Apply
          (fn
           (Lambda (arg x)
+           (body
+            (Literal (value (Int (T 5))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 26)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Literal (value (Int (T 5))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 3)))))
          (arg
           (Binop (op Sub)
            (lhs
             (Var (id dyn) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 4) (column 30)))))
            (rhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 34)))))
            (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 33)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Var (id y) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 6) (column 8)))))
+       (loc ((line 6) (column 0))))))
     |}]
 ;;
 
@@ -3286,52 +3626,58 @@ let _ = y @ unerased;;|};
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (Mode_annotation (expr (Var (id x) (loc ((line 2) (column 31)))))
+           (mode ((staticity ()) (erasure (Erased))))
+           (loc ((line 2) (column 33)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body
-          (Mode_annotation (expr (Var (id x) (loc ((line 2) (column 31)))))
-           (mode ((staticity ()) (erasure (Erased))))
-           (loc ((line 2) (column 33)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Apply
          (fn
           (Lambda (arg x)
+           (body
+            (Literal (value (Int (T 5))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 26)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Literal (value (Int (T 5))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 3)))))
          (arg
           (Let (var x)
            (bind
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 32)))))
            (rest
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Erased)))
+             (loc ((line 2) (column 33)))))
            (ty (Type Int)) (mode ((staticity Static) (erasure Erased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 30)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Var (id y) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 6) (column 8)))))
+       (loc ((line 6) (column 0))))))
     |}]
 ;;
 
@@ -3349,41 +3695,47 @@ let _ = y @ unerased;;|};
      ((Let (var dyn)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Apply
          (fn
           (Lambda (arg x)
+           (body
+            (Literal (value (Int (T 5))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 26)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Literal (value (Int (T 5))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 3)))))
          (arg
           (Binop (op Sub)
            (lhs
             (Var (id dyn) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 30)))))
            (rhs
             (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 34)))))
            (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-           (loc <opaque>)))
+           (loc ((line 4) (column 33)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Var (id y) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 6) (column 8)))))
+       (loc ((line 6) (column 0))))))
     |}]
 ;;
 
@@ -3400,17 +3752,19 @@ let _ =
      ((Let (var dyn_fn)
        (bind
         (Lambda (arg x)
+         (body
+          (Var (id x) (ty (Type Int))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 2) (column 30)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 14)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -3422,13 +3776,15 @@ let _ =
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 2)))))
          (arg
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 9)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3455,16 +3811,18 @@ let _ =
      ((Let (var dyn_fn)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 0))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 37)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 14)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -3476,13 +3834,15 @@ let _ =
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 2)))))
          (arg
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3500,22 +3860,25 @@ let _ =
      ((Let (var dyn_fn)
        (bind
         (Lambda (arg x)
+         (body
+          (Var (id x) (ty (Type Int))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 2) (column 30)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 14)))))
+       (loc ((line 2) (column 0))))
       (Let (var dyn_arg)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 3) (column 14)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -3527,13 +3890,15 @@ let _ =
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 2)))))
          (arg
           (Var (id dyn_arg) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 9)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 5) (column 2)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -3562,26 +3927,28 @@ let _ =
      ((Let (var dyn_fn)
        (bind
         (Lambda (arg x)
+         (body
+          (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
+           (loc ((line 2) (column 37)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 14)))))
+       (loc ((line 2) (column 0))))
       (Let (var dyn_arg)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 3) (column 14)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 2) (column 37)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -3597,17 +3964,19 @@ let _ =
      ((Let (var _)
        (bind
         (Lambda (arg x)
+         (body
+          (Var (id x) (ty (Type Int))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 18)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -3623,16 +3992,17 @@ let _ =
      ((Let (var _)
        (bind
         (Binder (arg x)
+         (body (Literal (value (Int 1)) (loc ((line 3) (column 25)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value (Int 1)) (loc ((line 3) (column 25)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -3648,16 +4018,17 @@ let _ =
      ((Let (var _)
        (bind
         (Lambda (arg x)
+         (body
+          (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
+           (loc ((line 3) (column 25)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Erased))) (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 3) (column 2)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -3674,22 +4045,25 @@ let _ =
      ((Let (var x)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Lambda (arg y)
+         (body
+          (Var (id x) (ty (Type Int))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 18)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3706,22 +4080,25 @@ let _ =
      ((Let (var x)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Lambda (arg y)
+         (body
+          (Var (id x) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 18)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Var (id x) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3738,22 +4115,25 @@ let _ =
      ((Let (var x)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Lambda (arg y)
+         (body
+          (Literal (value (Int (T 1))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 4) (column 18)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3770,20 +4150,23 @@ let _ =
      ((Let (var x)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Let (var y)
          (bind
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 22)))))
          (rest
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Erased)))
+           (loc ((line 4) (column 19)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 2)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3812,37 +4195,41 @@ let g = fn (x : f ()) -> x + 1;;|};
     (tst
      ((Let (var f)
        (bind
-        (Binder (arg _)
+        (Binder (arg _) (body (Var (id int) (loc ((line 2) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Unit))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id int) (loc ((line 2) (column 32))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Lambda (arg x)
+         (body
+          (Binop (op Add)
+           (lhs
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 3) (column 25)))))
+           (rhs
+            (Literal (value (Int (T 1))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 29)))))
+           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 27)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Binop (op Add)
-           (lhs
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (rhs
-            (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3873,22 +4260,23 @@ let _ = f int;;
      ((Let (var f)
        (bind
         (Lambda (arg ty)
+         (body
+          (Erased (ty (Type Type)) (mode ((staticity Dynamic) (erasure Erased)))
+           (loc ((line 2) (column 33)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Type))
             (arg_mode ((staticity Dynamic) (erasure Erased)))
             (ret_ty (Type Type))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Erased (ty (Type Type)) (mode ((staticity Dynamic) (erasure Erased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Erased (ty (Type Type)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 2) (column 33)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3903,21 +4291,23 @@ let _ = 0 : f int;;
     (tst
      ((Let (var f)
        (bind
-        (Binder (arg ty)
+        (Binder (arg ty) (body (Var (id ty) (loc ((line 2) (column 40)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id ty) (loc ((line 2) (column 40))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 0))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3961,21 +4351,23 @@ let y = x int;;
     (tst
      ((Let (var x)
        (bind
-        (Binder (arg x)
+        (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 39)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id x) (loc ((line 2) (column 39))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Literal (value (Type Int)) (ty (Type Type))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 39)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -3990,16 +4382,17 @@ let y = x @ dynamic;;
     (tst
      ((Let (var x)
        (bind
-        (Binder (arg x)
+        (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Var (id x) (loc ((line 2) (column 32))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Var (id x)
@@ -4009,8 +4402,9 @@ let y = x @ dynamic;;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4026,17 +4420,18 @@ let y = x @ dynamic;;
      ((Let (var x)
        (bind
         (Lambda (arg x)
+         (body
+          (Erased (ty (Type Type)) (mode ((staticity Dynamic) (erasure Erased)))
+           (loc ((line 2) (column 32)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Type))
             (arg_mode ((staticity Dynamic) (erasure Erased)))
             (ret_ty (Type Type))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Erased (ty (Type Type)) (mode ((staticity Dynamic) (erasure Erased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Literal
@@ -4051,7 +4446,8 @@ let y = x @ dynamic;;
                (ret_mode ((staticity Dynamic) (erasure Erased))))))
             (body
              (Erased (ty (Type Type))
-              (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
+              (mode ((staticity Dynamic) (erasure Erased)))
+              (loc ((line 2) (column 32)))))
             (env <opaque>))))
          (ty
           (Type
@@ -4059,8 +4455,9 @@ let y = x @ dynamic;;
             (arg_mode ((staticity Dynamic) (erasure Erased)))
             (ret_ty (Type Type))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Erased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4075,16 +4472,17 @@ let y = x @ unerased;;
     (tst
      ((Let (var x)
        (bind
-        (Binder (arg x)
+        (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Var (id x) (loc ((line 2) (column 32))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Var (id x)
@@ -4094,8 +4492,9 @@ let y = x @ unerased;;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4138,21 +4537,23 @@ let y = (x int) @ dynamic;;
     (tst
      ((Let (var x)
        (bind
-        (Binder (arg x)
+        (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 39)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id x) (loc ((line 2) (column 39))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Literal (value (Type Int)) (ty (Type Type))
-         (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Dynamic) (erasure Erased)))
+         (loc ((line 2) (column 39)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4181,6 +4582,13 @@ let f = fn (static erased ty : type) -> fn (x : ty) -> x;;
      ((Let (var f)
        (bind
         (Binder (arg ty)
+         (body
+          (Lambda (arg x) (erased Unerased)
+           (arg_mode ((staticity ()) (erasure ())))
+           (arg_ty (Var (id ty) (loc ((line 2) (column 48)))))
+           (body (Var (id x) (loc ((line 2) (column 55)))))
+           (loc ((line 2) (column 40)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
@@ -4195,15 +4603,9 @@ let f = fn (static erased ty : type) -> fn (x : ty) -> x;;
                 (body (Var (id x) (loc ((line 2) (column 55)))))
                 (loc ((line 2) (column 40)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Lambda (arg x) (erased Unerased)
-           (arg_mode ((staticity ()) (erasure ())))
-           (arg_ty (Var (id ty) (loc ((line 2) (column 48)))))
-           (body (Var (id x) (loc ((line 2) (column 55)))))
-           (loc ((line 2) (column 40)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -4219,6 +4621,13 @@ let g = (f 1 ()) @ unerased;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (Lambda (arg _) (erased Unerased)
+           (arg_mode ((staticity ()) (erasure ())))
+           (arg_ty (Var (id unit) (loc ((line 2) (column 39)))))
+           (body (Var (id x) (loc ((line 2) (column 48)))))
+           (loc ((line 2) (column 31)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -4231,34 +4640,46 @@ let g = (f 1 ()) @ unerased;;
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Lambda (arg _) (erased Unerased)
-           (arg_mode ((staticity ()) (erasure ())))
-           (arg_ty (Var (id unit) (loc ((line 2) (column 39)))))
-           (body (Var (id x) (loc ((line 2) (column 48)))))
-           (loc ((line 2) (column 31)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Apply
          (fn
-          (Symbol (id f) (arg (Int 1))
-           (mode ((staticity Static) (erasure Unerased)))
+          (Symbol
+           (fn
+            (Var (id f)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (ret_ty
+                 (T
+                  (Type
+                   (Arrow (arg_ty (Type Unit))
+                    (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                    (ret_ty (Type Int))
+                    (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 9)))))
+           (key (Int 1))
            (ty
             (Type
              (Arrow (arg_ty (Type Unit))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
            (loc ((line 3) (column 9)))))
          (arg
           (Literal (value Unit) (ty (Type Unit))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 13)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4273,19 +4694,20 @@ let f = fn (static ty : type) -> ty @ erased;;
      ((Let (var f)
        (bind
         (Binder (arg ty)
+         (body
+          (Mode_annotation (expr (Var (id ty) (loc ((line 2) (column 33)))))
+           (mode ((staticity ()) (erasure (Erased))))
+           (loc ((line 2) (column 36)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body
-          (Mode_annotation (expr (Var (id ty) (loc ((line 2) (column 33)))))
-           (mode ((staticity ()) (erasure (Erased))))
-           (loc ((line 2) (column 36)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -4301,31 +4723,34 @@ let _ = f 0;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (Mode_annotation (expr (Var (id x) (loc ((line 2) (column 31)))))
+           (mode ((staticity ()) (erasure (Erased))))
+           (loc ((line 2) (column 33)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body
-          (Mode_annotation (expr (Var (id x) (loc ((line 2) (column 31)))))
-           (mode ((staticity ()) (erasure (Erased))))
-           (loc ((line 2) (column 33)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Let (var x)
          (bind
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
          (rest
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 33)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4344,6 +4769,13 @@ let _ = g true;;
      ((Let (var f)
        (bind
         (Binder (arg ty)
+         (body
+          (Lambda (arg x) (erased Unerased)
+           (arg_mode ((staticity ()) (erasure ())))
+           (arg_ty (Var (id ty) (loc ((line 2) (column 48)))))
+           (body (Var (id x) (loc ((line 2) (column 55)))))
+           (loc ((line 2) (column 40)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
@@ -4358,26 +4790,40 @@ let _ = g true;;
                 (body (Var (id x) (loc ((line 2) (column 55)))))
                 (loc ((line 2) (column 40)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Lambda (arg x) (erased Unerased)
-           (arg_mode ((staticity ()) (erasure ())))
-           (arg_ty (Var (id ty) (loc ((line 2) (column 48)))))
-           (body (Var (id x) (loc ((line 2) (column 55)))))
-           (loc ((line 2) (column 40)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
-        (Symbol (id f) (arg IntT) (mode ((staticity Static) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Type))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg ty) (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
+                (body
+                 (Lambda (arg x) (erased Unerased)
+                  (arg_mode ((staticity ()) (erasure ())))
+                  (arg_ty (Var (id ty) (loc ((line 2) (column 48)))))
+                  (body (Var (id x) (loc ((line 2) (column 55)))))
+                  (loc ((line 2) (column 40)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key IntT)
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -4389,24 +4835,46 @@ let _ = g true;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))
       (Let (var g)
        (bind
-        (Symbol (id f) (arg BoolT) (mode ((staticity Static) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Type))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg ty) (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
+                (body
+                 (Lambda (arg x) (erased Unerased)
+                  (arg_mode ((staticity ()) (erasure ())))
+                  (arg_ty (Var (id ty) (loc ((line 2) (column 48)))))
+                  (body (Var (id x) (loc ((line 2) (column 55)))))
+                  (loc ((line 2) (column 40)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 5) (column 8)))))
+         (key BoolT)
          (ty
           (Type
            (Arrow (arg_ty (Type Bool))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Bool))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 5) (column 8)))))
-       (loc <opaque>))
+       (loc ((line 5) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -4418,13 +4886,15 @@ let _ = g true;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Bool))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 6) (column 8)))))
          (arg
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 6) (column 10)))))
          (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 6) (column 8)))))
+       (loc ((line 6) (column 0))))))
     |}]
 ;;
 
@@ -4440,6 +4910,11 @@ let _ = f (fn (x : int) -> x + 1);;
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Apply (fn (Var (id g) (loc ((line 2) (column 38)))))
+           (arg (Literal (value (Int 0)) (loc ((line 2) (column 40)))))
+           (loc ((line 2) (column 38)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -4452,19 +4927,32 @@ let _ = f (fn (x : int) -> x + 1);;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id g) (loc ((line 2) (column 38)))))
-           (arg (Literal (value (Int 0)) (loc ((line 2) (column 40)))))
-           (loc ((line 2) (column 38)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 1))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Arrow (arg_ty (Type Int))
+                 (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                 (ret_ty (Type Int))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 1)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4480,21 +4968,34 @@ let _ = f ();;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body (Literal (value Unit) (loc ((line 2) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Unit))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Unit)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value Unit) (loc ((line 2) (column 32)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg Unit) (mode ((staticity Static) (erasure Unerased)))
-         (ty (Type Unit)) (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Unit))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Unit)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key Unit) (ty (Type Unit))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4510,24 +5011,36 @@ let _ = f true;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (Unop (op Not) (arg (Var (id x) (loc ((line 2) (column 33)))))
+           (loc ((line 2) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Bool))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Bool)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Unop (op Not) (arg (Var (id x) (loc ((line 2) (column 33)))))
-           (loc ((line 2) (column 32)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Bool true))
-         (mode ((staticity Static) (erasure Unerased))) (ty (Type Bool))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Bool))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Bool)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Bool true)) (ty (Type Bool))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4543,24 +5056,36 @@ let _ = f 1;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (Unop (op Neg) (arg (Var (id x) (loc ((line 2) (column 32)))))
+           (loc ((line 2) (column 31)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Unop (op Neg) (arg (Var (id x) (loc ((line 2) (column 32)))))
-           (loc ((line 2) (column 31)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Int 1))
-         (mode ((staticity Static) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Int 1)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4587,6 +5112,17 @@ let f = fn (static erased t : type) -> fn (x : t) -> if true then x else x;;
      ((Let (var f)
        (bind
         (Binder (arg t)
+         (body
+          (Lambda (arg x) (erased Unerased)
+           (arg_mode ((staticity ()) (erasure ())))
+           (arg_ty (Var (id t) (loc ((line 2) (column 47)))))
+           (body
+            (If (cond (Literal (value (Bool true)) (loc ((line 2) (column 56)))))
+             (then_ (Var (id x) (loc ((line 2) (column 66)))))
+             (else_ (Var (id x) (loc ((line 2) (column 73))))) (static false)
+             (loc ((line 2) (column 53)))))
+           (loc ((line 2) (column 39)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
@@ -4607,19 +5143,9 @@ let f = fn (static erased t : type) -> fn (x : t) -> if true then x else x;;
                   (static false) (loc ((line 2) (column 53)))))
                 (loc ((line 2) (column 39)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Lambda (arg x) (erased Unerased)
-           (arg_mode ((staticity ()) (erasure ())))
-           (arg_ty (Var (id t) (loc ((line 2) (column 47)))))
-           (body
-            (If (cond (Literal (value (Bool true)) (loc ((line 2) (column 56)))))
-             (then_ (Var (id x) (loc ((line 2) (column 66)))))
-             (else_ (Var (id x) (loc ((line 2) (column 73))))) (static false)
-             (loc ((line 2) (column 53)))))
-           (loc ((line 2) (column 39)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -4647,6 +5173,24 @@ let _ = f (fn (x : int) -> 0);;
      ((Let (var f)
        (bind
         (Lambda (arg g)
+         (body
+          (Apply
+           (fn
+            (Var (id g)
+             (ty
+              (Type
+               (Arrow (arg_ty (Type Int))
+                (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                (ret_ty (Type Int))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 31)))))
+           (arg
+            (Literal (value (Int (T 0))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 2) (column 33)))))
+           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 2) (column 31)))))
          (ty
           (Type
            (Arrow
@@ -4659,24 +5203,9 @@ let _ = f (fn (x : int) -> 0);;
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply
-           (fn
-            (Var (id g)
-             (ty
-              (Type
-               (Arrow (arg_ty (Type Int))
-                (arg_mode ((staticity Dynamic) (erasure Unerased)))
-                (ret_ty (Type Int))
-                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (arg
-            (Literal (value (Int (T 0))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -4694,22 +5223,25 @@ let _ = f (fn (x : int) -> 0);;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
          (arg
           (Lambda (arg x)
+           (body
+            (Literal (value (Int (T 0))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 27)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Literal (value (Int (T 0))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 11)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4764,6 +5296,11 @@ let _ = f (fn (static x : int) -> 0);;
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Apply (fn (Var (id g) (loc ((line 2) (column 45)))))
+           (arg (Literal (value (Int 0)) (loc ((line 2) (column 47)))))
+           (loc ((line 2) (column 45)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -4776,19 +5313,32 @@ let _ = f (fn (static x : int) -> 0);;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id g) (loc ((line 2) (column 45)))))
-           (arg (Literal (value (Int 0)) (loc ((line 2) (column 47)))))
-           (loc ((line 2) (column 45)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 4))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Int))
+                 (arg_mode ((staticity Static) (erasure Unerased)))
+                 (ret_ty (T (Type Int)))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 4)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4804,6 +5354,11 @@ let _ = f (fn (x : int) -> 0);;
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Apply (fn (Var (id g) (loc ((line 2) (column 45)))))
+           (arg (Literal (value (Int 0)) (loc ((line 2) (column 47)))))
+           (loc ((line 2) (column 45)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -4816,19 +5371,32 @@ let _ = f (fn (x : int) -> 0);;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id g) (loc ((line 2) (column 45)))))
-           (arg (Literal (value (Int 0)) (loc ((line 2) (column 47)))))
-           (loc ((line 2) (column 45)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 3))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Int))
+                 (arg_mode ((staticity Static) (erasure Unerased)))
+                 (ret_ty (T (Type Int)))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 3)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -4854,37 +5422,42 @@ let _ = if true then fn (static x : int) -> x else fn (x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
-          (Binder (arg x)
+          (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 44)))))
+           (mono <opaque>)
            (ty
             (Type
              (Pi (arg_ty (Type Int))
               (arg_mode ((staticity Static) (erasure Unerased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (body (Var (id x) (loc ((line 2) (column 44))))) (mono <opaque>)
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 21)))))
          (else_
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 67)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 51)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -4901,37 +5474,41 @@ let _ = if true then fn (static x : int) -> x else fn (erased x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
-          (Binder (arg x)
+          (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 44)))))
+           (mono <opaque>)
            (ty
             (Type
              (Pi (arg_ty (Type Int))
               (arg_mode ((staticity Static) (erasure Unerased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (body (Var (id x) (loc ((line 2) (column 44))))) (mono <opaque>)
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 21)))))
          (else_
           (Lambda (arg x)
+           (body
+            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
+             (loc ((line 2) (column 74)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Erased))))))
-           (body
-            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-             (loc <opaque>)))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 51)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -4948,37 +5525,42 @@ let _ = if true then fn (static erased x : int) -> x else fn (x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
-          (Binder (arg x)
+          (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 51)))))
+           (mono <opaque>)
            (ty
             (Type
              (Pi (arg_ty (Type Int))
               (arg_mode ((staticity Static) (erasure Erased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Erased))))))
-           (body (Var (id x) (loc ((line 2) (column 51))))) (mono <opaque>)
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 21)))))
          (else_
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 74)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 58)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -4995,39 +5577,44 @@ let _ = if true then fn (erased x : int) -> x else fn (x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
           (Lambda (arg x)
+           (body
+            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
+             (loc ((line 2) (column 44)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Erased))))))
-           (body
-            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-             (loc <opaque>)))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 21)))))
          (else_
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 67)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 51)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -5044,37 +5631,42 @@ let _ = if true then fn (x : int) -> x else fn (static x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 37)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 21)))))
          (else_
-          (Binder (arg x)
+          (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 67)))))
+           (mono <opaque>)
            (ty
             (Type
              (Pi (arg_ty (Type Int))
               (arg_mode ((staticity Static) (erasure Unerased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (body (Var (id x) (loc ((line 2) (column 67))))) (mono <opaque>)
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 44)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -5091,39 +5683,44 @@ let _ = if true then fn (x : int) -> x else fn (erased x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 37)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 21)))))
          (else_
           (Lambda (arg x)
+           (body
+            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
+             (loc ((line 2) (column 67)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Erased))))))
-           (body
-            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-             (loc <opaque>)))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 44)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -5140,37 +5737,41 @@ let _ = if true then fn (erased x : int) -> x else fn (static x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
           (Lambda (arg x)
+           (body
+            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
+             (loc ((line 2) (column 44)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Erased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Erased))))))
-           (body
-            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-             (loc <opaque>)))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 21)))))
          (else_
-          (Binder (arg x)
+          (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 74)))))
+           (mono <opaque>)
            (ty
             (Type
              (Pi (arg_ty (Type Int))
               (arg_mode ((staticity Static) (erasure Unerased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (body (Var (id x) (loc ((line 2) (column 74))))) (mono <opaque>)
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 51)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -5187,37 +5788,42 @@ let _ = if true then fn (x : int) -> x else fn (static erased x : int) -> x;;
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 11)))))
          (then_
           (Lambda (arg x)
+           (body
+            (Var (id x) (ty (Type Int))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 37)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Var (id x) (ty (Type Int))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 2) (column 21)))))
          (else_
-          (Binder (arg x)
+          (Binder (arg x) (body (Var (id x) (loc ((line 2) (column 74)))))
+           (mono <opaque>)
            (ty
             (Type
              (Pi (arg_ty (Type Int))
               (arg_mode ((staticity Static) (erasure Erased)))
               (ret_ty (T (Type Int)))
               (ret_mode ((staticity Static) (erasure Erased))))))
-           (body (Var (id x) (loc ((line 2) (column 74))))) (mono <opaque>)
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 44)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -5248,29 +5854,33 @@ let _ = f 1;;
      ((Let (var f)
        (bind
         (Lambda (arg x)
+         (body
+          (Literal (value (Int (T 0))) (ty (Type Int))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 26)))))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Erased))))))
-         (body
-          (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Let (var x)
          (bind
           (Literal (value (Int (T 1))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
          (rest
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Erased)))
+           (loc ((line 2) (column 26)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -5285,6 +5895,24 @@ let%expect_test "arrow typechecking" =
      ((Let (var f)
        (bind
         (Lambda (arg g)
+         (body
+          (Apply
+           (fn
+            (Var (id g)
+             (ty
+              (Type
+               (Arrow (arg_ty (Type Int))
+                (arg_mode ((staticity Dynamic) (erasure Erased)))
+                (ret_ty (Type Int))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (mode ((staticity Dynamic) (erasure Unerased)))
+             (loc ((line 2) (column 40)))))
+           (arg
+            (Literal (value (Int (T 0))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 2) (column 42)))))
+           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 2) (column 40)))))
          (ty
           (Type
            (Arrow
@@ -5297,24 +5925,9 @@ let%expect_test "arrow typechecking" =
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply
-           (fn
-            (Var (id g)
-             (ty
-              (Type
-               (Arrow (arg_ty (Type Int))
-                (arg_mode ((staticity Dynamic) (erasure Erased)))
-                (ret_ty (Type Int))
-                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-           (arg
-            (Literal (value (Int (T 0))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-           (loc <opaque>)))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 2))))))
     |}]
 ;;
 
@@ -5344,6 +5957,11 @@ let%expect_test "pi typechecking" =
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Apply (fn (Var (id g) (loc ((line 2) (column 47)))))
+           (arg (Literal (value (Int 0)) (loc ((line 2) (column 49)))))
+           (loc ((line 2) (column 47)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5356,19 +5974,32 @@ let%expect_test "pi typechecking" =
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id g) (loc ((line 2) (column 47)))))
-           (arg (Literal (value (Int 0)) (loc ((line 2) (column 49)))))
-           (loc ((line 2) (column 47)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 10)))))
+       (loc ((line 2) (column 2))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 1))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Arrow (arg_ty (Type Int))
+                 (arg_mode ((staticity Dynamic) (erasure Erased)))
+                 (ret_ty (Type Int))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
+         (key (Closure 1)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 10)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 2))))))
     |}]
 ;;
 
@@ -5416,6 +6047,11 @@ let _ = f (fn (x : int) -> 0);;
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Apply (fn (Var (id g) (loc ((line 2) (column 45)))))
+           (arg (Literal (value (Int 1)) (loc ((line 2) (column 47)))))
+           (loc ((line 2) (column 45)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5428,19 +6064,32 @@ let _ = f (fn (x : int) -> 0);;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id g) (loc ((line 2) (column 45)))))
-           (arg (Literal (value (Int 1)) (loc ((line 2) (column 47)))))
-           (loc ((line 2) (column 45)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 3))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Int))
+                 (arg_mode ((staticity Static) (erasure Unerased)))
+                 (ret_ty (T (Type Int)))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 3)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -5456,6 +6105,11 @@ let _ = f (fn (static x : int) -> x + 1);;
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Apply (fn (Var (id g) (loc ((line 2) (column 52)))))
+           (arg (Literal (value (Int 0)) (loc ((line 2) (column 54)))))
+           (loc ((line 2) (column 52)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5468,19 +6122,32 @@ let _ = f (fn (static x : int) -> x + 1);;
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id g) (loc ((line 2) (column 52)))))
-           (arg (Literal (value (Int 0)) (loc ((line 2) (column 54)))))
-           (loc ((line 2) (column 52)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 4))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Int))
+                 (arg_mode ((staticity Static) (erasure Unerased)))
+                 (ret_ty (T (Type Int)))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 4)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -5535,6 +6202,11 @@ let _ = f (fn (static erased t : type) -> fn (x : int) -> x);;
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Apply (fn (Var (id g) (loc ((line 2) (column 60)))))
+           (arg (Var (id int) (loc ((line 2) (column 62)))))
+           (loc ((line 2) (column 60)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5559,25 +6231,50 @@ let _ = f (fn (static erased t : type) -> fn (x : int) -> x);;
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id g) (loc ((line 2) (column 60)))))
-           (arg (Var (id int) (loc ((line 2) (column 62)))))
-           (loc ((line 2) (column 60)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 4))
-         (mode ((staticity Dynamic) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Type))
+                 (arg_mode ((staticity Static) (erasure Erased)))
+                 (ret_ty
+                  (T
+                   (Type
+                    (Arrow (arg_ty (Type Int))
+                     (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                     (ret_ty (Type Int))
+                     (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (T
+                (Type
+                 (Arrow (arg_ty (Type Int))
+                  (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                  (ret_ty (Type Int))
+                  (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 4))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -5594,6 +6291,16 @@ let y = (id bool) (true @ dynamic);;
      ((Let (var id)
        (bind
         (Binder (arg t)
+         (body
+          (Paren
+           (expr
+            (Lambda (arg x) (erased Unerased)
+             (arg_mode ((staticity ()) (erasure ())))
+             (arg_ty (Var (id t) (loc ((line 2) (column 49)))))
+             (body (Var (id x) (loc ((line 2) (column 55)))))
+             (loc ((line 2) (column 41)))))
+           (loc ((line 2) (column 40)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
@@ -5611,56 +6318,95 @@ let y = (id bool) (true @ dynamic);;
                   (loc ((line 2) (column 41)))))
                 (loc ((line 2) (column 40)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Paren
-           (expr
-            (Lambda (arg x) (erased Unerased)
-             (arg_mode ((staticity ()) (erasure ())))
-             (arg_ty (Var (id t) (loc ((line 2) (column 49)))))
-             (body (Var (id x) (loc ((line 2) (column 55)))))
-             (loc ((line 2) (column 41)))))
-           (loc ((line 2) (column 40)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var x)
        (bind
         (Apply
          (fn
-          (Symbol (id id) (arg IntT)
-           (mode ((staticity Static) (erasure Unerased)))
+          (Symbol
+           (fn
+            (Var (id id)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg t) (arg_ty (Type Type))
+                  (arg_mode ((staticity Static) (erasure Erased)))
+                  (memo <opaque>)
+                  (body
+                   (Paren
+                    (expr
+                     (Lambda (arg x) (erased Unerased)
+                      (arg_mode ((staticity ()) (erasure ())))
+                      (arg_ty (Var (id t) (loc ((line 2) (column 49)))))
+                      (body (Var (id x) (loc ((line 2) (column 55)))))
+                      (loc ((line 2) (column 41)))))
+                    (loc ((line 2) (column 40)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 9)))))
+           (key IntT)
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
            (loc ((line 3) (column 9)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 18)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var y)
        (bind
         (Apply
          (fn
-          (Symbol (id id) (arg BoolT)
-           (mode ((staticity Static) (erasure Unerased)))
+          (Symbol
+           (fn
+            (Var (id id)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg t) (arg_ty (Type Type))
+                  (arg_mode ((staticity Static) (erasure Erased)))
+                  (memo <opaque>)
+                  (body
+                   (Paren
+                    (expr
+                     (Lambda (arg x) (erased Unerased)
+                      (arg_mode ((staticity ()) (erasure ())))
+                      (arg_ty (Var (id t) (loc ((line 2) (column 49)))))
+                      (body (Var (id x) (loc ((line 2) (column 55)))))
+                      (loc ((line 2) (column 41)))))
+                    (loc ((line 2) (column 40)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 9)))))
+           (key BoolT)
            (ty
             (Type
              (Arrow (arg_ty (Type Bool))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Bool))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
            (loc ((line 4) (column 9)))))
          (arg
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 19)))))
          (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -5677,6 +6423,20 @@ let y = (id bool) (true @ dynamic);;
      ((Let (var id)
        (bind
         (Binder (arg t)
+         (body
+          (Mode_annotation
+           (expr
+            (Paren
+             (expr
+              (Lambda (arg x) (erased Unerased)
+               (arg_mode ((staticity ()) (erasure ())))
+               (arg_ty (Var (id t) (loc ((line 2) (column 49)))))
+               (body (Var (id x) (loc ((line 2) (column 55)))))
+               (loc ((line 2) (column 41)))))
+             (loc ((line 2) (column 40)))))
+           (mode ((staticity ()) (erasure (Erased))))
+           (loc ((line 2) (column 58)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Type))
@@ -5698,46 +6458,37 @@ let y = (id bool) (true @ dynamic);;
                 (mode ((staticity ()) (erasure (Erased))))
                 (loc ((line 2) (column 58)))))))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body
-          (Mode_annotation
-           (expr
-            (Paren
-             (expr
-              (Lambda (arg x) (erased Unerased)
-               (arg_mode ((staticity ()) (erasure ())))
-               (arg_ty (Var (id t) (loc ((line 2) (column 49)))))
-               (body (Var (id x) (loc ((line 2) (column 55)))))
-               (loc ((line 2) (column 41)))))
-             (loc ((line 2) (column 40)))))
-           (mode ((staticity ()) (erasure (Erased))))
-           (loc ((line 2) (column 58)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Let (var x)
        (bind
         (Let (var x)
          (bind
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 18)))))
          (rest
           (Var (id x) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 2) (column 55)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var y)
        (bind
         (Let (var x)
          (bind
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 19)))))
          (rest
           (Var (id x) (ty (Type Bool))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 2) (column 55)))))
          (ty (Type Bool)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -5752,19 +6503,22 @@ let apply_int = fn (static f : static int \ x -> mk_int x) -> 2;;
     (tst
      ((Let (var mk_int)
        (bind
-        (Binder (arg x)
+        (Binder (arg x) (body (Var (id int) (loc ((line 2) (column 36)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id int) (loc ((line 2) (column 36))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 13)))))
+       (loc ((line 2) (column 0))))
       (Let (var apply_int)
        (bind
         (Binder (arg f)
+         (body (Literal (value (Int 2)) (loc ((line 3) (column 62)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5784,10 +6538,9 @@ let apply_int = fn (static f : static int \ x -> mk_int x) -> 2;;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body (Literal (value (Int 2)) (loc ((line 3) (column 62)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 16)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -5802,19 +6555,25 @@ let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
     (tst
      ((Let (var mk_int)
        (bind
-        (Binder (arg x)
+        (Binder (arg x) (body (Var (id int) (loc ((line 2) (column 36)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id int) (loc ((line 2) (column 36))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 13)))))
+       (loc ((line 2) (column 0))))
       (Let (var apply_int)
        (bind
         (Binder (arg f)
+         (body
+          (Apply (fn (Var (id f) (loc ((line 3) (column 70)))))
+           (arg (Literal (value (Int 2)) (loc ((line 3) (column 72)))))
+           (loc ((line 3) (column 70)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5845,13 +6604,9 @@ let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id f) (loc ((line 3) (column 70)))))
-           (arg (Literal (value (Int 2)) (loc ((line 3) (column 72)))))
-           (loc ((line 3) (column 70)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 16)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -5867,6 +6622,11 @@ let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
      ((Let (var apply_int)
        (bind
         (Binder (arg f)
+         (body
+          (Apply (fn (Var (id f) (loc ((line 2) (column 68)))))
+           (arg (Var (id int) (loc ((line 2) (column 70)))))
+           (loc ((line 2) (column 68)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5893,25 +6653,53 @@ let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id f) (loc ((line 2) (column 68)))))
-           (arg (Var (id int) (loc ((line 2) (column 70)))))
-           (loc ((line 2) (column 68)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 16)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id apply_int) (arg (Closure 4))
-         (mode ((staticity Dynamic) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id apply_int)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Type))
+                 (arg_mode ((staticity Static) (erasure Erased)))
+                 (ret_ty
+                  (Reduce (env <opaque>) (arg t) (arg_ty (Type Type))
+                   (arg_mode ((staticity Static) (erasure Erased)))
+                   (memo <opaque>)
+                   (ret_ty
+                    (Arrow (arg (Var (id t) (loc ((line 2) (column 57)))))
+                     (arg_id ()) (arg_mode ((staticity ()) (erasure ())))
+                     (ret (Var (id t) (loc ((line 2) (column 62)))))
+                     (ret_mode ((staticity ()) (erasure ())))
+                     (loc ((line 2) (column 59)))))))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (T
+                (Type
+                 (Arrow (arg_ty (Type Int))
+                  (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                  (ret_ty (Type Int))
+                  (ret_mode ((staticity Dynamic) (erasure Unerased)))))))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 4))
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -5929,6 +6717,16 @@ let h = f bool;;
      ((Let (var apply)
        (bind
         (Binder (arg f)
+         (body
+          (Lambda (arg t2) (erased Unerased)
+           (arg_mode ((staticity (Static)) (erasure (Erased))))
+           (arg_ty (Var (id type) (loc ((line 2) (column 87)))))
+           (body
+            (Apply (fn (Var (id f) (loc ((line 2) (column 96)))))
+             (arg (Var (id t2) (loc ((line 2) (column 98)))))
+             (loc ((line 2) (column 96)))))
+           (loc ((line 2) (column 64)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -5975,22 +6773,65 @@ let h = f bool;;
                   (loc ((line 2) (column 96)))))
                 (loc ((line 2) (column 64)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Lambda (arg t2) (erased Unerased)
-           (arg_mode ((staticity (Static)) (erasure (Erased))))
-           (arg_ty (Var (id type) (loc ((line 2) (column 87)))))
-           (body
-            (Apply (fn (Var (id f) (loc ((line 2) (column 96)))))
-             (arg (Var (id t2) (loc ((line 2) (column 98)))))
-             (loc ((line 2) (column 96)))))
-           (loc ((line 2) (column 64)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 12)))))
+       (loc ((line 2) (column 0))))
       (Let (var f)
        (bind
-        (Symbol (id apply) (arg (Closure 7))
-         (mode ((staticity Static) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id apply)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Type))
+                 (arg_mode ((staticity Static) (erasure Erased)))
+                 (ret_ty
+                  (Reduce (env <opaque>) (arg t) (arg_ty (Type Type))
+                   (arg_mode ((staticity Static) (erasure Erased)))
+                   (memo <opaque>)
+                   (ret_ty
+                    (Arrow (arg (Var (id t) (loc ((line 2) (column 53)))))
+                     (arg_id ()) (arg_mode ((staticity ()) (erasure ())))
+                     (ret (Var (id t) (loc ((line 2) (column 58)))))
+                     (ret_mode ((staticity ()) (erasure ())))
+                     (loc ((line 2) (column 55)))))))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg f)
+                (arg_ty
+                 (Type
+                  (Pi (arg_ty (Type Type))
+                   (arg_mode ((staticity Static) (erasure Erased)))
+                   (ret_ty
+                    (Reduce (env <opaque>) (arg t) (arg_ty (Type Type))
+                     (arg_mode ((staticity Static) (erasure Erased)))
+                     (memo <opaque>)
+                     (ret_ty
+                      (Arrow (arg (Var (id t) (loc ((line 2) (column 53)))))
+                       (arg_id ()) (arg_mode ((staticity ()) (erasure ())))
+                       (ret (Var (id t) (loc ((line 2) (column 58)))))
+                       (ret_mode ((staticity ()) (erasure ())))
+                       (loc ((line 2) (column 55)))))))
+                   (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (memo <opaque>)
+                (body
+                 (Lambda (arg t2) (erased Unerased)
+                  (arg_mode ((staticity (Static)) (erasure (Erased))))
+                  (arg_ty (Var (id type) (loc ((line 2) (column 87)))))
+                  (body
+                   (Apply (fn (Var (id f) (loc ((line 2) (column 96)))))
+                    (arg (Var (id t2) (loc ((line 2) (column 98)))))
+                    (loc ((line 2) (column 96)))))
+                  (loc ((line 2) (column 64)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 7))
          (ty
           (Type
            (Pi (arg_ty (Type Type))
@@ -6003,31 +6844,67 @@ let h = f bool;;
                 (arg (Var (id t2) (loc ((line 2) (column 98)))))
                 (loc ((line 2) (column 96)))))))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))
+       (loc ((line 3) (column 0))))
       (Let (var g)
        (bind
-        (Symbol (id f) (arg IntT) (mode ((staticity Dynamic) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Type))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg t2) (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
+                (body
+                 (Apply (fn (Var (id f) (loc ((line 2) (column 96)))))
+                  (arg (Var (id t2) (loc ((line 2) (column 98)))))
+                  (loc ((line 2) (column 96)))))))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
+         (key IntT)
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 4) (column 8)))))
-       (loc <opaque>))
+       (loc ((line 4) (column 0))))
       (Let (var h)
        (bind
-        (Symbol (id f) (arg BoolT)
-         (mode ((staticity Dynamic) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Type))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg t2) (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
+                (body
+                 (Apply (fn (Var (id f) (loc ((line 2) (column 96)))))
+                  (arg (Var (id t2) (loc ((line 2) (column 98)))))
+                  (loc ((line 2) (column 96)))))))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 5) (column 8)))))
+         (key BoolT)
          (ty
           (Type
            (Arrow (arg_ty (Type Bool))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Bool))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 5) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 5) (column 0))))))
     |}]
 ;;
 
@@ -6044,6 +6921,16 @@ let _ = f 1;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (If
+           (cond
+            (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
+             (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
+             (loc ((line 2) (column 43)))))
+           (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
+           (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
+           (static true) (loc ((line 2) (column 31)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6062,30 +6949,69 @@ let _ = f 1;;
                  (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
                 (static true) (loc ((line 2) (column 31)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (If
-           (cond
-            (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
-             (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
-             (loc ((line 2) (column 43)))))
-           (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
-           (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
-           (static true) (loc ((line 2) (column 31)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Int 0))
-         (mode ((staticity Static) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (memo <opaque>)
+                (body
+                 (If
+                  (cond
+                   (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
+                    (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
+                    (loc ((line 2) (column 43)))))
+                  (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
+                  (else_
+                   (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
+                  (static true) (loc ((line 2) (column 31)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Int 0)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Int 1))
-         (mode ((staticity Static) (erasure Unerased))) (ty (Type Bool))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (memo <opaque>)
+                (body
+                 (If
+                  (cond
+                   (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
+                    (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
+                    (loc ((line 2) (column 43)))))
+                  (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
+                  (else_
+                   (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
+                  (static true) (loc ((line 2) (column 31)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
+         (key (Int 1)) (ty (Type Bool))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 4) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -6129,8 +7055,9 @@ let _ = (if static true then 1 else true) : (if true then int else bool);;
      ((Let (var _)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 29)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6145,8 +7072,9 @@ let _ = (if static true then 1 else true) : (if static true then int else bool);
      ((Let (var _)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 29)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6185,21 +7113,23 @@ let _ = (if static true then 1 else (0 : f ())) : int;;
     (tst
      ((Let (var f)
        (bind
-        (Binder (arg _)
+        (Binder (arg _) (body (Var (id int) (loc ((line 2) (column 32)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Unit))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body (Var (id int) (loc ((line 2) (column 32))))) (mono <opaque>)
-         (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Literal (value (Int (T 1))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 29)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -6214,6 +7144,34 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (Type_annotation
+           (expr
+            (Paren
+             (expr
+              (If
+               (cond
+                (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 42)))))
+                 (rhs (Literal (value (Int 0)) (loc ((line 2) (column 47)))))
+                 (loc ((line 2) (column 44)))))
+               (then_ (Literal (value (Int 1)) (loc ((line 2) (column 54)))))
+               (else_ (Literal (value (Bool true)) (loc ((line 2) (column 61)))))
+               (static true) (loc ((line 2) (column 32)))))
+             (loc ((line 2) (column 31)))))
+           (ty
+            (Paren
+             (expr
+              (If
+               (cond
+                (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 73)))))
+                 (rhs (Literal (value (Int 0)) (loc ((line 2) (column 78)))))
+                 (loc ((line 2) (column 75)))))
+               (then_ (Var (id int) (loc ((line 2) (column 85)))))
+               (else_ (Var (id bool) (loc ((line 2) (column 94)))))
+               (static false) (loc ((line 2) (column 70)))))
+             (loc ((line 2) (column 69)))))
+           (loc ((line 2) (column 67)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6255,6 +7213,23 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 
                   (loc ((line 2) (column 69)))))
                 (loc ((line 2) (column 67)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
+    |}]
+;;
+
+let%expect_test "dependent if" =
+  go
+    {|
+let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static x == 0 then int else bool);;
+|};
+  [%expect
+    {|
+    (tst
+     ((Let (var f)
+       (bind
+        (Binder (arg x)
          (body
           (Type_annotation
            (expr
@@ -6274,31 +7249,15 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 
              (expr
               (If
                (cond
-                (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 73)))))
-                 (rhs (Literal (value (Int 0)) (loc ((line 2) (column 78)))))
-                 (loc ((line 2) (column 75)))))
-               (then_ (Var (id int) (loc ((line 2) (column 85)))))
-               (else_ (Var (id bool) (loc ((line 2) (column 94)))))
-               (static false) (loc ((line 2) (column 70)))))
+                (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 80)))))
+                 (rhs (Literal (value (Int 0)) (loc ((line 2) (column 85)))))
+                 (loc ((line 2) (column 82)))))
+               (then_ (Var (id int) (loc ((line 2) (column 92)))))
+               (else_ (Var (id bool) (loc ((line 2) (column 101)))))
+               (static true) (loc ((line 2) (column 70)))))
              (loc ((line 2) (column 69)))))
            (loc ((line 2) (column 67)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
-    |}]
-;;
-
-let%expect_test "dependent if" =
-  go
-    {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static x == 0 then int else bool);;
-|};
-  [%expect
-    {|
-    (tst
-     ((Let (var f)
-       (bind
-        (Binder (arg x)
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6340,36 +7299,9 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static 
                   (loc ((line 2) (column 69)))))
                 (loc ((line 2) (column 67)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Type_annotation
-           (expr
-            (Paren
-             (expr
-              (If
-               (cond
-                (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 42)))))
-                 (rhs (Literal (value (Int 0)) (loc ((line 2) (column 47)))))
-                 (loc ((line 2) (column 44)))))
-               (then_ (Literal (value (Int 1)) (loc ((line 2) (column 54)))))
-               (else_ (Literal (value (Bool true)) (loc ((line 2) (column 61)))))
-               (static true) (loc ((line 2) (column 32)))))
-             (loc ((line 2) (column 31)))))
-           (ty
-            (Paren
-             (expr
-              (If
-               (cond
-                (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 80)))))
-                 (rhs (Literal (value (Int 0)) (loc ((line 2) (column 85)))))
-                 (loc ((line 2) (column 82)))))
-               (then_ (Var (id int) (loc ((line 2) (column 92)))))
-               (else_ (Var (id bool) (loc ((line 2) (column 101)))))
-               (static true) (loc ((line 2) (column 70)))))
-             (loc ((line 2) (column 69)))))
-           (loc ((line 2) (column 67)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6451,6 +7383,16 @@ let _ = if true then f else g;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (If
+           (cond
+            (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
+             (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
+             (loc ((line 2) (column 43)))))
+           (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
+           (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
+           (static true) (loc ((line 2) (column 31)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6469,21 +7411,22 @@ let _ = if true then f else g;;
                  (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
                 (static true) (loc ((line 2) (column 31)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (If
-           (cond
-            (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
-             (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
-             (loc ((line 2) (column 43)))))
-           (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
-           (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
-           (static true) (loc ((line 2) (column 31)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg x)
+         (body
+          (If
+           (cond
+            (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 41)))))
+             (rhs (Literal (value (Int 0)) (loc ((line 3) (column 46)))))
+             (loc ((line 3) (column 43)))))
+           (then_ (Literal (value (Int 1)) (loc ((line 3) (column 53)))))
+           (else_ (Literal (value (Bool true)) (loc ((line 3) (column 60)))))
+           (static true) (loc ((line 3) (column 31)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6502,24 +7445,16 @@ let _ = if true then f else g;;
                  (Literal (value (Bool true)) (loc ((line 3) (column 60)))))
                 (static true) (loc ((line 3) (column 31)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (If
-           (cond
-            (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 41)))))
-             (rhs (Literal (value (Int 0)) (loc ((line 3) (column 46)))))
-             (loc ((line 3) (column 43)))))
-           (then_ (Literal (value (Int 1)) (loc ((line 3) (column 53)))))
-           (else_ (Literal (value (Bool true)) (loc ((line 3) (column 60)))))
-           (static true) (loc ((line 3) (column 31)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 11)))))
          (then_
           (Var (id f)
            (ty
@@ -6541,7 +7476,8 @@ let _ = if true then f else g;;
                    (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
                   (static true) (loc ((line 2) (column 31)))))))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 21)))))
          (else_
           (Var (id g)
            (ty
@@ -6563,7 +7499,8 @@ let _ = if true then f else g;;
                    (Literal (value (Bool true)) (loc ((line 3) (column 60)))))
                   (static true) (loc ((line 3) (column 31)))))))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 28)))))
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6595,8 +7532,9 @@ let _ = if true then f else g;;
                   (Literal (value (Bool true)) (loc ((line 3) (column 60)))))
                  (static true) (loc ((line 3) (column 31))))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -6613,6 +7551,16 @@ let _ = if true then f 0 else g 1;;
      ((Let (var f)
        (bind
         (Binder (arg x)
+         (body
+          (If
+           (cond
+            (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
+             (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
+             (loc ((line 2) (column 43)))))
+           (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
+           (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
+           (static true) (loc ((line 2) (column 31)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6631,21 +7579,22 @@ let _ = if true then f 0 else g 1;;
                  (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
                 (static true) (loc ((line 2) (column 31)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (If
-           (cond
-            (Binop (op Eq) (lhs (Var (id x) (loc ((line 2) (column 41)))))
-             (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
-             (loc ((line 2) (column 43)))))
-           (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
-           (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
-           (static true) (loc ((line 2) (column 31)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var g)
        (bind
         (Binder (arg x)
+         (body
+          (If
+           (cond
+            (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 41)))))
+             (rhs (Literal (value (Int 0)) (loc ((line 3) (column 46)))))
+             (loc ((line 3) (column 43)))))
+           (then_ (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
+           (else_ (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
+           (static true) (loc ((line 3) (column 31)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Int))
@@ -6664,35 +7613,81 @@ let _ = if true then f 0 else g 1;;
                 (else_ (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
                 (static true) (loc ((line 3) (column 31)))))))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (If
-           (cond
-            (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 41)))))
-             (rhs (Literal (value (Int 0)) (loc ((line 3) (column 46)))))
-             (loc ((line 3) (column 43)))))
-           (then_ (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
-           (else_ (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
-           (static true) (loc ((line 3) (column 31)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))
       (Let (var _)
        (bind
         (If
          (cond
           (Literal (value (Bool (T true))) (ty (Type Bool))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 11)))))
          (then_
-          (Symbol (id f) (arg (Int 0))
-           (mode ((staticity Static) (erasure Unerased))) (ty (Type Int))
+          (Symbol
+           (fn
+            (Var (id f)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                  (arg_mode ((staticity Static) (erasure Unerased)))
+                  (memo <opaque>)
+                  (body
+                   (If
+                    (cond
+                     (Binop (op Eq)
+                      (lhs (Var (id x) (loc ((line 2) (column 41)))))
+                      (rhs
+                       (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
+                      (loc ((line 2) (column 43)))))
+                    (then_
+                     (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
+                    (else_
+                     (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
+                    (static true) (loc ((line 2) (column 31)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 21)))))
+           (key (Int 0)) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
            (loc ((line 4) (column 21)))))
          (else_
-          (Symbol (id g) (arg (Int 1))
-           (mode ((staticity Static) (erasure Unerased))) (ty (Type Int))
+          (Symbol
+           (fn
+            (Var (id g)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                  (arg_mode ((staticity Static) (erasure Unerased)))
+                  (memo <opaque>)
+                  (body
+                   (If
+                    (cond
+                     (Binop (op Eq)
+                      (lhs (Var (id x) (loc ((line 3) (column 41)))))
+                      (rhs
+                       (Literal (value (Int 0)) (loc ((line 3) (column 46)))))
+                      (loc ((line 3) (column 43)))))
+                    (then_
+                     (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
+                    (else_
+                     (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
+                    (static true) (loc ((line 3) (column 31)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 30)))))
+           (key (Int 1)) (ty (Type Int))
+           (mode ((staticity Static) (erasure Unerased)))
            (loc ((line 4) (column 30)))))
          (ty (Type Int)) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -6708,6 +7703,11 @@ let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
      ((Let (var choose)
        (bind
         (Binder (arg f)
+         (body
+          (Apply (fn (Var (id f) (loc ((line 2) (column 79)))))
+           (arg (Literal (value (Int 0)) (loc ((line 2) (column 81)))))
+           (loc ((line 2) (column 79)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -6733,19 +7733,46 @@ let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (body
-          (Apply (fn (Var (id f) (loc ((line 2) (column 79)))))
-           (arg (Literal (value (Int 0)) (loc ((line 2) (column 81)))))
-           (loc ((line 2) (column 79)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 13)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id choose) (arg (Closure 4))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id choose)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Pi (arg_ty (Type Int))
+                 (arg_mode ((staticity Static) (erasure Unerased)))
+                 (ret_ty
+                  (Reduce (env <opaque>) (arg x) (arg_ty (Type Int))
+                   (arg_mode ((staticity Static) (erasure Unerased)))
+                   (memo <opaque>)
+                   (ret_ty
+                    (If
+                     (cond
+                      (Binop (op Eq)
+                       (lhs (Var (id x) (loc ((line 2) (column 49)))))
+                       (rhs
+                        (Literal (value (Int 0)) (loc ((line 2) (column 54)))))
+                       (loc ((line 2) (column 51)))))
+                     (then_ (Var (id int) (loc ((line 2) (column 61)))))
+                     (else_ (Var (id bool) (loc ((line 2) (column 70)))))
+                     (static false) (loc ((line 2) (column 46)))))))
+                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 4)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -6770,20 +7797,23 @@ fun f (x : int) : int = f x;;
                  (arg_mode ((staticity Dynamic) (erasure Unerased)))
                  (ret_ty (Type Int))
                  (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-              (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Static) (erasure Unerased)))
+              (loc ((line 2) (column 24)))))
             (arg
              (Var (id x) (ty (Type Int))
-              (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Dynamic) (erasure Unerased)))
+              (loc ((line 2) (column 26)))))
             (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-            (loc <opaque>)))
+            (loc ((line 2) (column 24)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6808,20 +7838,23 @@ fun f (erased x : int) : int = f x;;
                  (arg_mode ((staticity Dynamic) (erasure Erased)))
                  (ret_ty (Type Int))
                  (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-              (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Static) (erasure Unerased)))
+              (loc ((line 2) (column 31)))))
             (arg
              (Erased (ty (Type Int))
-              (mode ((staticity Dynamic) (erasure Erased))) (loc <opaque>)))
+              (mode ((staticity Dynamic) (erasure Erased)))
+              (loc ((line 2) (column 33)))))
             (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-            (loc <opaque>)))
+            (loc ((line 2) (column 31)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Erased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6838,15 +7871,16 @@ fun f (erased x : int) : erased int = x;;
         ((Lambda (var f) (arg x)
           (body
            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-            (loc <opaque>)))
+            (loc ((line 2) (column 38)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Erased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Erased))))))
-          (mode ((staticity Static) (erasure Erased))) (loc <opaque>))))
-       (loc <opaque>))))
+          (mode ((staticity Static) (erasure Erased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6878,15 +7912,17 @@ fun f (x : int) : int = 1;;
         ((Lambda (var f) (arg x)
           (body
            (Literal (value (Int (T 1))) (ty (Type Int))
-            (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+            (mode ((staticity Static) (erasure Unerased)))
+            (loc ((line 2) (column 24)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6903,15 +7939,17 @@ fun f (x : int) : erased int = 1 @ erased;;
         ((Lambda (var f) (arg x)
           (body
            (Literal (value (Int (T 1))) (ty (Type Int))
-            (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+            (mode ((staticity Static) (erasure Erased)))
+            (loc ((line 2) (column 33)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Erased))))))
-          (mode ((staticity Static) (erasure Erased))) (loc <opaque>))))
-       (loc <opaque>))))
+          (mode ((staticity Static) (erasure Erased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))))
     |}]
 ;;
 
@@ -6949,14 +7987,26 @@ let y = x 0;;
              (arg_mode ((staticity Static) (erasure Unerased)))
              (ret_ty (T (Type Int)))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
-        (Symbol (id x) (arg (Int 0))
-         (mode ((staticity Dynamic) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id x)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Int 0)) (ty (Type Int))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -6994,13 +8044,15 @@ let y = 0 : f ();;
              (arg_mode ((staticity Static) (erasure Unerased)))
              (ret_ty (T (Type Type)))
              (ret_mode ((staticity Static) (erasure Erased))))))
-          (mode ((staticity Static) (erasure Erased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Erased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Literal (value (Int (T 0))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7023,20 +8075,23 @@ let y = (f () @ dynamic);;
              (arg_mode ((staticity Static) (erasure Unerased)))
              (ret_ty (T (Type Type)))
              (ret_mode ((staticity Static) (erasure Erased))))))
-          (mode ((staticity Static) (erasure Erased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Erased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Let (var _)
          (bind
           (Literal (value Unit) (ty (Type Unit))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 11)))))
          (rest
           (Literal (value (Type Int)) (ty (Type Type))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 2) (column 47)))))
          (ty (Type Type)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7059,13 +8114,15 @@ let y = 5 : f ();;
              (arg_mode ((staticity Static) (erasure Unerased)))
              (ret_ty (T (Type Type)))
              (ret_mode ((staticity Static) (erasure Erased))))))
-          (mode ((staticity Static) (erasure Erased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Erased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var y)
        (bind
         (Literal (value (Int (T 5))) (ty (Type Int))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7125,20 +8182,40 @@ let i = id int;;
                  (ret_mode ((staticity ()) (erasure ())))
                  (loc ((line 2) (column 36)))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var i)
        (bind
-        (Symbol (id id) (arg IntT)
-         (mode ((staticity Dynamic) (erasure Unerased)))
+        (Symbol
+         (fn
+          (Var (id id)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Type))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty
+               (Reduce (env <opaque>) (arg t) (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
+                (ret_ty
+                 (Arrow (arg (Var (id t) (loc ((line 2) (column 34)))))
+                  (arg_id ()) (arg_mode ((staticity ()) (erasure ())))
+                  (ret (Var (id t) (loc ((line 2) (column 39)))))
+                  (ret_mode ((staticity ()) (erasure ())))
+                  (loc ((line 2) (column 36)))))))
+              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key IntT)
          (ty
           (Type
            (Arrow (arg_ty (Type Int))
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+         (mode ((staticity Dynamic) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7156,20 +8233,21 @@ let _ = id 0;;
         ((Lambda (var id) (arg x)
           (body
            (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-            (loc <opaque>)))
+            (loc ((line 2) (column 39)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Erased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Erased))))))
-          (mode ((staticity Static) (erasure Erased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Erased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Erased (ty (Type Int)) (mode ((staticity Dynamic) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 2) (column 39)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7215,27 +8293,49 @@ let x = (id int) (0 @ dynamic);;
                  (ret_mode ((staticity ()) (erasure ())))
                  (loc ((line 2) (column 36)))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var x)
        (bind
         (Apply
          (fn
-          (Symbol (id id) (arg IntT)
-           (mode ((staticity Dynamic) (erasure Unerased)))
+          (Symbol
+           (fn
+            (Var (id id)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased)))
+                (ret_ty
+                 (Reduce (env <opaque>) (arg t) (arg_ty (Type Type))
+                  (arg_mode ((staticity Static) (erasure Erased)))
+                  (memo <opaque>)
+                  (ret_ty
+                   (Arrow (arg (Var (id t) (loc ((line 2) (column 34)))))
+                    (arg_id ()) (arg_mode ((staticity ()) (erasure ())))
+                    (ret (Var (id t) (loc ((line 2) (column 39)))))
+                    (ret_mode ((staticity ()) (erasure ())))
+                    (loc ((line 2) (column 36)))))))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 9)))))
+           (key IntT)
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Dynamic) (erasure Unerased)))
            (loc ((line 3) (column 9)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 18)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7252,35 +8352,38 @@ let x = id () 0;;
      ((Let (var ty)
        (bind
         (Binder (arg _)
+         (body
+          (Arrow (arg (Var (id int) (loc ((line 2) (column 33))))) (arg_id ())
+           (arg_mode ((staticity ()) (erasure ())))
+           (ret (Var (id int) (loc ((line 2) (column 40)))))
+           (ret_mode ((staticity ()) (erasure ()))) (loc ((line 2) (column 37)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi (arg_ty (Type Unit))
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty (T (Type Type)))
             (ret_mode ((staticity Static) (erasure Erased))))))
-         (body
-          (Arrow (arg (Var (id int) (loc ((line 2) (column 33))))) (arg_id ())
-           (arg_mode ((staticity ()) (erasure ())))
-           (ret (Var (id int) (loc ((line 2) (column 40)))))
-           (ret_mode ((staticity ()) (erasure ()))) (loc ((line 2) (column 37)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Erased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Erased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
       (Fun
        (funs
         ((Lambda (var id) (arg _)
           (body
            (Lambda (arg x)
+            (body
+             (Var (id x) (ty (Type Int))
+              (mode ((staticity Dynamic) (erasure Unerased)))
+              (loc ((line 3) (column 44)))))
             (ty
              (Type
               (Arrow (arg_ty (Type Int))
                (arg_mode ((staticity Dynamic) (erasure Unerased)))
                (ret_ty (Type Int))
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-            (body
-             (Var (id x) (ty (Type Int))
-              (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
-            (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+            (mode ((staticity Static) (erasure Unerased)))
+            (loc ((line 3) (column 28)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Unit))
@@ -7292,8 +8395,9 @@ let x = id () 0;;
                 (ret_ty (Type Int))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 3) (column 4))))))
+       (loc ((line 3) (column 0))))
       (Let (var x)
        (bind
         (Apply
@@ -7312,23 +8416,27 @@ let x = id () 0;;
                    (ret_ty (Type Int))
                    (ret_mode ((staticity Dynamic) (erasure Unerased))))))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 8)))))
            (arg
             (Literal (value Unit) (ty (Type Unit))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 11)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 8)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 14)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -7366,8 +8474,9 @@ let x = id2 int (0 @ dynamic);;
                  (ret_mode ((staticity ()) (erasure ())))
                  (loc ((line 2) (column 37)))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Fun
        (funs
         ((Binder (var id2) (arg t)
@@ -7390,27 +8499,49 @@ let x = id2 int (0 @ dynamic);;
                  (ret_mode ((staticity ()) (erasure ())))
                  (loc ((line 3) (column 37)))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 3) (column 4))))))
+       (loc ((line 3) (column 0))))
       (Let (var x)
        (bind
         (Apply
          (fn
-          (Symbol (id id2) (arg IntT)
-           (mode ((staticity Dynamic) (erasure Unerased)))
+          (Symbol
+           (fn
+            (Var (id id2)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Type))
+                (arg_mode ((staticity Static) (erasure Erased)))
+                (ret_ty
+                 (Reduce (env <opaque>) (arg t) (arg_ty (Type Type))
+                  (arg_mode ((staticity Static) (erasure Erased)))
+                  (memo <opaque>)
+                  (ret_ty
+                   (Arrow (arg (Var (id t) (loc ((line 3) (column 35)))))
+                    (arg_id ()) (arg_mode ((staticity ()) (erasure ())))
+                    (ret (Var (id t) (loc ((line 3) (column 40)))))
+                    (ret_mode ((staticity ()) (erasure ())))
+                    (loc ((line 3) (column 37)))))))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 4) (column 8)))))
+           (key IntT)
            (ty
             (Type
              (Arrow (arg_ty (Type Int))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+           (mode ((staticity Dynamic) (erasure Unerased)))
            (loc ((line 4) (column 8)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 4) (column 17)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))))
     |}]
 ;;
 
@@ -7430,30 +8561,34 @@ let _ = x () ();;
         ((Lambda (var a) (arg _)
           (body
            (Literal (value Unit) (ty (Type Unit))
-            (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+            (mode ((staticity Static) (erasure Unerased)))
+            (loc ((line 2) (column 26)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Unit))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Unit))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Fun
        (funs
         ((Lambda (var b) (arg _)
           (body
            (Lambda (arg _)
+            (body
+             (Literal (value Unit) (ty (Type Unit))
+              (mode ((staticity Static) (erasure Unerased)))
+              (loc ((line 3) (column 51)))))
             (ty
              (Type
               (Arrow (arg_ty (Type Unit))
                (arg_mode ((staticity Dynamic) (erasure Unerased)))
                (ret_ty (Type Unit))
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-            (body
-             (Literal (value Unit) (ty (Type Unit))
-              (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-            (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+            (mode ((staticity Static) (erasure Unerased)))
+            (loc ((line 3) (column 34)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Unit))
@@ -7465,8 +8600,9 @@ let _ = x () ();;
                 (ret_ty (Type Unit))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 3) (column 4))))))
+       (loc ((line 3) (column 0))))
       (Let (var x)
        (bind
         (Var (id b)
@@ -7481,8 +8617,9 @@ let _ = x () ();;
                (ret_ty (Type Unit))
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 36)))))
+       (loc ((line 4) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -7501,23 +8638,27 @@ let _ = x () ();;
                    (ret_ty (Type Unit))
                    (ret_mode ((staticity Dynamic) (erasure Unerased))))))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 5) (column 8)))))
            (arg
             (Literal (value Unit) (ty (Type Unit))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 5) (column 10)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Unit))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Unit))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 5) (column 8)))))
          (arg
           (Literal (value Unit) (ty (Type Unit))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 5) (column 13)))))
          (ty (Type Unit)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 5) (column 8)))))
+       (loc ((line 5) (column 0))))))
     |}]
 ;;
 
@@ -7535,16 +8676,18 @@ let _ = x () ();;
         ((Lambda (var x) (arg _)
           (body
            (Lambda (arg _)
+            (body
+             (Literal (value Unit) (ty (Type Unit))
+              (mode ((staticity Static) (erasure Unerased)))
+              (loc ((line 2) (column 51)))))
             (ty
              (Type
               (Arrow (arg_ty (Type Unit))
                (arg_mode ((staticity Dynamic) (erasure Unerased)))
                (ret_ty (Type Unit))
                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-            (body
-             (Literal (value Unit) (ty (Type Unit))
-              (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-            (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+            (mode ((staticity Static) (erasure Unerased)))
+            (loc ((line 2) (column 34)))))
           (ty
            (Type
             (Arrow (arg_ty (Type Unit))
@@ -7556,8 +8699,9 @@ let _ = x () ();;
                 (ret_ty (Type Unit))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -7576,23 +8720,27 @@ let _ = x () ();;
                    (ret_ty (Type Unit))
                    (ret_mode ((staticity Dynamic) (erasure Unerased))))))
                 (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 8)))))
            (arg
             (Literal (value Unit) (ty (Type Unit))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 10)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Unit))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Unit))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Dynamic) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
          (arg
           (Literal (value Unit) (ty (Type Unit))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 13)))))
          (ty (Type Unit)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7618,12 +8766,14 @@ let _ = x (fn (_ : unit) -> 1);;
                  (arg_mode ((staticity Dynamic) (erasure Unerased)))
                  (ret_ty (Type Int))
                  (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-              (mode ((staticity Dynamic) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Dynamic) (erasure Unerased)))
+              (loc ((line 2) (column 32)))))
             (arg
              (Literal (value Unit) (ty (Type Unit))
-              (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+              (mode ((staticity Static) (erasure Unerased)))
+              (loc ((line 2) (column 34)))))
             (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-            (loc <opaque>)))
+            (loc ((line 2) (column 32)))))
           (ty
            (Type
             (Arrow
@@ -7636,8 +8786,9 @@ let _ = x (fn (_ : unit) -> 1);;
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (mode ((staticity Static) (erasure Unerased))) (loc <opaque>))))
-       (loc <opaque>))
+          (mode ((staticity Static) (erasure Unerased)))
+          (loc ((line 2) (column 4))))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
         (Apply
@@ -7655,22 +8806,25 @@ let _ = x (fn (_ : unit) -> 1);;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
          (arg
           (Lambda (arg _)
+           (body
+            (Literal (value (Int (T 1))) (ty (Type Int))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 3) (column 28)))))
            (ty
             (Type
              (Arrow (arg_ty (Type Unit))
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (body
-            (Literal (value (Int (T 1))) (ty (Type Int))
-             (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 11)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7893,7 +9047,7 @@ fun f (static x : type) : (x + 1) = ();;
 let%expect_test "erased closure arg" =
   go
     {|
-let f = fn (static erased g : int -> erased int) -> let _ = g 1; 2;;
+let f = fn (static erased g : int -> erased int) -> let _ = g 1 in 2;;
 let _ = f (fn (x : int) -> 0 @ erased);;
 |};
   [%expect
@@ -7902,6 +9056,15 @@ let _ = f (fn (x : int) -> 0 @ erased);;
      ((Let (var f)
        (bind
         (Binder (arg g)
+         (body
+          (Let (var _)
+           (bind
+            (Apply (fn (Var (id g) (loc ((line 2) (column 60)))))
+             (arg (Literal (value (Int 1)) (loc ((line 2) (column 62)))))
+             (loc ((line 2) (column 60)))))
+           (rest (Literal (value (Int 2)) (loc ((line 2) (column 67)))))
+           (loc ((line 2) (column 52)))))
+         (mono <opaque>)
          (ty
           (Type
            (Pi
@@ -7914,23 +9077,32 @@ let _ = f (fn (x : int) -> 0 @ erased);;
             (arg_mode ((staticity Static) (erasure Erased)))
             (ret_ty (T (Type Int)))
             (ret_mode ((staticity Static) (erasure Unerased))))))
-         (body
-          (Let (var _)
-           (bind
-            (Apply (fn (Var (id g) (loc ((line 2) (column 60)))))
-             (arg (Literal (value (Int 1)) (loc ((line 2) (column 62)))))
-             (loc ((line 2) (column 60)))))
-           (rest (Literal (value (Int 2)) (loc ((line 2) (column 65)))))
-           (loc ((line 2) (column 52)))))
-         (mono <opaque>) (mode ((staticity Static) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
       (Let (var _)
        (bind
-        (Symbol (id f) (arg (Closure 1))
-         (mode ((staticity Static) (erasure Unerased))) (ty (Type Int))
+        (Symbol
+         (fn
+          (Var (id f)
+           (ty
+            (Type
+             (Pi
+              (arg_ty
+               (Type
+                (Arrow (arg_ty (Type Int))
+                 (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                 (ret_ty (Type Int))
+                 (ret_mode ((staticity Dynamic) (erasure Erased))))))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
+         (key (Closure 1)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 3) (column 8)))))
-       (loc <opaque>))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -7961,13 +9133,15 @@ let _ = f 0;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 8)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 10)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -8006,13 +9180,15 @@ let _ = (f @ erased) 0;;
               (arg_mode ((staticity Dynamic) (erasure Unerased)))
               (ret_ty (Type Int))
               (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-           (mode ((staticity Static) (erasure Erased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Erased)))
+           (loc ((line 3) (column 11)))))
          (arg
           (Literal (value (Int (T 0))) (ty (Type Int))
-           (mode ((staticity Static) (erasure Unerased))) (loc <opaque>)))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 3) (column 21)))))
          (ty (Type Int)) (mode ((staticity Dynamic) (erasure Unerased)))
-         (loc <opaque>)))
-       (loc <opaque>))))
+         (loc ((line 3) (column 8)))))
+       (loc ((line 3) (column 0))))))
     |}]
 ;;
 
@@ -8022,7 +9198,7 @@ let%expect_test "external" =
 external f : static int -> int = asdf;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 0))) (reason Static_external)) |}]
+  [%expect {| ((loc ((line 2) (column 0))) (reason Bad_external)) |}]
 ;;
 
 let%expect_test "external" =
@@ -8031,5 +9207,698 @@ let%expect_test "external" =
 external f : int -> static int = asdf;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 0))) (reason Static_external)) |}]
+  [%expect {| ((loc ((line 2) (column 0))) (reason Bad_external)) |}]
+;;
+
+let%expect_test "nested if static with different types per level" =
+  go
+    {|
+let f = fn (static x : int) -> fn (static y : int) ->
+  if static x == 0 then
+    (if static y == 0 then 1 else true)
+  else
+    (if static y == 0 then () else 2);;
+let _ = f 0 0;;
+let _ = f 0 1;;
+let _ = f 1 0;;
+let _ = f 1 1;;
+|};
+  [%expect
+    {|
+    (tst
+     ((Let (var f)
+       (bind
+        (Binder (arg x)
+         (body
+          (Lambda (arg y) (erased Unerased)
+           (arg_mode ((staticity (Static)) (erasure ())))
+           (arg_ty (Var (id int) (loc ((line 2) (column 46)))))
+           (body
+            (If
+             (cond
+              (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 12)))))
+               (rhs (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+               (loc ((line 3) (column 14)))))
+             (then_
+              (Paren
+               (expr
+                (If
+                 (cond
+                  (Binop (op Eq) (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                   (rhs (Literal (value (Int 0)) (loc ((line 4) (column 20)))))
+                   (loc ((line 4) (column 17)))))
+                 (then_ (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                 (else_
+                  (Literal (value (Bool true)) (loc ((line 4) (column 34)))))
+                 (static true) (loc ((line 4) (column 5)))))
+               (loc ((line 4) (column 4)))))
+             (else_
+              (Paren
+               (expr
+                (If
+                 (cond
+                  (Binop (op Eq) (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                   (rhs (Literal (value (Int 0)) (loc ((line 6) (column 20)))))
+                   (loc ((line 6) (column 17)))))
+                 (then_ (Literal (value Unit) (loc ((line 6) (column 27)))))
+                 (else_ (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                 (static true) (loc ((line 6) (column 5)))))
+               (loc ((line 6) (column 4)))))
+             (static true) (loc ((line 3) (column 2)))))
+           (loc ((line 2) (column 31)))))
+         (mono <opaque>)
+         (ty
+          (Type
+           (Pi (arg_ty (Type Int))
+            (arg_mode ((staticity Static) (erasure Unerased)))
+            (ret_ty
+             (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
+              (body
+               (Lambda (arg y) (erased Unerased)
+                (arg_mode ((staticity (Static)) (erasure ())))
+                (arg_ty (Var (id int) (loc ((line 2) (column 46)))))
+                (body
+                 (If
+                  (cond
+                   (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                    (rhs (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                    (loc ((line 3) (column 14)))))
+                  (then_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 4) (column 20)))))
+                        (loc ((line 4) (column 17)))))
+                      (then_
+                       (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                      (else_
+                       (Literal (value (Bool true)) (loc ((line 4) (column 34)))))
+                      (static true) (loc ((line 4) (column 5)))))
+                    (loc ((line 4) (column 4)))))
+                  (else_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 6) (column 20)))))
+                        (loc ((line 6) (column 17)))))
+                      (then_ (Literal (value Unit) (loc ((line 6) (column 27)))))
+                      (else_
+                       (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                      (static true) (loc ((line 6) (column 5)))))
+                    (loc ((line 6) (column 4)))))
+                  (static true) (loc ((line 3) (column 2)))))
+                (loc ((line 2) (column 31)))))))
+            (ret_mode ((staticity Static) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 8)))))
+       (loc ((line 2) (column 0))))
+      (Let (var _)
+       (bind
+        (Symbol
+         (fn
+          (Symbol
+           (fn
+            (Var (id f)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                  (arg_mode ((staticity Static) (erasure Unerased)))
+                  (memo <opaque>)
+                  (body
+                   (Lambda (arg y) (erased Unerased)
+                    (arg_mode ((staticity (Static)) (erasure ())))
+                    (arg_ty (Var (id int) (loc ((line 2) (column 46)))))
+                    (body
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                        (loc ((line 3) (column 14)))))
+                      (then_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 4) (column 20)))))
+                            (loc ((line 4) (column 17)))))
+                          (then_
+                           (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                          (else_
+                           (Literal (value (Bool true))
+                            (loc ((line 4) (column 34)))))
+                          (static true) (loc ((line 4) (column 5)))))
+                        (loc ((line 4) (column 4)))))
+                      (else_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 6) (column 20)))))
+                            (loc ((line 6) (column 17)))))
+                          (then_
+                           (Literal (value Unit) (loc ((line 6) (column 27)))))
+                          (else_
+                           (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                          (static true) (loc ((line 6) (column 5)))))
+                        (loc ((line 6) (column 4)))))
+                      (static true) (loc ((line 3) (column 2)))))
+                    (loc ((line 2) (column 31)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 7) (column 8)))))
+           (key (Int 0))
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg y) (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (memo <opaque>)
+                (body
+                 (If
+                  (cond
+                   (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                    (rhs (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                    (loc ((line 3) (column 14)))))
+                  (then_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 4) (column 20)))))
+                        (loc ((line 4) (column 17)))))
+                      (then_
+                       (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                      (else_
+                       (Literal (value (Bool true)) (loc ((line 4) (column 34)))))
+                      (static true) (loc ((line 4) (column 5)))))
+                    (loc ((line 4) (column 4)))))
+                  (else_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 6) (column 20)))))
+                        (loc ((line 6) (column 17)))))
+                      (then_ (Literal (value Unit) (loc ((line 6) (column 27)))))
+                      (else_
+                       (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                      (static true) (loc ((line 6) (column 5)))))
+                    (loc ((line 6) (column 4)))))
+                  (static true) (loc ((line 3) (column 2)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 7) (column 8)))))
+         (key (Int 0)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 7) (column 8)))))
+       (loc ((line 7) (column 0))))
+      (Let (var _)
+       (bind
+        (Symbol
+         (fn
+          (Symbol
+           (fn
+            (Var (id f)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                  (arg_mode ((staticity Static) (erasure Unerased)))
+                  (memo <opaque>)
+                  (body
+                   (Lambda (arg y) (erased Unerased)
+                    (arg_mode ((staticity (Static)) (erasure ())))
+                    (arg_ty (Var (id int) (loc ((line 2) (column 46)))))
+                    (body
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                        (loc ((line 3) (column 14)))))
+                      (then_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 4) (column 20)))))
+                            (loc ((line 4) (column 17)))))
+                          (then_
+                           (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                          (else_
+                           (Literal (value (Bool true))
+                            (loc ((line 4) (column 34)))))
+                          (static true) (loc ((line 4) (column 5)))))
+                        (loc ((line 4) (column 4)))))
+                      (else_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 6) (column 20)))))
+                            (loc ((line 6) (column 17)))))
+                          (then_
+                           (Literal (value Unit) (loc ((line 6) (column 27)))))
+                          (else_
+                           (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                          (static true) (loc ((line 6) (column 5)))))
+                        (loc ((line 6) (column 4)))))
+                      (static true) (loc ((line 3) (column 2)))))
+                    (loc ((line 2) (column 31)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 8) (column 8)))))
+           (key (Int 0))
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg y) (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (memo <opaque>)
+                (body
+                 (If
+                  (cond
+                   (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                    (rhs (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                    (loc ((line 3) (column 14)))))
+                  (then_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 4) (column 20)))))
+                        (loc ((line 4) (column 17)))))
+                      (then_
+                       (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                      (else_
+                       (Literal (value (Bool true)) (loc ((line 4) (column 34)))))
+                      (static true) (loc ((line 4) (column 5)))))
+                    (loc ((line 4) (column 4)))))
+                  (else_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 6) (column 20)))))
+                        (loc ((line 6) (column 17)))))
+                      (then_ (Literal (value Unit) (loc ((line 6) (column 27)))))
+                      (else_
+                       (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                      (static true) (loc ((line 6) (column 5)))))
+                    (loc ((line 6) (column 4)))))
+                  (static true) (loc ((line 3) (column 2)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 8) (column 8)))))
+         (key (Int 1)) (ty (Type Bool))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 8) (column 8)))))
+       (loc ((line 8) (column 0))))
+      (Let (var _)
+       (bind
+        (Symbol
+         (fn
+          (Symbol
+           (fn
+            (Var (id f)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                  (arg_mode ((staticity Static) (erasure Unerased)))
+                  (memo <opaque>)
+                  (body
+                   (Lambda (arg y) (erased Unerased)
+                    (arg_mode ((staticity (Static)) (erasure ())))
+                    (arg_ty (Var (id int) (loc ((line 2) (column 46)))))
+                    (body
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                        (loc ((line 3) (column 14)))))
+                      (then_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 4) (column 20)))))
+                            (loc ((line 4) (column 17)))))
+                          (then_
+                           (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                          (else_
+                           (Literal (value (Bool true))
+                            (loc ((line 4) (column 34)))))
+                          (static true) (loc ((line 4) (column 5)))))
+                        (loc ((line 4) (column 4)))))
+                      (else_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 6) (column 20)))))
+                            (loc ((line 6) (column 17)))))
+                          (then_
+                           (Literal (value Unit) (loc ((line 6) (column 27)))))
+                          (else_
+                           (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                          (static true) (loc ((line 6) (column 5)))))
+                        (loc ((line 6) (column 4)))))
+                      (static true) (loc ((line 3) (column 2)))))
+                    (loc ((line 2) (column 31)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 9) (column 8)))))
+           (key (Int 1))
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg y) (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (memo <opaque>)
+                (body
+                 (If
+                  (cond
+                   (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                    (rhs (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                    (loc ((line 3) (column 14)))))
+                  (then_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 4) (column 20)))))
+                        (loc ((line 4) (column 17)))))
+                      (then_
+                       (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                      (else_
+                       (Literal (value (Bool true)) (loc ((line 4) (column 34)))))
+                      (static true) (loc ((line 4) (column 5)))))
+                    (loc ((line 4) (column 4)))))
+                  (else_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 6) (column 20)))))
+                        (loc ((line 6) (column 17)))))
+                      (then_ (Literal (value Unit) (loc ((line 6) (column 27)))))
+                      (else_
+                       (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                      (static true) (loc ((line 6) (column 5)))))
+                    (loc ((line 6) (column 4)))))
+                  (static true) (loc ((line 3) (column 2)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 9) (column 8)))))
+         (key (Int 0)) (ty (Type Unit))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 9) (column 8)))))
+       (loc ((line 9) (column 0))))
+      (Let (var _)
+       (bind
+        (Symbol
+         (fn
+          (Symbol
+           (fn
+            (Var (id f)
+             (ty
+              (Type
+               (Pi (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (ret_ty
+                 (Typecheck (env <opaque>) (arg x) (arg_ty (Type Int))
+                  (arg_mode ((staticity Static) (erasure Unerased)))
+                  (memo <opaque>)
+                  (body
+                   (Lambda (arg y) (erased Unerased)
+                    (arg_mode ((staticity (Static)) (erasure ())))
+                    (arg_ty (Var (id int) (loc ((line 2) (column 46)))))
+                    (body
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                        (loc ((line 3) (column 14)))))
+                      (then_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 4) (column 20)))))
+                            (loc ((line 4) (column 17)))))
+                          (then_
+                           (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                          (else_
+                           (Literal (value (Bool true))
+                            (loc ((line 4) (column 34)))))
+                          (static true) (loc ((line 4) (column 5)))))
+                        (loc ((line 4) (column 4)))))
+                      (else_
+                       (Paren
+                        (expr
+                         (If
+                          (cond
+                           (Binop (op Eq)
+                            (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                            (rhs
+                             (Literal (value (Int 0))
+                              (loc ((line 6) (column 20)))))
+                            (loc ((line 6) (column 17)))))
+                          (then_
+                           (Literal (value Unit) (loc ((line 6) (column 27)))))
+                          (else_
+                           (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                          (static true) (loc ((line 6) (column 5)))))
+                        (loc ((line 6) (column 4)))))
+                      (static true) (loc ((line 3) (column 2)))))
+                    (loc ((line 2) (column 31)))))))
+                (ret_mode ((staticity Static) (erasure Unerased))))))
+             (mode ((staticity Static) (erasure Unerased)))
+             (loc ((line 10) (column 8)))))
+           (key (Int 1))
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty
+               (Typecheck (env <opaque>) (arg y) (arg_ty (Type Int))
+                (arg_mode ((staticity Static) (erasure Unerased)))
+                (memo <opaque>)
+                (body
+                 (If
+                  (cond
+                   (Binop (op Eq) (lhs (Var (id x) (loc ((line 3) (column 12)))))
+                    (rhs (Literal (value (Int 0)) (loc ((line 3) (column 17)))))
+                    (loc ((line 3) (column 14)))))
+                  (then_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 4) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 4) (column 20)))))
+                        (loc ((line 4) (column 17)))))
+                      (then_
+                       (Literal (value (Int 1)) (loc ((line 4) (column 27)))))
+                      (else_
+                       (Literal (value (Bool true)) (loc ((line 4) (column 34)))))
+                      (static true) (loc ((line 4) (column 5)))))
+                    (loc ((line 4) (column 4)))))
+                  (else_
+                   (Paren
+                    (expr
+                     (If
+                      (cond
+                       (Binop (op Eq)
+                        (lhs (Var (id y) (loc ((line 6) (column 15)))))
+                        (rhs
+                         (Literal (value (Int 0)) (loc ((line 6) (column 20)))))
+                        (loc ((line 6) (column 17)))))
+                      (then_ (Literal (value Unit) (loc ((line 6) (column 27)))))
+                      (else_
+                       (Literal (value (Int 2)) (loc ((line 6) (column 35)))))
+                      (static true) (loc ((line 6) (column 5)))))
+                    (loc ((line 6) (column 4)))))
+                  (static true) (loc ((line 3) (column 2)))))))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 10) (column 8)))))
+         (key (Int 1)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 10) (column 8)))))
+       (loc ((line 10) (column 0))))))
+    |}]
+;;
+
+let%expect_test "closure branches" =
+  go
+    {|
+let f = (fn (static erased x : int) -> 1);;
+let g = (fn (static x : int) -> 2);;
+let h = if true then f else g;;
+let _ = h 0;;
+|};
+  [%expect
+    {|
+    (tst
+     ((Let (var f)
+       (bind
+        (Binder (arg x)
+         (body (Literal (value (Int 1)) (loc ((line 2) (column 39)))))
+         (mono <opaque>)
+         (ty
+          (Type
+           (Pi (arg_ty (Type Int))
+            (arg_mode ((staticity Static) (erasure Erased)))
+            (ret_ty (T (Type Int)))
+            (ret_mode ((staticity Static) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 2) (column 9)))))
+       (loc ((line 2) (column 0))))
+      (Let (var g)
+       (bind
+        (Binder (arg x)
+         (body (Literal (value (Int 2)) (loc ((line 3) (column 32)))))
+         (mono <opaque>)
+         (ty
+          (Type
+           (Pi (arg_ty (Type Int))
+            (arg_mode ((staticity Static) (erasure Unerased)))
+            (ret_ty (T (Type Int)))
+            (ret_mode ((staticity Static) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 3) (column 9)))))
+       (loc ((line 3) (column 0))))
+      (Let (var h)
+       (bind
+        (If
+         (cond
+          (Literal (value (Bool (T true))) (ty (Type Bool))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 11)))))
+         (then_
+          (Var (id f)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 21)))))
+         (else_
+          (Var (id g)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 4) (column 28)))))
+         (ty
+          (Type
+           (Pi (arg_ty (Type Int))
+            (arg_mode ((staticity Static) (erasure Unerased)))
+            (ret_ty (T (Type Int)))
+            (ret_mode ((staticity Static) (erasure Unerased))))))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 4) (column 8)))))
+       (loc ((line 4) (column 0))))
+      (Let (var _)
+       (bind
+        (Symbol
+         (fn
+          (Var (id h)
+           (ty
+            (Type
+             (Pi (arg_ty (Type Int))
+              (arg_mode ((staticity Static) (erasure Unerased)))
+              (ret_ty (T (Type Int)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           (mode ((staticity Static) (erasure Unerased)))
+           (loc ((line 5) (column 8)))))
+         (key (Int 0)) (ty (Type Int))
+         (mode ((staticity Static) (erasure Unerased)))
+         (loc ((line 5) (column 8)))))
+       (loc ((line 5) (column 0))))))
+    |}]
 ;;
