@@ -25,18 +25,31 @@ module Ty : sig
     | Bool
     | Int
     | Env
-    | Closure
-    | Thunk
+    | Closure of
+        { arg_ty : t
+        ; ret_ty : t
+        }
+    | Thunk of t
     | Pack of (Tst.Value.Concrete.t, t) Hashtbl.t
   [@@deriving sexp]
+
+  val size_in_bytes : t -> int
+  val is_zero_size : t -> bool
 end
 
 module Env : sig
-  type t = (Path.t * Ty.t) array [@@deriving sexp]
+  type entry =
+    { path : Path.t
+    ; ty : Ty.t
+    ; offset_in_bytes : int
+    }
+  [@@deriving sexp]
 
-  module Sub : sig
-    type t = (Path.t * Ty.t * int) array [@@deriving sexp]
-  end
+  type t =
+    { entries : entry array
+    ; size_in_bytes : int
+    }
+  [@@deriving sexp]
 end
 
 module Expr : sig
@@ -57,15 +70,10 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-    | Make_thunk of
-        { body : Path.t
-        ; env : Path.t option
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
     | Apply_closure of
         { fn : Path.t
         ; arg : Path.t
+        ; arg_ty : Ty.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -95,6 +103,7 @@ module Expr : sig
   [@@deriving sexp]
 
   val ty : t -> Ty.t
+  val with_ty : t -> Ty.t -> t
 end
 
 module Stmt : sig
@@ -106,8 +115,7 @@ module Stmt : sig
   [@@deriving sexp]
 
   and functions =
-    { closures : (Path.t * Path.t) array
-    ; thunks : (Path.t * Path.t) array
+    { paths : (Path.t * Ty.t * Path.t) array
     ; captures : Env.t
     ; loc : Lex.Location.t
     }
@@ -136,14 +144,14 @@ module Decl : sig
         { path : Path.t
         ; arg : Path.t
         ; arg_ty : Ty.t
-        ; captures : Env.Sub.t
+        ; captures : Env.entry array
         ; bind : Stmt.t array
         ; return : Expr.t
         ; loc : Lex.Location.t
         }
     | Thunk_body of
         { path : Path.t
-        ; captures : Env.Sub.t
+        ; captures : Env.entry array
         ; bind : Stmt.t array
         ; return : Expr.t
         ; loc : Lex.Location.t

@@ -29,18 +29,40 @@ module Ty = struct
     | Bool
     | Int
     | Env
-    | Closure
-    | Thunk
+    | Closure of
+        { arg_ty : t
+        ; ret_ty : t
+        }
+    | Thunk of t
     | Pack of ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
   [@@deriving sexp]
+
+  let size_in_bytes = function
+    | Unit -> 0
+    | Bool -> 1
+    | Int -> 8
+    | Env -> 8
+    | Closure _ -> 16
+    | Thunk _ -> 16
+    | Pack _ -> raise_s [%message "Unexpected pack"]
+  ;;
+
+  let is_zero_size t = size_in_bytes t = 0
 end
 
 module Env = struct
-  type t = (Path.t * Ty.t) array [@@deriving sexp]
+  type entry =
+    { path : Path.t
+    ; ty : Ty.t
+    ; offset_in_bytes : int
+    }
+  [@@deriving sexp]
 
-  module Sub = struct
-    type t = (Path.t * Ty.t * int) array [@@deriving sexp]
-  end
+  type t =
+    { entries : entry array
+    ; size_in_bytes : int
+    }
+  [@@deriving sexp]
 end
 
 module Expr = struct
@@ -61,15 +83,10 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-    | Make_thunk of
-        { body : Path.t
-        ; env : Path.t option
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
     | Apply_closure of
         { fn : Path.t
         ; arg : Path.t
+        ; arg_ty : Ty.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -101,13 +118,24 @@ module Expr = struct
   let ty = function
     | Make_env { ty; _ }
     | Make_closure { ty; _ }
-    | Make_thunk { ty; _ }
     | Apply_closure { ty; _ }
     | Apply_thunk { ty; _ }
     | Scalar { ty; _ }
     | Unop { ty; _ }
     | Binop { ty; _ }
     | Ident { ty; _ } -> ty
+  ;;
+
+  let with_ty t ty =
+    match t with
+    | Make_env expr -> Make_env { expr with ty }
+    | Make_closure expr -> Make_closure { expr with ty }
+    | Apply_closure expr -> Apply_closure { expr with ty }
+    | Apply_thunk expr -> Apply_thunk { expr with ty }
+    | Scalar expr -> Scalar { expr with ty }
+    | Unop expr -> Unop { expr with ty }
+    | Binop expr -> Binop { expr with ty }
+    | Ident expr -> Ident { expr with ty }
   ;;
 end
 
@@ -120,8 +148,7 @@ module Stmt = struct
   [@@deriving sexp]
 
   and functions =
-    { closures : (Path.t * Path.t) array
-    ; thunks : (Path.t * Path.t) array
+    { paths : (Path.t * Ty.t * Path.t) array
     ; captures : Env.t
     ; loc : Lex.Location.t
     }
@@ -150,14 +177,14 @@ module Decl = struct
         { path : Path.t
         ; arg : Path.t
         ; arg_ty : Ty.t
-        ; captures : Env.Sub.t
+        ; captures : Env.entry array
         ; bind : Stmt.t array
         ; return : Expr.t
         ; loc : Lex.Location.t
         }
     | Thunk_body of
         { path : Path.t
-        ; captures : Env.Sub.t
+        ; captures : Env.entry array
         ; bind : Stmt.t array
         ; return : Expr.t
         ; loc : Lex.Location.t

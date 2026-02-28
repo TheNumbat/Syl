@@ -4,9 +4,9 @@ open! Syl
 let check = `No
 
 let compile c =
-  let tmp = Stdlib.Filename.temp_file "syl_test" ".c" in
+  let tmp = Stdlib.Filename.temp_file "syl_test" ".cpp" in
   Out_channel.write_all tmp ~data:c;
-  let cmd = Printf.sprintf "clang -fsyntax-only -w %s 2>/dev/null" tmp in
+  let cmd = Printf.sprintf "clang++ -fsyntax-only -w %s 2>/dev/null" tmp in
   (match Core_unix.system cmd with
    | Ok () -> ()
    | Error (`Exit_non_zero exit_code) -> raise_s [%message "Clang failed" (exit_code : int)]
@@ -15,10 +15,10 @@ let compile c =
 ;;
 
 let compile_and_run c =
-  let tmp_c = Stdlib.Filename.temp_file "syl_test" ".c" in
+  let tmp_c = Stdlib.Filename.temp_file "syl_test" ".cpp" in
   let tmp_exe = Stdlib.Filename.temp_file "syl_test" ".exe" in
   Out_channel.write_all tmp_c ~data:c;
-  let cmd = Printf.sprintf "clang -o %s -w %s 2>/dev/null" tmp_exe tmp_c in
+  let cmd = Printf.sprintf "clang++ -o %s -w %s 2>/dev/null" tmp_exe tmp_c in
   (match Core_unix.system cmd with
    | Ok () -> ()
    | Error (`Exit_non_zero exit_code) -> raise_s [%message "Clang failed" (exit_code : int)]
@@ -63,12 +63,10 @@ let x = ();;
 |};
   [%expect
     {|
-    static syl_unit _x;
-    static syl_unit _xˢ1;
     int main()
     {
-      _x = 0;
-      _xˢ1 = 0;
+      ;
+      ;
       return 0;
     }
     |}]
@@ -88,20 +86,18 @@ let _ = true @ dynamic;;
 let _ = 123 @ dynamic;;|};
   [%expect
     {|
-    static syl_unit __;
     static syl_bool __ˢ1;
     static syl_int __ˢ2;
-    static syl_unit __ˢ3;
     static syl_bool __ˢ4;
     static syl_int __ˢ5;
     int main()
     {
-      __ = 0;
+      ;
       __ˢ1 = true;
-      __ˢ2 = 123;
-      __ˢ3 = 0;
+      __ˢ2 = 123ll;
+      ;
       __ˢ4 = true;
-      __ˢ5 = 123;
+      __ˢ5 = 123ll;
       return 0;
     }
     |}]
@@ -118,7 +114,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -135,7 +131,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -153,7 +149,7 @@ let _ =
     static syl_int _dyn;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       return 0;
     }
     |}]
@@ -188,7 +184,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       __ = _dyn;
       return 0;
     }
@@ -207,7 +203,7 @@ let _ =
     static syl_int _dyn;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       return 0;
     }
     |}]
@@ -413,7 +409,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 3;
+      __ = 3ll;
       return 0;
     }
     |}]
@@ -430,7 +426,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 3;
+      __ = 3ll;
       return 0;
     }
     |}]
@@ -447,7 +443,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 3;
+      __ = 3ll;
       return 0;
     }
     |}]
@@ -464,7 +460,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 6;
+      __ = 6ll;
       return 0;
     }
     |}]
@@ -481,7 +477,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 6;
+      __ = 6ll;
       return 0;
     }
     |}]
@@ -500,9 +496,9 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn = 2;
+      _dyn = 2ll;
       {
-        syl_int _$ = 1;
+        syl_int _$ = 1ll;
         __ = _$ + _dyn;
       }
       return 0;
@@ -523,9 +519,9 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       {
-        syl_int _$ = 2;
+        syl_int _$ = 2ll;
         __ = _dyn + _$;
       }
       return 0;
@@ -548,8 +544,8 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn1 = 1;
-      _dyn2 = 2;
+      _dyn1 = 1ll;
+      _dyn2 = 2ll;
       __ = _dyn1 + _dyn2;
       return 0;
     }
@@ -570,9 +566,9 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn2 = 2;
+      _dyn2 = 2ll;
       {
-        syl_int _$ = 1;
+        syl_int _$ = 1ll;
         __ = _$ + _dyn2;
       }
       return 0;
@@ -593,7 +589,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 3;
+      __ = 3ll;
       return 0;
     }
     |}]
@@ -610,7 +606,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -642,7 +638,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -660,7 +656,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -679,7 +675,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       __ = _dyn;
       return 0;
     }
@@ -704,11 +700,11 @@ let _ =
         syl_int __·if;
         if(_dyn)
         {
-          __·if = 1;
+          __·if = 1ll;
         }
         else
         {
-          __·if = 2;
+          __·if = 2ll;
         }
         __ = __·if;
       }
@@ -731,7 +727,7 @@ let _ =
     int main()
     {
       _x = true;
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -795,7 +791,7 @@ let _ =
     int main()
     {
       {
-        syl_int __·x = 1;
+        syl_int __·x = 1ll;
         __ = __·x;
       }
       return 0;
@@ -817,7 +813,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       {
         syl_int __·x = _dyn;
         __ = __·x;
@@ -841,7 +837,7 @@ let _ =
     int main()
     {
       {
-        syl_int __·x = 2;
+        syl_int __·x = 2ll;
         __ = __·x;
       }
       return 0;
@@ -878,7 +874,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 2;
+      __ = 2ll;
       return 0;
     }
     |}]
@@ -898,8 +894,8 @@ let _ =
     int main()
     {
       {
-        syl_int __·y = 1;
-        syl_int _$ = 1;
+        syl_int __·y = 1ll;
+        syl_int _$ = 1ll;
         __ = _$ + __·y;
       }
       return 0;
@@ -920,7 +916,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      __ = 2;
+      __ = 2ll;
       return 0;
     }
     |}]
@@ -940,9 +936,9 @@ let _ =
     int main()
     {
       {
-        syl_int __·x = 1;
-        syl_int __·y = 1;
-        __ = 2;
+        syl_int __·x = 1ll;
+        syl_int __·y = 1ll;
+        __ = 2ll;
       }
       return 0;
     }
@@ -958,7 +954,7 @@ let _ =
   [%expect
     {|
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
@@ -967,7 +963,7 @@ let _ =
     {
       {
         syl_env __·env = NULL;
-        __ = syl_mk_closure(__·λ, __·env);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -1015,18 +1011,18 @@ let _ =
     {|
     static syl_int _y;
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _y = 𝒰[0];
+      syl_int _y = *(syl_int*)(𝒰 + 0);
       return _x + _y;
     }
     int main()
     {
-      _y = 1;
+      _y = 1ll;
       {
-        syl_env __·env = syl_capture(1, _y);
-        __ = syl_mk_closure(__·λ, __·env);
+        syl_env __·env = syl_capture<syl_int>(_y);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -1057,21 +1053,21 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -1089,7 +1085,7 @@ let _ = f 0;;
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -1104,21 +1100,21 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -1134,21 +1130,21 @@ let _ = f (0 @ erased);;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -1164,21 +1160,21 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -1196,8 +1192,8 @@ let _ = (fn (erased x : int) -> 1) 0;;
     int main()
     {
       {
-        syl_int __·x = 0;
-        __ = 1;
+        syl_int __·x = 0ll;
+        __ = 1ll;
       }
       return 0;
     }
@@ -1215,8 +1211,8 @@ let _ = (fn (erased x : int) -> 1) (0 @ erased);;
     int main()
     {
       {
-        syl_int __·x = 0;
-        __ = 1;
+        syl_int __·x = 0ll;
+        __ = 1ll;
       }
       return 0;
     }
@@ -1234,8 +1230,8 @@ let _ = (fn (static x : int) -> 1) 0;;
     int main()
     {
       {
-        syl_int __·x = 0;
-        __ = 1;
+        syl_int __·x = 0ll;
+        __ = 1ll;
       }
       return 0;
     }
@@ -1252,7 +1248,7 @@ let _ = (fn (static erased x : int) -> 1) 0;;
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -1268,7 +1264,7 @@ let _ = (fn (static erased x : int) -> 1) (0 @ erased);;
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -1283,19 +1279,19 @@ let _ = f (fn (x : int) -> 0 @ erased);;
   [%expect
     {|
     static syl_int _f·λₒλ1(syl_env);
-    static syl_int _fₒλ1;
+    static syl_thunk<syl_int> _fₒλ1;
     static syl_int __;
     static syl_int _f·λₒλ1(syl_env 𝒰)
     {
-      return 2;
+      return 2ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ1 = syl_mk_thunk(_f·λₒλ1, _f·env);
+        _fₒλ1 = syl_thunk<syl_int>{_f·λₒλ1, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ1);
+      __ = _fₒλ1();
       return 0;
     }
     |}]
@@ -1309,29 +1305,29 @@ let _ = f ((fn (x : int) -> x + 1) @ erased);;
 |};
   [%expect
     {|
-    static syl_int _f·λ(syl_closure, syl_env);
-    static syl_closure _f;
+    static syl_int _f·λ(syl_closure<syl_int,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _f;
     static syl_int __·λ(syl_int, syl_env);
     static syl_int __;
-    static syl_int _f·λ(syl_closure _x, syl_env 𝒰)
+    static syl_int _f·λ(syl_closure<syl_int,syl_int> _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _$ = 1;
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env __·env = NULL;
-        syl_closure _$ = syl_mk_closure(__·λ, __·env);
-        __ = syl_app_closure(_f, _$);
+        syl_closure<syl_int,syl_int> _$ = syl_closure<syl_int,syl_int>{__·λ, __·env};
+        __ = _f(_$);
       }
       return 0;
     }
@@ -1349,7 +1345,7 @@ let _ = f ((fn (x : int) -> x + 1) @ erased);;
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -1378,17 +1374,17 @@ let _ =
 ;;|};
   [%expect
     {|
-    static syl_unit __·λ(syl_unit, syl_env);
-    static syl_closure __;
-    static syl_unit __·λ(syl_unit _x, syl_env 𝒰)
+    static syl_unit __·λ(syl_env);
+    static syl_closure<syl_unit,syl_unit> __;
+    static syl_unit __·λ(syl_env 𝒰)
     {
-      return _x;
+      ;
     }
     int main()
     {
       {
         syl_env __·env = NULL;
-        __ = syl_mk_closure(__·λ, __·env);
+        __ = syl_closure<syl_unit,syl_unit>{__·λ, __·env};
       }
       return 0;
     }
@@ -1401,17 +1397,17 @@ let%expect_test "dependent closure arg" =
 fun f (x : type) : type = x;;|};
   [%expect
     {|
-    static syl_unit _f·λ(syl_unit, syl_env);
-    static syl_closure _f;
-    static syl_unit _f·λ(syl_unit _x, syl_env 𝒰)
+    static syl_unit _f·λ(syl_env);
+    static syl_closure<syl_unit,syl_unit> _f;
+    static syl_unit _f·λ(syl_env 𝒰)
     {
-      return _x;
+      ;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _f = syl_mk_closure(_f·λ, 𝒰);
+        _f = syl_closure<syl_unit,syl_unit>{_f·λ, 𝒰};
       }
       return 0;
     }
@@ -1503,8 +1499,8 @@ let x = (fn (erased x : int) -> 1) 0;;
     int main()
     {
       {
-        syl_int _x·x = 0;
-        _x = 1;
+        syl_int _x·x = 0ll;
+        _x = 1ll;
       }
       return 0;
     }
@@ -1521,7 +1517,7 @@ let x = ((fn (erased x : int) -> 1) @ erased) 0;;
     static syl_int _x;
     int main()
     {
-      _x = 1;
+      _x = 1ll;
       return 0;
     }
     |}]
@@ -1537,17 +1533,17 @@ let _ = if true then f else g;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env _g·env = NULL;
@@ -1569,27 +1565,27 @@ let _ = f 1;;
     {|
     static syl_int _f·λₒ1(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ1;
-    static syl_int _fₒ0;
+    static syl_thunk<syl_int> _fₒ1;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int __ˢ1;
     static syl_int _f·λₒ1(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
-      __ˢ1 = syl_app_thunk(_fₒ1);
+      __ = _fₒ0();
+      __ˢ1 = _fₒ1();
       return 0;
     }
     |}]
@@ -1606,25 +1602,25 @@ let _ = h 0;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ0;
-    static syl_int _hₒ0;
+    static syl_thunk<syl_int> _fₒ0;
+    static syl_thunk<syl_int> _hₒ0;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      return 1;
+      syl_int _f·λₒ0·x = 0ll;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
       {
         syl_env _g·env = NULL;
       }
       _hₒ0 = _fₒ0;
-      __ = syl_app_thunk(_hₒ0);
+      __ = _hₒ0();
       return 0;
     }
     |}]
@@ -1662,43 +1658,43 @@ let _ = (if c () then f else g) 0;;
 |};
   [%expect
     {|
-    static syl_bool _c·λ(syl_unit, syl_env);
-    static syl_closure _c;
+    static syl_bool _c·λ(syl_env);
+    static syl_closure<syl_unit,syl_bool> _c;
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
-    static syl_bool _c·λ(syl_unit __, syl_env 𝒰)
+    static syl_bool _c·λ(syl_env 𝒰)
     {
       return true;
     }
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
-      return 2;
+      return 2ll;
     }
     int main()
     {
       {
         syl_env _c·env = NULL;
-        _c = syl_mk_closure(_c·λ, _c·env);
+        _c = syl_closure<syl_unit,syl_bool>{_c·λ, _c·env};
       }
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
       }
       {
-        syl_unit _$ = 0;
-        syl_closure __·if;
-        if(syl_app_closure(_c, _$))
+        ;
+        syl_closure<syl_int,syl_int> __·if;
+        if(_c())
         {
           __·if = _f;
         }
@@ -1706,8 +1702,8 @@ let _ = (if c () then f else g) 0;;
         {
           __·if = _g;
         }
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(__·if, _$ˢ1);
+        syl_int _$ˢ1 = 0ll;
+        __ = __·if(_$ˢ1);
       }
       return 0;
     }
@@ -1724,30 +1720,30 @@ let _ = g f;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_int _g·λ(syl_closure, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_int _g·λ(syl_closure<syl_int,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _g;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
-    static syl_int _g·λ(syl_closure _f, syl_env 𝒰)
+    static syl_int _g·λ(syl_closure<syl_int,syl_int> _f, syl_env 𝒰)
     {
-      syl_int _$ = 0;
-      return syl_app_closure(_f, _$);
+      syl_int _$ = 0ll;
+      return _f(_$);
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_g·λ, _g·env};
       }
-      __ = syl_app_closure(_g, _f);
+      __ = _g(_f);
       return 0;
     }
     |}]
@@ -1763,40 +1759,40 @@ let _ = g f;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _g·λₒλ1·f·λ(syl_int, syl_env);
     static syl_int _g·λₒλ1(syl_env);
-    static syl_int _gₒλ1;
+    static syl_thunk<syl_int> _gₒλ1;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λₒλ1·f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λₒλ1(syl_env 𝒰)
     {
-      syl_closure _g·λₒλ1·f;
+      syl_closure<syl_int,syl_int> _g·λₒλ1·f;
       {
         syl_env _g·λₒλ1·f·env = NULL;
-        _g·λₒλ1·f = syl_mk_closure(_g·λₒλ1·f·λ, _g·λₒλ1·f·env);
+        _g·λₒλ1·f = syl_closure<syl_int,syl_int>{_g·λₒλ1·f·λ, _g·λₒλ1·f·env};
       }
-      syl_int _$ = 0;
-      return syl_app_closure(_g·λₒλ1·f, _$);
+      syl_int _$ = 0ll;
+      return _g·λₒλ1·f(_$);
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env _g·env = NULL;
-        _gₒλ1 = syl_mk_thunk(_g·λₒλ1, _g·env);
+        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
       }
-      __ = syl_app_thunk(_gₒλ1);
+      __ = _gₒλ1();
       return 0;
     }
     |}]
@@ -1812,39 +1808,39 @@ let _ = g f;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _g·λₒλ1·f·λ(syl_int, syl_env);
     static syl_int _g·λₒλ1(syl_env);
-    static syl_int _gₒλ1;
+    static syl_thunk<syl_int> _gₒλ1;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λₒλ1·f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λₒλ1(syl_env 𝒰)
     {
-      syl_closure _g·λₒλ1·f;
+      syl_closure<syl_int,syl_int> _g·λₒλ1·f;
       {
         syl_env _g·λₒλ1·f·env = NULL;
-        _g·λₒλ1·f = syl_mk_closure(_g·λₒλ1·f·λ, _g·λₒλ1·f·env);
+        _g·λₒλ1·f = syl_closure<syl_int,syl_int>{_g·λₒλ1·f·λ, _g·λₒλ1·f·env};
       }
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env _g·env = NULL;
-        _gₒλ1 = syl_mk_thunk(_g·λₒλ1, _g·env);
+        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
       }
-      __ = syl_app_thunk(_gₒλ1);
+      __ = _gₒλ1();
       return 0;
     }
     |}]
@@ -1860,20 +1856,20 @@ let _ = g f1;;
   [%expect
     {|
     static syl_int _g·λₒλ1(syl_env);
-    static syl_int _gₒλ1;
+    static syl_thunk<syl_int> _gₒλ1;
     static syl_int __;
     static syl_int _g·λₒλ1(syl_env 𝒰)
     {
-      syl_int _g·λₒλ1·x = 0;
-      return 1;
+      syl_int _g·λₒλ1·x = 0ll;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _g·env = NULL;
-        _gₒλ1 = syl_mk_thunk(_g·λₒλ1, _g·env);
+        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
       }
-      __ = syl_app_thunk(_gₒλ1);
+      __ = _gₒλ1();
       return 0;
     }
     |}]
@@ -1889,30 +1885,30 @@ let _ = g f1;;
   [%expect
     {|
     static syl_int _f1·λ(syl_int, syl_env);
-    static syl_closure _f1;
-    static syl_int _g·λ(syl_closure, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f1;
+    static syl_int _g·λ(syl_closure<syl_int,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _g;
     static syl_int __;
     static syl_int _f1·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
-    static syl_int _g·λ(syl_closure _f2, syl_env 𝒰)
+    static syl_int _g·λ(syl_closure<syl_int,syl_int> _f2, syl_env 𝒰)
     {
-      syl_int _$ = 0;
-      return syl_app_closure(_f2, _$);
+      syl_int _$ = 0ll;
+      return _f2(_$);
     }
     int main()
     {
       {
         syl_env _f1·env = NULL;
-        _f1 = syl_mk_closure(_f1·λ, _f1·env);
+        _f1 = syl_closure<syl_int,syl_int>{_f1·λ, _f1·env};
       }
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_g·λ, _g·env};
       }
-      __ = syl_app_closure(_g, _f1);
+      __ = _g(_f1);
       return 0;
     }
     |}]
@@ -1928,40 +1924,40 @@ let _ = g f1;;
   [%expect
     {|
     static syl_int _f1·λ(syl_int, syl_env);
-    static syl_closure _f1;
+    static syl_closure<syl_int,syl_int> _f1;
     static syl_int _g·λₒλ1·f2·λ(syl_int, syl_env);
     static syl_int _g·λₒλ1(syl_env);
-    static syl_int _gₒλ1;
+    static syl_thunk<syl_int> _gₒλ1;
     static syl_int __;
     static syl_int _f1·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λₒλ1·f2·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λₒλ1(syl_env 𝒰)
     {
-      syl_closure _g·λₒλ1·f2;
+      syl_closure<syl_int,syl_int> _g·λₒλ1·f2;
       {
         syl_env _g·λₒλ1·f2·env = NULL;
-        _g·λₒλ1·f2 = syl_mk_closure(_g·λₒλ1·f2·λ, _g·λₒλ1·f2·env);
+        _g·λₒλ1·f2 = syl_closure<syl_int,syl_int>{_g·λₒλ1·f2·λ, _g·λₒλ1·f2·env};
       }
-      syl_int _$ = 0;
-      return syl_app_closure(_g·λₒλ1·f2, _$);
+      syl_int _$ = 0ll;
+      return _g·λₒλ1·f2(_$);
     }
     int main()
     {
       {
         syl_env _f1·env = NULL;
-        _f1 = syl_mk_closure(_f1·λ, _f1·env);
+        _f1 = syl_closure<syl_int,syl_int>{_f1·λ, _f1·env};
       }
       {
         syl_env _g·env = NULL;
-        _gₒλ1 = syl_mk_thunk(_g·λₒλ1, _g·env);
+        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
       }
-      __ = syl_app_thunk(_gₒλ1);
+      __ = _gₒλ1();
       return 0;
     }
     |}]
@@ -1977,19 +1973,19 @@ let _ = g f1;;
   [%expect
     {|
     static syl_int _g·λₒλ1(syl_env);
-    static syl_int _gₒλ1;
+    static syl_thunk<syl_int> _gₒλ1;
     static syl_int __;
     static syl_int _g·λₒλ1(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _g·env = NULL;
-        _gₒλ1 = syl_mk_thunk(_g·λₒλ1, _g·env);
+        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
       }
-      __ = syl_app_thunk(_gₒλ1);
+      __ = _gₒλ1();
       return 0;
     }
     |}]
@@ -2005,29 +2001,29 @@ let _ = g f1;;
   [%expect
     {|
     static syl_int _f1·λ(syl_int, syl_env);
-    static syl_closure _f1;
+    static syl_closure<syl_int,syl_int> _f1;
     static syl_int _g·λₒλ1(syl_env);
-    static syl_int _gₒλ1;
+    static syl_thunk<syl_int> _gₒλ1;
     static syl_int __;
     static syl_int _f1·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_int _g·λₒλ1(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f1·env = NULL;
-        _f1 = syl_mk_closure(_f1·λ, _f1·env);
+        _f1 = syl_closure<syl_int,syl_int>{_f1·λ, _f1·env};
       }
       {
         syl_env _g·env = NULL;
-        _gₒλ1 = syl_mk_thunk(_g·λₒλ1, _g·env);
+        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
       }
-      __ = syl_app_thunk(_gₒλ1);
+      __ = _gₒλ1();
       return 0;
     }
     |}]
@@ -2044,7 +2040,7 @@ let x = (fn (static x : int) -> x) 0;;
     int main()
     {
       {
-        syl_int _x·x = 0;
+        syl_int _x·x = 0ll;
         _x = _x·x;
       }
       return 0;
@@ -2062,7 +2058,7 @@ let x = (fn (static erased x : int) -> 1) 0;;
     static syl_int _x;
     int main()
     {
-      _x = 1;
+      _x = 1ll;
       return 0;
     }
     |}]
@@ -2079,7 +2075,7 @@ let _ = 0 : t;;
     static syl_int __;
     int main()
     {
-      __ = 0;
+      __ = 0ll;
       return 0;
     }
     |}]
@@ -2096,7 +2092,7 @@ let _ = 0 : t;;
     static syl_int __;
     int main()
     {
-      __ = 0;
+      __ = 0ll;
       return 0;
     }
     |}]
@@ -2114,7 +2110,7 @@ let _ =
     int main()
     {
       {
-        syl_int __·x = 1;
+        syl_int __·x = 1ll;
         __ = __·x;
       }
       return 0;
@@ -2150,7 +2146,7 @@ let _ =
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       {
         syl_int __·x = _dyn;
         __ = __·x;
@@ -2175,14 +2171,14 @@ let _ = y @ unerased;;|};
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       {
         syl_int _y·x;
         {
-          syl_int _$ = 1;
+          syl_int _$ = 1ll;
           _y·x = _dyn - _$;
         }
-        _y = 5;
+        _y = 5ll;
       }
       __ = _y;
       return 0;
@@ -2207,10 +2203,10 @@ let _ = y @ unerased;;|};
       {
         syl_int _y·x;
         {
-          syl_int _y·x·x = 1;
-          _y·x = 1;
+          syl_int _y·x·x = 1ll;
+          _y·x = 1ll;
         }
-        _y = 5;
+        _y = 5ll;
       }
       __ = _y;
       return 0;
@@ -2233,14 +2229,14 @@ let _ = y @ unerased;;|};
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       {
         syl_int _y·x;
         {
-          syl_int _$ = 1;
+          syl_int _$ = 1ll;
           _y·x = _dyn - _$;
         }
-        _y = 5;
+        _y = 5ll;
       }
       __ = _y;
       return 0;
@@ -2263,10 +2259,10 @@ let _ = y @ unerased;;|};
     static syl_int __;
     int main()
     {
-      _dyn = 1;
+      _dyn = 1ll;
       {
-        syl_int _y·x = 0;
-        _y = 5;
+        syl_int _y·x = 0ll;
+        _y = 5ll;
       }
       __ = _y;
       return 0;
@@ -2289,8 +2285,8 @@ let _ = y @ unerased;;|};
     static syl_int __;
     int main()
     {
-      _dyn = 1;
-      _y = 5;
+      _dyn = 1ll;
+      _y = 5ll;
       __ = _y;
       return 0;
     }
@@ -2307,7 +2303,7 @@ let _ =
   [%expect
     {|
     static syl_int _dyn_fn·λ(syl_int, syl_env);
-    static syl_closure _dyn_fn;
+    static syl_closure<syl_int,syl_int> _dyn_fn;
     static syl_int __;
     static syl_int _dyn_fn·λ(syl_int _x, syl_env 𝒰)
     {
@@ -2317,11 +2313,11 @@ let _ =
     {
       {
         syl_env _dyn_fn·env = NULL;
-        _dyn_fn = syl_mk_closure(_dyn_fn·λ, _dyn_fn·env);
+        _dyn_fn = syl_closure<syl_int,syl_int>{_dyn_fn·λ, _dyn_fn·env};
       }
       {
-        syl_int _$ = 1;
-        __ = syl_app_closure(_dyn_fn, _$);
+        syl_int _$ = 1ll;
+        __ = _dyn_fn(_$);
       }
       return 0;
     }
@@ -2339,7 +2335,7 @@ let _ =
   [%expect
     {|
     static syl_int _dyn_fn·λ(syl_int, syl_env);
-    static syl_closure _dyn_fn;
+    static syl_closure<syl_int,syl_int> _dyn_fn;
     static syl_int _dyn_arg;
     static syl_int __;
     static syl_int _dyn_fn·λ(syl_int _x, syl_env 𝒰)
@@ -2350,10 +2346,10 @@ let _ =
     {
       {
         syl_env _dyn_fn·env = NULL;
-        _dyn_fn = syl_mk_closure(_dyn_fn·λ, _dyn_fn·env);
+        _dyn_fn = syl_closure<syl_int,syl_int>{_dyn_fn·λ, _dyn_fn·env};
       }
-      _dyn_arg = 1;
-      __ = syl_app_closure(_dyn_fn, _dyn_arg);
+      _dyn_arg = 1ll;
+      __ = _dyn_fn(_dyn_arg);
       return 0;
     }
     |}]
@@ -2368,7 +2364,7 @@ let _ =
   [%expect
     {|
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
@@ -2377,7 +2373,7 @@ let _ =
     {
       {
         syl_env __·env = NULL;
-        __ = syl_mk_closure(__·λ, __·env);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -2428,18 +2424,18 @@ let _ =
     {|
     static syl_int _x;
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _y, syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
+      syl_int _x = *(syl_int*)(𝒰 + 0);
       return _x;
     }
     int main()
     {
-      _x = 1;
+      _x = 1ll;
       {
-        syl_env __·env = syl_capture(1, _x);
-        __ = syl_mk_closure(__·λ, __·env);
+        syl_env __·env = syl_capture<syl_int>(_x);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -2457,18 +2453,18 @@ let _ =
     {|
     static syl_int _x;
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _y, syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
+      syl_int _x = *(syl_int*)(𝒰 + 0);
       return _x;
     }
     int main()
     {
-      _x = 1;
+      _x = 1ll;
       {
-        syl_env __·env = syl_capture(1, _x);
-        __ = syl_mk_closure(__·λ, __·env);
+        syl_env __·env = syl_capture<syl_int>(_x);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -2515,17 +2511,17 @@ let g = fn (x : f ()) -> x + 1;;|};
   [%expect
     {|
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _$ = 1;
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     int main()
     {
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
       }
       return 0;
     }
@@ -2558,7 +2554,7 @@ let _ = 0 : f int;;
     static syl_int __;
     int main()
     {
-      __ = 0;
+      __ = 0ll;
       return 0;
     }
     |}]
@@ -2670,31 +2666,31 @@ let g = (f 1 ()) @ unerased;;
 |};
   [%expect
     {|
-    static syl_int _f·λₒ1·λ(syl_unit, syl_env);
-    static syl_closure _f·λₒ1(syl_env);
-    static syl_closure _fₒ1;
+    static syl_int _f·λₒ1·λ(syl_env);
+    static syl_closure<syl_unit,syl_int> _f·λₒ1(syl_env);
+    static syl_thunk<syl_closure<syl_unit,syl_int>> _fₒ1;
     static syl_int _g;
-    static syl_int _f·λₒ1·λ(syl_unit __, syl_env 𝒰)
+    static syl_int _f·λₒ1·λ(syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
+      syl_int _x = *(syl_int*)(𝒰 + 0);
       return _x;
     }
-    static syl_closure _f·λₒ1(syl_env 𝒰)
+    static syl_closure<syl_unit,syl_int> _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_env _f·λₒ1·env = syl_capture(1, _f·λₒ1·x);
-      return syl_mk_closure(_f·λₒ1·λ, _f·λₒ1·env);
+      syl_int _f·λₒ1·x = 1ll;
+      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
+      return syl_closure<syl_unit,syl_int>{_f·λₒ1·λ, _f·λₒ1·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
+        _fₒ1 = syl_thunk<syl_closure<syl_unit,syl_int>>{_f·λₒ1, _f·env};
       }
       {
-        syl_closure _$ = syl_app_thunk(_fₒ1);
-        syl_unit _$ˢ1 = 0;
-        _g = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_unit,syl_int> _$ = _fₒ1();
+        ;
+        _g = _$();
       }
       return 0;
     }
@@ -2742,49 +2738,49 @@ let _ = g true;;
   [%expect
     {|
     static syl_bool _f·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure _f·λₒ𝔹(syl_env);
+    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env);
     static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀(syl_env);
-    static syl_closure _fₒ𝔹;
-    static syl_closure _fₒ𝕀;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
-    static syl_closure _gˢ1;
+    static syl_closure<syl_bool,syl_bool> _gˢ1;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env 𝒰)
     {
       syl_env _f·λₒ𝔹·env = NULL;
-      return syl_mk_closure(_f·λₒ𝔹·λ, _f·λₒ𝔹·env);
+      return syl_closure<syl_bool,syl_bool>{_f·λₒ𝔹·λ, _f·λₒ𝔹·env};
     }
     static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λ, _f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ𝔹 = syl_mk_thunk(_f·λₒ𝔹, _f·env);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, _f·env);
+        _fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_f·λₒ𝔹, _f·env};
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, _f·env};
       }
-      _g = syl_app_thunk(_fₒ𝕀);
+      _g = _fₒ𝕀();
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 0ll;
+        __ = _g(_$);
       }
-      _gˢ1 = syl_app_thunk(_fₒ𝔹);
+      _gˢ1 = _fₒ𝔹();
       {
         syl_bool _$ = true;
-        __ˢ1 = syl_app_closure(_gˢ1, _$);
+        __ˢ1 = _gˢ1(_$);
       }
       return 0;
     }
@@ -2801,30 +2797,30 @@ let _ = f (fn (x : int) -> x + 1);;
     {|
     static syl_int _f·λₒλ1·g·λ(syl_int, syl_env);
     static syl_int _f·λₒλ1(syl_env);
-    static syl_int _fₒλ1;
+    static syl_thunk<syl_int> _fₒλ1;
     static syl_int __;
     static syl_int _f·λₒλ1·g·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _$ = 1;
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     static syl_int _f·λₒλ1(syl_env 𝒰)
     {
-      syl_closure _f·λₒλ1·g;
+      syl_closure<syl_int,syl_int> _f·λₒλ1·g;
       {
         syl_env _f·λₒλ1·g·env = NULL;
-        _f·λₒλ1·g = syl_mk_closure(_f·λₒλ1·g·λ, _f·λₒλ1·g·env);
+        _f·λₒλ1·g = syl_closure<syl_int,syl_int>{_f·λₒλ1·g·λ, _f·λₒλ1·g·env};
       }
-      syl_int _$ = 0;
-      return syl_app_closure(_f·λₒλ1·g, _$);
+      syl_int _$ = 0ll;
+      return _f·λₒλ1·g(_$);
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ1 = syl_mk_thunk(_f·λₒλ1, _f·env);
+        _fₒλ1 = syl_thunk<syl_int>{_f·λₒλ1, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ1);
+      __ = _fₒλ1();
       return 0;
     }
     |}]
@@ -2833,26 +2829,26 @@ let _ = f (fn (x : int) -> x + 1);;
 let%expect_test "dependent unit" =
   go
     {|
-let f = fn (static x : unit) -> ();;
+let f = fn (static x : unit) -> let x = 0 in ();;
 let _ = f ();;
 |};
   [%expect
     {|
     static syl_unit _f·λₒø(syl_env);
-    static syl_unit _fₒø;
-    static syl_unit __;
+    static syl_thunk<syl_unit> _fₒø;
     static syl_unit _f·λₒø(syl_env 𝒰)
     {
-      syl_unit _f·λₒø·x = 0;
-      return 0;
+      ;
+      syl_int _f·λₒø·xˢ1 = 0ll;
+      ;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒø = syl_mk_thunk(_f·λₒø, _f·env);
+        _fₒø = syl_thunk<syl_unit>{_f·λₒø, _f·env};
       }
-      __ = syl_app_thunk(_fₒø);
+      _fₒø();
       return 0;
     }
     |}]
@@ -2867,7 +2863,7 @@ let _ = f true;;
   [%expect
     {|
     static syl_bool _f·λₒT(syl_env);
-    static syl_bool _fₒT;
+    static syl_thunk<syl_bool> _fₒT;
     static syl_bool __;
     static syl_bool _f·λₒT(syl_env 𝒰)
     {
@@ -2878,9 +2874,9 @@ let _ = f true;;
     {
       {
         syl_env _f·env = NULL;
-        _fₒT = syl_mk_thunk(_f·λₒT, _f·env);
+        _fₒT = syl_thunk<syl_bool>{_f·λₒT, _f·env};
       }
-      __ = syl_app_thunk(_fₒT);
+      __ = _fₒT();
       return 0;
     }
     |}]
@@ -2895,20 +2891,20 @@ let _ = f 1;;
   [%expect
     {|
     static syl_int _f·λₒ1(syl_env);
-    static syl_int _fₒ1;
+    static syl_thunk<syl_int> _fₒ1;
     static syl_int __;
     static syl_int _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       return -_f·λₒ1·x;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
+        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
       }
-      __ = syl_app_thunk(_fₒ1);
+      __ = _fₒ1();
       return 0;
     }
     |}]
@@ -2939,29 +2935,29 @@ let _ = f (fn (x : int) -> 0);;
 |};
   [%expect
     {|
-    static syl_int _f·λ(syl_closure, syl_env);
-    static syl_closure _f;
+    static syl_int _f·λ(syl_closure<syl_int,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _f;
     static syl_int __·λ(syl_int, syl_env);
     static syl_int __;
-    static syl_int _f·λ(syl_closure _g, syl_env 𝒰)
+    static syl_int _f·λ(syl_closure<syl_int,syl_int> _g, syl_env 𝒰)
     {
-      syl_int _$ = 0;
-      return syl_app_closure(_g, _$);
+      syl_int _$ = 0ll;
+      return _g(_$);
     }
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env __·env = NULL;
-        syl_closure _$ = syl_mk_closure(__·λ, __·env);
-        __ = syl_app_closure(_f, _$);
+        syl_closure<syl_int,syl_int> _$ = syl_closure<syl_int,syl_int>{__·λ, __·env};
+        __ = _f(_$);
       }
       return 0;
     }
@@ -2978,29 +2974,29 @@ let _ = f (fn (static x : int) -> 0);;
     {|
     static syl_int _f·λₒλ4·g·λₒ0(syl_env);
     static syl_int _f·λₒλ4(syl_env);
-    static syl_int _fₒλ4;
+    static syl_thunk<syl_int> _fₒλ4;
     static syl_int __;
     static syl_int _f·λₒλ4·g·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒλ4·g·λₒ0·x = 0;
-      return 0;
+      syl_int _f·λₒλ4·g·λₒ0·x = 0ll;
+      return 0ll;
     }
     static syl_int _f·λₒλ4(syl_env 𝒰)
     {
-      syl_int _f·λₒλ4·gₒ0;
+      syl_thunk<syl_int> _f·λₒλ4·gₒ0;
       {
         syl_env _f·λₒλ4·g·env = NULL;
-        _f·λₒλ4·gₒ0 = syl_mk_thunk(_f·λₒλ4·g·λₒ0, _f·λₒλ4·g·env);
+        _f·λₒλ4·gₒ0 = syl_thunk<syl_int>{_f·λₒλ4·g·λₒ0, _f·λₒλ4·g·env};
       }
-      return syl_app_thunk(_f·λₒλ4·gₒ0);
+      return _f·λₒλ4·gₒ0();
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ4 = syl_mk_thunk(_f·λₒλ4, _f·env);
+        _fₒλ4 = syl_thunk<syl_int>{_f·λₒλ4, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ4);
+      __ = _fₒλ4();
       return 0;
     }
     |}]
@@ -3016,29 +3012,29 @@ let _ = f (fn (x : int) -> 0);;
     {|
     static syl_int _f·λₒλ3·g·λ(syl_int, syl_env);
     static syl_int _f·λₒλ3(syl_env);
-    static syl_int _fₒλ3;
+    static syl_thunk<syl_int> _fₒλ3;
     static syl_int __;
     static syl_int _f·λₒλ3·g·λ(syl_int _x, syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     static syl_int _f·λₒλ3(syl_env 𝒰)
     {
-      syl_closure _f·λₒλ3·g;
+      syl_closure<syl_int,syl_int> _f·λₒλ3·g;
       {
         syl_env _f·λₒλ3·g·env = NULL;
-        _f·λₒλ3·g = syl_mk_closure(_f·λₒλ3·g·λ, _f·λₒλ3·g·env);
+        _f·λₒλ3·g = syl_closure<syl_int,syl_int>{_f·λₒλ3·g·λ, _f·λₒλ3·g·env};
       }
-      syl_int _$ = 0;
-      return syl_app_closure(_f·λₒλ3·g, _$);
+      syl_int _$ = 0ll;
+      return _f·λₒλ3·g(_$);
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ3 = syl_mk_thunk(_f·λₒλ3, _f·env);
+        _fₒλ3 = syl_thunk<syl_int>{_f·λₒλ3, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ3);
+      __ = _fₒλ3();
       return 0;
     }
     |}]
@@ -3111,7 +3107,7 @@ let _ = if true then fn (x : int) -> x else fn (static x : int) -> x;;
   [%expect
     {|
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
@@ -3120,7 +3116,7 @@ let _ = if true then fn (x : int) -> x else fn (static x : int) -> x;;
     {
       {
         syl_env __·env = NULL;
-        __ = syl_mk_closure(__·λ, __·env);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -3194,29 +3190,29 @@ let%expect_test "pi typechecking" =
     {|
     static syl_int _f·λₒλ1·g·λ(syl_int, syl_env);
     static syl_int _f·λₒλ1(syl_env);
-    static syl_int _fₒλ1;
+    static syl_thunk<syl_int> _fₒλ1;
     static syl_int __;
     static syl_int _f·λₒλ1·g·λ(syl_int _x, syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     static syl_int _f·λₒλ1(syl_env 𝒰)
     {
-      syl_closure _f·λₒλ1·g;
+      syl_closure<syl_int,syl_int> _f·λₒλ1·g;
       {
         syl_env _f·λₒλ1·g·env = NULL;
-        _f·λₒλ1·g = syl_mk_closure(_f·λₒλ1·g·λ, _f·λₒλ1·g·env);
+        _f·λₒλ1·g = syl_closure<syl_int,syl_int>{_f·λₒλ1·g·λ, _f·λₒλ1·g·env};
       }
-      syl_int _$ = 0;
-      return syl_app_closure(_f·λₒλ1·g, _$);
+      syl_int _$ = 0ll;
+      return _f·λₒλ1·g(_$);
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ1 = syl_mk_thunk(_f·λₒλ1, _f·env);
+        _fₒλ1 = syl_thunk<syl_int>{_f·λₒλ1, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ1);
+      __ = _fₒλ1();
       return 0;
     }
     |}]
@@ -3232,29 +3228,29 @@ let _ = f (fn (x : int) -> 0);;
     {|
     static syl_int _f·λₒλ3·g·λ(syl_int, syl_env);
     static syl_int _f·λₒλ3(syl_env);
-    static syl_int _fₒλ3;
+    static syl_thunk<syl_int> _fₒλ3;
     static syl_int __;
     static syl_int _f·λₒλ3·g·λ(syl_int _x, syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     static syl_int _f·λₒλ3(syl_env 𝒰)
     {
-      syl_closure _f·λₒλ3·g;
+      syl_closure<syl_int,syl_int> _f·λₒλ3·g;
       {
         syl_env _f·λₒλ3·g·env = NULL;
-        _f·λₒλ3·g = syl_mk_closure(_f·λₒλ3·g·λ, _f·λₒλ3·g·env);
+        _f·λₒλ3·g = syl_closure<syl_int,syl_int>{_f·λₒλ3·g·λ, _f·λₒλ3·g·env};
       }
-      syl_int _$ = 1;
-      return syl_app_closure(_f·λₒλ3·g, _$);
+      syl_int _$ = 1ll;
+      return _f·λₒλ3·g(_$);
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ3 = syl_mk_thunk(_f·λₒλ3, _f·env);
+        _fₒλ3 = syl_thunk<syl_int>{_f·λₒλ3, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ3);
+      __ = _fₒλ3();
       return 0;
     }
     |}]
@@ -3269,21 +3265,21 @@ let _ = f (fn (static x : int) -> x + 1);;
   [%expect
     {|
     static syl_int _f·λₒλ4(syl_env);
-    static syl_int _fₒλ4;
+    static syl_thunk<syl_int> _fₒλ4;
     static syl_int __;
     static syl_int _f·λₒλ4(syl_env 𝒰)
     {
-      syl_int _f·λₒλ4·x = 0;
-      syl_int _$ = 1;
+      syl_int _f·λₒλ4·x = 0ll;
+      syl_int _$ = 1ll;
       return _f·λₒλ4·x + _$;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ4 = syl_mk_thunk(_f·λₒλ4, _f·env);
+        _fₒλ4 = syl_thunk<syl_int>{_f·λₒλ4, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ4);
+      __ = _fₒλ4();
       return 0;
     }
     |}]
@@ -3298,35 +3294,35 @@ let _ = f (fn (static erased t : type) -> fn (x : int) -> x);;
   [%expect
     {|
     static syl_int _f·λₒλ4·g·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒλ4·g·λₒ𝕀(syl_env);
-    static syl_closure _f·λₒλ4(syl_env);
-    static syl_closure _fₒλ4;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _f·λₒλ4·g·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _f·λₒλ4(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒλ4;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _f·λₒλ4·g·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒλ4·g·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒλ4·g·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒλ4·g·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒλ4·g·λₒ𝕀·λ, _f·λₒλ4·g·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒλ4·g·λₒ𝕀·λ, _f·λₒλ4·g·λₒ𝕀·env};
     }
-    static syl_closure _f·λₒλ4(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒλ4(syl_env 𝒰)
     {
-      syl_closure _f·λₒλ4·gₒ𝕀;
+      syl_thunk<syl_closure<syl_int,syl_int>> _f·λₒλ4·gₒ𝕀;
       {
         syl_env _f·λₒλ4·g·env = NULL;
-        _f·λₒλ4·gₒ𝕀 = syl_mk_thunk(_f·λₒλ4·g·λₒ𝕀, _f·λₒλ4·g·env);
+        _f·λₒλ4·gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒλ4·g·λₒ𝕀, _f·λₒλ4·g·env};
       }
-      return syl_app_thunk(_f·λₒλ4·gₒ𝕀);
+      return _f·λₒλ4·gₒ𝕀();
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ4 = syl_mk_thunk(_f·λₒλ4, _f·env);
+        _fₒλ4 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒλ4, _f·env};
       }
-      __ = syl_app_thunk(_fₒλ4);
+      __ = _fₒλ4();
       return 0;
     }
     |}]
@@ -3342,47 +3338,47 @@ let y = (id bool) (true @ dynamic);;
   [%expect
     {|
     static syl_bool _id·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure _id·λₒ𝔹(syl_env);
+    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env);
     static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _id·λₒ𝕀(syl_env);
-    static syl_closure _idₒ𝔹;
-    static syl_closure _idₒ𝕀;
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _idₒ𝔹;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
     static syl_int _x;
     static syl_bool _y;
     static syl_bool _id·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env 𝒰)
     {
       syl_env _id·λₒ𝔹·env = NULL;
-      return syl_mk_closure(_id·λₒ𝔹·λ, _id·λₒ𝔹·env);
+      return syl_closure<syl_bool,syl_bool>{_id·λₒ𝔹·λ, _id·λₒ𝔹·env};
     }
     static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _id·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_id·λₒ𝕀·λ, _id·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env _id·env = NULL;
-        _idₒ𝔹 = syl_mk_thunk(_id·λₒ𝔹, _id·env);
-        _idₒ𝕀 = syl_mk_thunk(_id·λₒ𝕀, _id·env);
+        _idₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_id·λₒ𝔹, _id·env};
+        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, _id·env};
       }
       {
-        syl_closure _$ = syl_app_thunk(_idₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        _x = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _idₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        _x = _$(_$ˢ1);
       }
       {
-        syl_closure _$ = syl_app_thunk(_idₒ𝔹);
+        syl_closure<syl_bool,syl_bool> _$ = _idₒ𝔹();
         syl_bool _$ˢ1 = true;
-        _y = syl_app_closure(_$, _$ˢ1);
+        _y = _$(_$ˢ1);
       }
       return 0;
     }
@@ -3403,7 +3399,7 @@ let y = (id bool) (true @ dynamic);;
     int main()
     {
       {
-        syl_int _x·x = 0;
+        syl_int _x·x = 0ll;
         _x = _x·x;
       }
       {
@@ -3460,35 +3456,35 @@ let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
   [%expect
     {|
     static syl_int _apply_int·λₒλ4·f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _apply_int·λₒλ4·f·λₒ𝕀(syl_env);
-    static syl_closure _apply_int·λₒλ4(syl_env);
-    static syl_closure _apply_intₒλ4;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4·f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _apply_intₒλ4;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _apply_int·λₒλ4·f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _apply_int·λₒλ4·f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4·f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _apply_int·λₒλ4·f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_apply_int·λₒλ4·f·λₒ𝕀·λ, _apply_int·λₒλ4·f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_apply_int·λₒλ4·f·λₒ𝕀·λ, _apply_int·λₒλ4·f·λₒ𝕀·env};
     }
-    static syl_closure _apply_int·λₒλ4(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4(syl_env 𝒰)
     {
-      syl_closure _apply_int·λₒλ4·fₒ𝕀;
+      syl_thunk<syl_closure<syl_int,syl_int>> _apply_int·λₒλ4·fₒ𝕀;
       {
         syl_env _apply_int·λₒλ4·f·env = NULL;
-        _apply_int·λₒλ4·fₒ𝕀 = syl_mk_thunk(_apply_int·λₒλ4·f·λₒ𝕀, _apply_int·λₒλ4·f·env);
+        _apply_int·λₒλ4·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_int·λₒλ4·f·λₒ𝕀, _apply_int·λₒλ4·f·env};
       }
-      return syl_app_thunk(_apply_int·λₒλ4·fₒ𝕀);
+      return _apply_int·λₒλ4·fₒ𝕀();
     }
     int main()
     {
       {
         syl_env _apply_int·env = NULL;
-        _apply_intₒλ4 = syl_mk_thunk(_apply_int·λₒλ4, _apply_int·env);
+        _apply_intₒλ4 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_int·λₒλ4, _apply_int·env};
       }
-      __ = syl_app_thunk(_apply_intₒλ4);
+      __ = _apply_intₒλ4();
       return 0;
     }
     |}]
@@ -3505,82 +3501,82 @@ let h = f bool;;
   [%expect
     {|
     static syl_bool _apply·λₒλ7·f·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure _apply·λₒλ7·f·λₒ𝔹(syl_env);
+    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·f·λₒ𝔹(syl_env);
     static syl_int _apply·λₒλ7·f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _apply·λₒλ7·f·λₒ𝕀(syl_env);
-    static syl_closure _apply·λₒλ7·λₒ𝔹(syl_env);
-    static syl_closure _apply·λₒλ7·λₒ𝕀(syl_env);
-    static syl_closure _apply·λₒλ7ₒ𝔹(syl_env);
-    static syl_closure _apply·λₒλ7ₒ𝕀(syl_env);
-    static syl_closure _applyₒλ7ₒ𝔹;
-    static syl_closure _applyₒλ7ₒ𝕀;
-    static syl_closure _fₒ𝔹;
-    static syl_closure _fₒ𝕀;
-    static syl_closure _g;
-    static syl_closure _h;
+    static syl_closure<syl_int,syl_int> _apply·λₒλ7·f·λₒ𝕀(syl_env);
+    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·λₒ𝔹(syl_env);
+    static syl_closure<syl_int,syl_int> _apply·λₒλ7·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7ₒ𝔹(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7ₒ𝕀(syl_env);
+    static syl_thunk<syl_thunk<syl_closure<syl_bool,syl_bool>>> _applyₒλ7ₒ𝔹;
+    static syl_thunk<syl_thunk<syl_closure<syl_int,syl_int>>> _applyₒλ7ₒ𝕀;
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_closure<syl_int,syl_int> _g;
+    static syl_closure<syl_bool,syl_bool> _h;
     static syl_bool _apply·λₒλ7·f·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _apply·λₒλ7·f·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·f·λₒ𝔹(syl_env 𝒰)
     {
       syl_env _apply·λₒλ7·f·λₒ𝔹·env = NULL;
-      return syl_mk_closure(_apply·λₒλ7·f·λₒ𝔹·λ, _apply·λₒλ7·f·λₒ𝔹·env);
+      return syl_closure<syl_bool,syl_bool>{_apply·λₒλ7·f·λₒ𝔹·λ, _apply·λₒλ7·f·λₒ𝔹·env};
     }
     static syl_int _apply·λₒλ7·f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _apply·λₒλ7·f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _apply·λₒλ7·f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _apply·λₒλ7·f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_apply·λₒλ7·f·λₒ𝕀·λ, _apply·λₒλ7·f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_apply·λₒλ7·f·λₒ𝕀·λ, _apply·λₒλ7·f·λₒ𝕀·env};
     }
-    static syl_closure _apply·λₒλ7·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·λₒ𝔹(syl_env 𝒰)
     {
-      syl_closure _fₒ𝔹 = 𝒰[1];
-      return syl_app_thunk(_fₒ𝔹);
+      syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹 = *(syl_thunk<syl_closure<syl_bool,syl_bool>>*)(𝒰 + 16);
+      return _fₒ𝔹();
     }
-    static syl_closure _apply·λₒλ7·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _apply·λₒλ7·λₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _fₒ𝕀 = 𝒰[0];
-      return syl_app_thunk(_fₒ𝕀);
+      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      return _fₒ𝕀();
     }
-    static syl_closure _apply·λₒλ7ₒ𝔹(syl_env 𝒰)
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7ₒ𝔹(syl_env 𝒰)
     {
-      syl_closure _apply·λₒλ7·fₒ𝔹;
-      syl_closure _apply·λₒλ7·fₒ𝕀;
+      syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7·fₒ𝔹;
+      syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7·fₒ𝕀;
       {
         syl_env _apply·λₒλ7·f·env = NULL;
-        _apply·λₒλ7·fₒ𝔹 = syl_mk_thunk(_apply·λₒλ7·f·λₒ𝔹, _apply·λₒλ7·f·env);
-        _apply·λₒλ7·fₒ𝕀 = syl_mk_thunk(_apply·λₒλ7·f·λₒ𝕀, _apply·λₒλ7·f·env);
+        _apply·λₒλ7·fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_apply·λₒλ7·f·λₒ𝔹, _apply·λₒλ7·f·env};
+        _apply·λₒλ7·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply·λₒλ7·f·λₒ𝕀, _apply·λₒλ7·f·env};
       }
-      syl_env _apply·λₒλ7·env = syl_capture(2, _apply·λₒλ7·fₒ𝕀, _apply·λₒλ7·fₒ𝔹);
-      return syl_mk_thunk(_apply·λₒλ7·λₒ𝔹, _apply·λₒλ7·env);
+      syl_env _apply·λₒλ7·env = syl_capture<syl_thunk<syl_closure<syl_int,syl_int>>, syl_thunk<syl_closure<syl_bool,syl_bool>>>(_apply·λₒλ7·fₒ𝕀, _apply·λₒλ7·fₒ𝔹);
+      return syl_thunk<syl_closure<syl_bool,syl_bool>>{_apply·λₒλ7·λₒ𝔹, _apply·λₒλ7·env};
     }
-    static syl_closure _apply·λₒλ7ₒ𝕀(syl_env 𝒰)
+    static syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7ₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _apply·λₒλ7·fₒ𝔹;
-      syl_closure _apply·λₒλ7·fₒ𝕀;
+      syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7·fₒ𝔹;
+      syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7·fₒ𝕀;
       {
         syl_env _apply·λₒλ7·f·env = NULL;
-        _apply·λₒλ7·fₒ𝔹 = syl_mk_thunk(_apply·λₒλ7·f·λₒ𝔹, _apply·λₒλ7·f·env);
-        _apply·λₒλ7·fₒ𝕀 = syl_mk_thunk(_apply·λₒλ7·f·λₒ𝕀, _apply·λₒλ7·f·env);
+        _apply·λₒλ7·fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_apply·λₒλ7·f·λₒ𝔹, _apply·λₒλ7·f·env};
+        _apply·λₒλ7·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply·λₒλ7·f·λₒ𝕀, _apply·λₒλ7·f·env};
       }
-      syl_env _apply·λₒλ7·env = syl_capture(2, _apply·λₒλ7·fₒ𝕀, _apply·λₒλ7·fₒ𝔹);
-      return syl_mk_thunk(_apply·λₒλ7·λₒ𝕀, _apply·λₒλ7·env);
+      syl_env _apply·λₒλ7·env = syl_capture<syl_thunk<syl_closure<syl_int,syl_int>>, syl_thunk<syl_closure<syl_bool,syl_bool>>>(_apply·λₒλ7·fₒ𝕀, _apply·λₒλ7·fₒ𝔹);
+      return syl_thunk<syl_closure<syl_int,syl_int>>{_apply·λₒλ7·λₒ𝕀, _apply·λₒλ7·env};
     }
     int main()
     {
       {
         syl_env _apply·env = NULL;
-        _applyₒλ7ₒ𝔹 = syl_mk_thunk(_apply·λₒλ7ₒ𝔹, _apply·env);
-        _applyₒλ7ₒ𝕀 = syl_mk_thunk(_apply·λₒλ7ₒ𝕀, _apply·env);
+        _applyₒλ7ₒ𝔹 = syl_thunk<syl_thunk<syl_closure<syl_bool,syl_bool>>>{_apply·λₒλ7ₒ𝔹, _apply·env};
+        _applyₒλ7ₒ𝕀 = syl_thunk<syl_thunk<syl_closure<syl_int,syl_int>>>{_apply·λₒλ7ₒ𝕀, _apply·env};
       }
-      _fₒ𝔹 = syl_app_thunk(_applyₒλ7ₒ𝔹);
-      _fₒ𝕀 = syl_app_thunk(_applyₒλ7ₒ𝕀);
-      _g = syl_app_thunk(_fₒ𝕀);
-      _h = syl_app_thunk(_fₒ𝔹);
+      _fₒ𝔹 = _applyₒλ7ₒ𝔹();
+      _fₒ𝕀 = _applyₒλ7ₒ𝕀();
+      _g = _fₒ𝕀();
+      _h = _fₒ𝔹();
       return 0;
     }
     |}]
@@ -3597,29 +3593,29 @@ let _ = f 1;;
     {|
     static syl_bool _f·λₒ1(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_bool _fₒ1;
-    static syl_int _fₒ0;
+    static syl_thunk<syl_bool> _fₒ1;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       return true;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      return 1;
+      syl_int _f·λₒ0·x = 0ll;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
-      __ˢ1 = syl_app_thunk(_fₒ1);
+      __ = _fₒ0();
+      __ˢ1 = _fₒ1();
       return 0;
     }
     |}]
@@ -3635,31 +3631,31 @@ let _ = if true then f 0 else g 1;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ0;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int _g·λₒ1(syl_env);
-    static syl_int _gₒ1;
+    static syl_thunk<syl_int> _gₒ1;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      return 1;
+      syl_int _f·λₒ0·x = 0ll;
+      return 1ll;
     }
     static syl_int _g·λₒ1(syl_env 𝒰)
     {
-      syl_int _g·λₒ1·x = 1;
-      return 2;
+      syl_int _g·λₒ1·x = 1ll;
+      return 2ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
       {
         syl_env _g·env = NULL;
-        _gₒ1 = syl_mk_thunk(_g·λₒ1, _g·env);
+        _gₒ1 = syl_thunk<syl_int>{_g·λₒ1, _g·env};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -3673,18 +3669,18 @@ fun f (x : int) : int = f x;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[0];
-      return syl_app_closure(_f, _x);
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      return _f(_x);
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        𝒰[0] = _f;
+        syl_env 𝒰 = syl_env_rec(16);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
       }
       return 0;
     }
@@ -3713,16 +3709,16 @@ fun f (x : int) : int = 1;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _f = syl_mk_closure(_f·λ, 𝒰);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
       }
       return 0;
     }
@@ -3752,20 +3748,20 @@ let y = x 0;;
   [%expect
     {|
     static syl_int _x·λₒ0(syl_env);
-    static syl_thunk _xₒ0;
+    static syl_thunk<syl_int> _xₒ0;
     static syl_int _y;
     static syl_int _x·λₒ0(syl_env 𝒰)
     {
-      syl_int _x·λₒ0·x = 0;
+      syl_int _x·λₒ0·x = 0ll;
       return _x·λₒ0·x;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _xₒ0 = syl_mk_thunk(_x·λₒ0, 𝒰);
+        _xₒ0 = syl_thunk<syl_int>{_x·λₒ0, 𝒰};
       }
-      _y = syl_app_thunk(_xₒ0);
+      _y = _xₒ0();
       return 0;
     }
     |}]
@@ -3782,7 +3778,7 @@ let y = 0 : f ();;
     static syl_int _y;
     int main()
     {
-      _y = 0;
+      _y = 0ll;
       return 0;
     }
     |}]
@@ -3814,7 +3810,7 @@ let y = 5 : f ();;
     static syl_int _y;
     int main()
     {
-      _y = 5;
+      _y = 5ll;
       return 0;
     }
     |}]
@@ -3829,25 +3825,25 @@ let i = id int;;
   [%expect
     {|
     static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _id·λₒ𝕀(syl_env);
-    static syl_thunk _idₒ𝕀;
-    static syl_closure _i;
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
+    static syl_closure<syl_int,syl_int> _i;
     static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _id·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_id·λₒ𝕀·λ, _id·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _idₒ𝕀 = syl_mk_thunk(_id·λₒ𝕀, 𝒰);
+        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, 𝒰};
       }
-      _i = syl_app_thunk(_idₒ𝕀);
+      _i = _idₒ𝕀();
       return 0;
     }
     |}]
@@ -3877,28 +3873,28 @@ let x = (id int) (0 @ dynamic);;
   [%expect
     {|
     static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _id·λₒ𝕀(syl_env);
-    static syl_thunk _idₒ𝕀;
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
     static syl_int _x;
     static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _id·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_id·λₒ𝕀·λ, _id·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _idₒ𝕀 = syl_mk_thunk(_id·λₒ𝕀, 𝒰);
+        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, 𝒰};
       }
       {
-        syl_closure _$ = syl_app_thunk(_idₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        _x = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _idₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        _x = _$(_$ˢ1);
       }
       return 0;
     }
@@ -3915,29 +3911,29 @@ let x = id () 0;;
   [%expect
     {|
     static syl_int _id·λ·λ(syl_int, syl_env);
-    static syl_closure _id·λ(syl_unit, syl_env);
-    static syl_closure _id;
+    static syl_closure<syl_int,syl_int> _id·λ(syl_env);
+    static syl_closure<syl_unit,syl_closure<syl_int,syl_int>> _id;
     static syl_int _x;
     static syl_int _id·λ·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λ(syl_unit __, syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id·λ(syl_env 𝒰)
     {
       syl_env _id·λ·env = NULL;
-      return syl_mk_closure(_id·λ·λ, _id·λ·env);
+      return syl_closure<syl_int,syl_int>{_id·λ·λ, _id·λ·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _id = syl_mk_closure(_id·λ, 𝒰);
+        _id = syl_closure<syl_unit,syl_closure<syl_int,syl_int>>{_id·λ, 𝒰};
       }
       {
-        syl_unit _$ = 0;
-        syl_closure _$ˢ1 = syl_app_closure(_id, _$);
-        syl_int _$ˢ2 = 0;
-        _x = syl_app_closure(_$ˢ1, _$ˢ2);
+        ;
+        syl_closure<syl_int,syl_int> _$ˢ1 = _id();
+        syl_int _$ˢ2 = 0ll;
+        _x = _$ˢ1(_$ˢ2);
       }
       return 0;
     }
@@ -3954,40 +3950,40 @@ let x = id2 int (0 @ dynamic);;
   [%expect
     {|
     static syl_int _id1·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _id1·λₒ𝕀(syl_env);
-    static syl_thunk _id1ₒ𝕀;
-    static syl_closure _id2·λₒ𝕀(syl_env);
-    static syl_thunk _id2ₒ𝕀;
+    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀;
+    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _id2ₒ𝕀;
     static syl_int _x;
     static syl_int _id1·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id1·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _id1·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_id1·λₒ𝕀·λ, _id1·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_id1·λₒ𝕀·λ, _id1·λₒ𝕀·env};
     }
-    static syl_closure _id2·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _id1ₒ𝕀 = 𝒰[0];
-      return syl_app_thunk(_id1ₒ𝕀);
+      syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      return _id1ₒ𝕀();
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _id1ₒ𝕀 = syl_mk_thunk(_id1·λₒ𝕀, 𝒰);
+        _id1ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id1·λₒ𝕀, 𝒰};
       }
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _id2ₒ𝕀 = syl_mk_thunk(_id2·λₒ𝕀, 𝒰);
-        𝒰[0] = _id1ₒ𝕀;
+        syl_env 𝒰 = syl_env_rec(16);
+        _id2ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id2·λₒ𝕀, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _id1ₒ𝕀;
       }
       {
-        syl_closure _$ = syl_app_thunk(_id2ₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        _x = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _id2ₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        _x = _$(_$ˢ1);
       }
       return 0;
     }
@@ -4004,42 +4000,41 @@ let _ = x () ();;
 |};
   [%expect
     {|
-    static syl_unit _a·λ(syl_unit, syl_env);
-    static syl_closure _a;
-    static syl_unit _b·λ·λ(syl_unit, syl_env);
-    static syl_closure _b·λ(syl_unit, syl_env);
-    static syl_closure _b;
-    static syl_closure _x;
-    static syl_unit __;
-    static syl_unit _a·λ(syl_unit __, syl_env 𝒰)
+    static syl_unit _a·λ(syl_env);
+    static syl_closure<syl_unit,syl_unit> _a;
+    static syl_unit _b·λ·λ(syl_env);
+    static syl_closure<syl_unit,syl_unit> _b·λ(syl_env);
+    static syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>> _b;
+    static syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>> _x;
+    static syl_unit _a·λ(syl_env 𝒰)
     {
-      return 0;
+      ;
     }
-    static syl_unit _b·λ·λ(syl_unit __, syl_env 𝒰)
+    static syl_unit _b·λ·λ(syl_env 𝒰)
     {
-      return 0;
+      ;
     }
-    static syl_closure _b·λ(syl_unit __, syl_env 𝒰)
+    static syl_closure<syl_unit,syl_unit> _b·λ(syl_env 𝒰)
     {
       syl_env _b·λ·env = NULL;
-      return syl_mk_closure(_b·λ·λ, _b·λ·env);
+      return syl_closure<syl_unit,syl_unit>{_b·λ·λ, _b·λ·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _a = syl_mk_closure(_a·λ, 𝒰);
+        _a = syl_closure<syl_unit,syl_unit>{_a·λ, 𝒰};
       }
       {
         syl_env 𝒰 = NULL;
-        _b = syl_mk_closure(_b·λ, 𝒰);
+        _b = syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>>{_b·λ, 𝒰};
       }
       _x = _b;
       {
-        syl_unit _$ = 0;
-        syl_closure _$ˢ1 = syl_app_closure(_x, _$);
-        syl_unit _$ˢ2 = 0;
-        __ = syl_app_closure(_$ˢ1, _$ˢ2);
+        ;
+        syl_closure<syl_unit,syl_unit> _$ˢ1 = _x();
+        ;
+        _$ˢ1();
       }
       return 0;
     }
@@ -4054,30 +4049,29 @@ let _ = x () ();;
 |};
   [%expect
     {|
-    static syl_unit _x·λ·λ(syl_unit, syl_env);
-    static syl_closure _x·λ(syl_unit, syl_env);
-    static syl_closure _x;
-    static syl_unit __;
-    static syl_unit _x·λ·λ(syl_unit __, syl_env 𝒰)
+    static syl_unit _x·λ·λ(syl_env);
+    static syl_closure<syl_unit,syl_unit> _x·λ(syl_env);
+    static syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>> _x;
+    static syl_unit _x·λ·λ(syl_env 𝒰)
     {
-      return 0;
+      ;
     }
-    static syl_closure _x·λ(syl_unit __, syl_env 𝒰)
+    static syl_closure<syl_unit,syl_unit> _x·λ(syl_env 𝒰)
     {
       syl_env _x·λ·env = NULL;
-      return syl_mk_closure(_x·λ·λ, _x·λ·env);
+      return syl_closure<syl_unit,syl_unit>{_x·λ·λ, _x·λ·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _x = syl_mk_closure(_x·λ, 𝒰);
+        _x = syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>>{_x·λ, 𝒰};
       }
       {
-        syl_unit _$ = 0;
-        syl_closure _$ˢ1 = syl_app_closure(_x, _$);
-        syl_unit _$ˢ2 = 0;
-        __ = syl_app_closure(_$ˢ1, _$ˢ2);
+        ;
+        syl_closure<syl_unit,syl_unit> _$ˢ1 = _x();
+        ;
+        _$ˢ1();
       }
       return 0;
     }
@@ -4092,29 +4086,29 @@ let _ = x (fn (_ : unit) -> 1);;
 |};
   [%expect
     {|
-    static syl_int _x·λ(syl_closure, syl_env);
-    static syl_closure _x;
-    static syl_int __·λ(syl_unit, syl_env);
+    static syl_int _x·λ(syl_closure<syl_unit,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_unit,syl_int>,syl_int> _x;
+    static syl_int __·λ(syl_env);
     static syl_int __;
-    static syl_int _x·λ(syl_closure _f, syl_env 𝒰)
+    static syl_int _x·λ(syl_closure<syl_unit,syl_int> _f, syl_env 𝒰)
     {
-      syl_unit _$ = 0;
-      return syl_app_closure(_f, _$);
+      ;
+      return _f();
     }
-    static syl_int __·λ(syl_unit __, syl_env 𝒰)
+    static syl_int __·λ(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _x = syl_mk_closure(_x·λ, 𝒰);
+        _x = syl_closure<syl_closure<syl_unit,syl_int>,syl_int>{_x·λ, 𝒰};
       }
       {
         syl_env __·env = NULL;
-        syl_closure _$ = syl_mk_closure(__·λ, __·env);
-        __ = syl_app_closure(_x, _$);
+        syl_closure<syl_unit,syl_int> _$ = syl_closure<syl_unit,syl_int>{__·λ, __·env};
+        __ = _x(_$);
       }
       return 0;
     }
@@ -4134,10 +4128,10 @@ let _ = h 1;;
     {|
     static syl_bool _f·λₒ1(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_bool _fₒ1;
-    static syl_int _fₒ0;
-    static syl_bool _hₒ1;
-    static syl_int _hₒ0;
+    static syl_thunk<syl_bool> _fₒ1;
+    static syl_thunk<syl_int> _fₒ0;
+    static syl_thunk<syl_bool> _hₒ1;
+    static syl_thunk<syl_int> _hₒ0;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒ1(syl_env 𝒰)
@@ -4146,22 +4140,22 @@ let _ = h 1;;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
       {
         syl_env _g·env = NULL;
       }
       _hₒ1 = _fₒ1;
       _hₒ0 = _fₒ0;
-      __ = syl_app_thunk(_hₒ0);
-      __ˢ1 = syl_app_thunk(_hₒ1);
+      __ = _hₒ0();
+      __ˢ1 = _hₒ1();
       return 0;
     }
     |}]
@@ -4178,8 +4172,8 @@ let _ = f 1;;
     {|
     static syl_bool _f·λₒ1(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_bool _fₒ1;
-    static syl_int _fₒ0;
+    static syl_thunk<syl_bool> _fₒ1;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒ1(syl_env 𝒰)
@@ -4188,17 +4182,17 @@ let _ = f 1;;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
-      __ˢ1 = syl_app_thunk(_fₒ1);
+      __ = _fₒ0();
+      __ˢ1 = _fₒ1();
       return 0;
     }
     |}]
@@ -4215,8 +4209,8 @@ let _ = f 2;;
     {|
     static syl_bool _f·λₒ1(syl_env);
     static syl_int _f·λₒ2(syl_env);
-    static syl_bool _fₒ1;
-    static syl_int _fₒ2;
+    static syl_thunk<syl_bool> _fₒ1;
+    static syl_thunk<syl_int> _fₒ2;
     static syl_bool __;
     static syl_int __ˢ1;
     static syl_bool _f·λₒ1(syl_env 𝒰)
@@ -4225,17 +4219,17 @@ let _ = f 2;;
     }
     static syl_int _f·λₒ2(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ2 = syl_mk_thunk(_f·λₒ2, _f·env);
+        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
+        _fₒ2 = syl_thunk<syl_int>{_f·λₒ2, _f·env};
       }
-      __ = syl_app_thunk(_fₒ1);
-      __ˢ1 = syl_app_thunk(_fₒ2);
+      __ = _fₒ1();
+      __ˢ1 = _fₒ2();
       return 0;
     }
     |}]
@@ -4250,19 +4244,19 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ0;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -4277,7 +4271,7 @@ let _ = f 0;;
   [%expect
     {|
     static syl_bool _f·λₒ0(syl_env);
-    static syl_bool _fₒ0;
+    static syl_thunk<syl_bool> _fₒ0;
     static syl_bool __;
     static syl_bool _f·λₒ0(syl_env 𝒰)
     {
@@ -4287,9 +4281,9 @@ let _ = f 0;;
     {
       {
         syl_env _f·env = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ0 = syl_thunk<syl_bool>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -4308,15 +4302,15 @@ let _ = f 2;;
     static syl_int _f·λₒ1(syl_env);
     static syl_bool _f·λₒ2(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ1;
-    static syl_bool _fₒ2;
-    static syl_int _fₒ0;
+    static syl_thunk<syl_int> _fₒ1;
+    static syl_thunk<syl_bool> _fₒ2;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int __ˢ1;
     static syl_bool __ˢ2;
     static syl_int _f·λₒ1(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     static syl_bool _f·λₒ2(syl_env 𝒰)
     {
@@ -4324,19 +4318,19 @@ let _ = f 2;;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ2 = syl_mk_thunk(_f·λₒ2, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
+        _fₒ2 = syl_thunk<syl_bool>{_f·λₒ2, _f·env};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
-      __ˢ1 = syl_app_thunk(_fₒ1);
-      __ˢ2 = syl_app_thunk(_fₒ2);
+      __ = _fₒ0();
+      __ˢ1 = _fₒ1();
+      __ˢ2 = _fₒ2();
       return 0;
     }
     |}]
@@ -4352,29 +4346,29 @@ let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
     {|
     static syl_int _choose·λₒλ4·f·λₒ0(syl_env);
     static syl_int _choose·λₒλ4(syl_env);
-    static syl_int _chooseₒλ4;
+    static syl_thunk<syl_int> _chooseₒλ4;
     static syl_int __;
     static syl_int _choose·λₒλ4·f·λₒ0(syl_env 𝒰)
     {
-      syl_int _choose·λₒλ4·f·λₒ0·x = 0;
-      return 0;
+      syl_int _choose·λₒλ4·f·λₒ0·x = 0ll;
+      return 0ll;
     }
     static syl_int _choose·λₒλ4(syl_env 𝒰)
     {
-      syl_int _choose·λₒλ4·fₒ0;
+      syl_thunk<syl_int> _choose·λₒλ4·fₒ0;
       {
         syl_env _choose·λₒλ4·f·env = NULL;
-        _choose·λₒλ4·fₒ0 = syl_mk_thunk(_choose·λₒλ4·f·λₒ0, _choose·λₒλ4·f·env);
+        _choose·λₒλ4·fₒ0 = syl_thunk<syl_int>{_choose·λₒλ4·f·λₒ0, _choose·λₒλ4·f·env};
       }
-      return syl_app_thunk(_choose·λₒλ4·fₒ0);
+      return _choose·λₒλ4·fₒ0();
     }
     int main()
     {
       {
         syl_env _choose·env = NULL;
-        _chooseₒλ4 = syl_mk_thunk(_choose·λₒλ4, _choose·env);
+        _chooseₒλ4 = syl_thunk<syl_int>{_choose·λₒλ4, _choose·env};
       }
-      __ = syl_app_thunk(_chooseₒλ4);
+      __ = _chooseₒλ4();
       return 0;
     }
     |}]
@@ -4405,7 +4399,7 @@ let _ = x @ erased;;
     static syl_int _x;
     int main()
     {
-      _x = 1;
+      _x = 1ll;
       return 0;
     }
     |}]
@@ -4419,7 +4413,7 @@ let _ = (fn (x : int) -> x) @ dynamic;;
   [%expect
     {|
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
@@ -4428,7 +4422,7 @@ let _ = (fn (x : int) -> x) @ dynamic;;
     {
       {
         syl_env __·env = NULL;
-        __ = syl_mk_closure(__·λ, __·env);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -4444,8 +4438,8 @@ let _ = f : int -> erased int;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
@@ -4454,7 +4448,7 @@ let _ = f : int -> erased int;;
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       __ = _f;
       return 0;
@@ -4471,17 +4465,17 @@ let _ = f : int -> int;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       __ = _f;
       return 0;
@@ -4511,16 +4505,16 @@ let _ = if true then fn (erased x : int) -> 1 else fn (x : int) -> 1;;
   [%expect
     {|
     static syl_int __·λ(syl_int, syl_env);
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env __·env = NULL;
-        __ = syl_mk_closure(__·λ, __·env);
+        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -4550,20 +4544,20 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ0;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       return _f·λₒ0·x;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -4578,7 +4572,7 @@ let _ = (f @ erased) 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
@@ -4588,10 +4582,10 @@ let _ = (f @ erased) 0;;
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
-        syl_int __·x = 0;
+        syl_int __·x = 0ll;
         __ = __·x;
       }
       return 0;
@@ -4609,16 +4603,16 @@ let _ = ((if true then f else g) @ erased) 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       return 0;
     }
@@ -4651,8 +4645,8 @@ let _ = if true then 1 else x;;
     static syl_int __;
     int main()
     {
-      _x = 1;
-      __ = 1;
+      _x = 1ll;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -4669,7 +4663,7 @@ let _ = if true then 1 else x @ erased;;
     static syl_int _x;
     int main()
     {
-      _x = 1;
+      _x = 1ll;
       return 0;
     }
     |}]
@@ -4684,20 +4678,20 @@ let _ = f false;;
   [%expect
     {|
     static syl_int _f·λₒF(syl_env);
-    static syl_int _fₒF;
+    static syl_thunk<syl_int> _fₒF;
     static syl_int __;
     static syl_int _f·λₒF(syl_env 𝒰)
     {
       syl_bool _f·λₒF·b = false;
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒF = syl_mk_thunk(_f·λₒF, _f·env);
+        _fₒF = syl_thunk<syl_int>{_f·λₒF, _f·env};
       }
-      __ = syl_app_thunk(_fₒF);
+      __ = _fₒF();
       return 0;
     }
     |}]
@@ -4742,21 +4736,21 @@ let _ = (f @ erased) 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
-        syl_int __·x = 0;
-        __ = 1;
+        syl_int __·x = 0ll;
+        __ = 1ll;
       }
       return 0;
     }
@@ -4773,7 +4767,7 @@ let _ = ((if true then f else g) @ erased) 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
@@ -4782,7 +4776,7 @@ let _ = ((if true then f else g) @ erased) 0;;
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       return 0;
     }
@@ -4799,24 +4793,24 @@ let _ = ((if true then f else g) @ erased) 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _f = syl_mk_closure(_f·λ, _f·env);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
       }
       {
         syl_env _g·env = NULL;
       }
       {
-        syl_int __·x = 0;
-        __ = 1;
+        syl_int __·x = 0ll;
+        __ = 1ll;
       }
       return 0;
     }
@@ -4832,31 +4826,31 @@ let _ = apply g;;
 |};
   [%expect
     {|
-    static syl_int _apply·λ(syl_closure, syl_env);
-    static syl_closure _apply;
+    static syl_int _apply·λ(syl_closure<syl_int,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _apply;
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
-    static syl_int _apply·λ(syl_closure _f, syl_env 𝒰)
+    static syl_int _apply·λ(syl_closure<syl_int,syl_int> _f, syl_env 𝒰)
     {
-      syl_int _$ = 0;
-      return syl_app_closure(_f, _$);
+      syl_int _$ = 0ll;
+      return _f(_$);
     }
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _apply·env = NULL;
-        _apply = syl_mk_closure(_apply·λ, _apply·env);
+        _apply = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_apply·λ, _apply·env};
       }
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
       }
-      __ = syl_app_closure(_apply, _g);
+      __ = _apply(_g);
       return 0;
     }
     |}]
@@ -4872,7 +4866,7 @@ let _ = apply g;;
   [%expect
     {|
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
@@ -4881,7 +4875,7 @@ let _ = apply g;;
     {
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
       }
       return 0;
     }
@@ -4898,16 +4892,16 @@ let _ = apply g;;
   [%expect
     {|
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
       }
       return 0;
     }
@@ -4925,9 +4919,9 @@ let _ = apply g;;
     {|
     static syl_int _apply·λₒλ3·f·λ(syl_int, syl_env);
     static syl_int _apply·λₒλ3(syl_env);
-    static syl_int _applyₒλ3;
+    static syl_thunk<syl_int> _applyₒλ3;
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _apply·λₒλ3·f·λ(syl_int _x, syl_env 𝒰)
     {
@@ -4935,13 +4929,13 @@ let _ = apply g;;
     }
     static syl_int _apply·λₒλ3(syl_env 𝒰)
     {
-      syl_closure _apply·λₒλ3·f;
+      syl_closure<syl_int,syl_int> _apply·λₒλ3·f;
       {
         syl_env _apply·λₒλ3·f·env = NULL;
-        _apply·λₒλ3·f = syl_mk_closure(_apply·λₒλ3·f·λ, _apply·λₒλ3·f·env);
+        _apply·λₒλ3·f = syl_closure<syl_int,syl_int>{_apply·λₒλ3·f·λ, _apply·λₒλ3·f·env};
       }
-      syl_int _$ = 0;
-      return syl_app_closure(_apply·λₒλ3·f, _$);
+      syl_int _$ = 0ll;
+      return _apply·λₒλ3·f(_$);
     }
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
@@ -4951,13 +4945,13 @@ let _ = apply g;;
     {
       {
         syl_env _apply·env = NULL;
-        _applyₒλ3 = syl_mk_thunk(_apply·λₒλ3, _apply·env);
+        _applyₒλ3 = syl_thunk<syl_int>{_apply·λₒλ3, _apply·env};
       }
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
       }
-      __ = syl_app_thunk(_applyₒλ3);
+      __ = _applyₒλ3();
       return 0;
     }
     |}]
@@ -4974,40 +4968,40 @@ let _ = apply g;;
     {|
     static syl_int _apply·λₒλ4·f·λₒ0(syl_env);
     static syl_int _apply·λₒλ4(syl_env);
-    static syl_int _applyₒλ4;
+    static syl_thunk<syl_int> _applyₒλ4;
     static syl_int _g·λₒ0(syl_env);
-    static syl_int _gₒ0;
+    static syl_thunk<syl_int> _gₒ0;
     static syl_int __;
     static syl_int _apply·λₒλ4·f·λₒ0(syl_env 𝒰)
     {
-      syl_int _apply·λₒλ4·f·λₒ0·x = 0;
-      return 1;
+      syl_int _apply·λₒλ4·f·λₒ0·x = 0ll;
+      return 1ll;
     }
     static syl_int _apply·λₒλ4(syl_env 𝒰)
     {
-      syl_int _apply·λₒλ4·fₒ0;
+      syl_thunk<syl_int> _apply·λₒλ4·fₒ0;
       {
         syl_env _apply·λₒλ4·f·env = NULL;
-        _apply·λₒλ4·fₒ0 = syl_mk_thunk(_apply·λₒλ4·f·λₒ0, _apply·λₒλ4·f·env);
+        _apply·λₒλ4·fₒ0 = syl_thunk<syl_int>{_apply·λₒλ4·f·λₒ0, _apply·λₒλ4·f·env};
       }
-      return syl_app_thunk(_apply·λₒλ4·fₒ0);
+      return _apply·λₒλ4·fₒ0();
     }
     static syl_int _g·λₒ0(syl_env 𝒰)
     {
-      syl_int _g·λₒ0·x = 0;
-      return 1;
+      syl_int _g·λₒ0·x = 0ll;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _apply·env = NULL;
-        _applyₒλ4 = syl_mk_thunk(_apply·λₒλ4, _apply·env);
+        _applyₒλ4 = syl_thunk<syl_int>{_apply·λₒλ4, _apply·env};
       }
       {
         syl_env _g·env = NULL;
-        _gₒ0 = syl_mk_thunk(_g·λₒ0, _g·env);
+        _gₒ0 = syl_thunk<syl_int>{_g·λₒ0, _g·env};
       }
-      __ = syl_app_thunk(_applyₒλ4);
+      __ = _applyₒλ4();
       return 0;
     }
     |}]
@@ -5021,14 +5015,14 @@ let _ = (apply @ erased) (fn (x : int) -> x);;
 |};
   [%expect
     {|
-    static syl_int _apply·λ(syl_closure, syl_env);
-    static syl_closure _apply;
+    static syl_int _apply·λ(syl_closure<syl_int,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _apply;
     static syl_int __·f·λ(syl_int, syl_env);
     static syl_int __;
-    static syl_int _apply·λ(syl_closure _f, syl_env 𝒰)
+    static syl_int _apply·λ(syl_closure<syl_int,syl_int> _f, syl_env 𝒰)
     {
-      syl_int _$ = 0;
-      return syl_app_closure(_f, _$);
+      syl_int _$ = 0ll;
+      return _f(_$);
     }
     static syl_int __·f·λ(syl_int _x, syl_env 𝒰)
     {
@@ -5038,16 +5032,16 @@ let _ = (apply @ erased) (fn (x : int) -> x);;
     {
       {
         syl_env _apply·env = NULL;
-        _apply = syl_mk_closure(_apply·λ, _apply·env);
+        _apply = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_apply·λ, _apply·env};
       }
       {
-        syl_closure __·f;
+        syl_closure<syl_int,syl_int> __·f;
         {
           syl_env __·f·env = NULL;
-          __·f = syl_mk_closure(__·f·λ, __·f·env);
+          __·f = syl_closure<syl_int,syl_int>{__·f·λ, __·f·env};
         }
-        syl_int _$ = 0;
-        __ = syl_app_closure(__·f, _$);
+        syl_int _$ = 0ll;
+        __ = __·f(_$);
       }
       return 0;
     }
@@ -5064,16 +5058,16 @@ let _ = apply g;;
   [%expect
     {|
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _g·env = NULL;
-        _g = syl_mk_closure(_g·λ, _g·env);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
       }
       return 0;
     }
@@ -5091,29 +5085,29 @@ let _ = f 69;;
     {|
     static syl_int _f·λₒ69(syl_env);
     static syl_int _f·λₒ42(syl_env);
-    static syl_thunk _fₒ69;
-    static syl_thunk _fₒ42;
+    static syl_thunk<syl_int> _fₒ69;
+    static syl_thunk<syl_int> _fₒ42;
     static syl_int __;
     static syl_int __ˢ1;
     static syl_int _f·λₒ69(syl_env 𝒰)
     {
-      syl_int _f·λₒ69·x = 69;
+      syl_int _f·λₒ69·x = 69ll;
       return _f·λₒ69·x;
     }
     static syl_int _f·λₒ42(syl_env 𝒰)
     {
-      syl_int _f·λₒ42·x = 42;
+      syl_int _f·λₒ42·x = 42ll;
       return _f·λₒ42·x;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _fₒ69 = syl_mk_thunk(_f·λₒ69, 𝒰);
-        _fₒ42 = syl_mk_thunk(_f·λₒ42, 𝒰);
+        _fₒ69 = syl_thunk<syl_int>{_f·λₒ69, 𝒰};
+        _fₒ42 = syl_thunk<syl_int>{_f·λₒ42, 𝒰};
       }
-      __ = syl_app_thunk(_fₒ42);
-      __ˢ1 = syl_app_thunk(_fₒ69);
+      __ = _fₒ42();
+      __ˢ1 = _fₒ69();
       return 0;
     }
     |}]
@@ -5130,29 +5124,29 @@ let _ = f 69;;
     {|
     static syl_int _f·λₒ69(syl_env);
     static syl_int _f·λₒ42(syl_env);
-    static syl_int _fₒ69;
-    static syl_int _fₒ42;
+    static syl_thunk<syl_int> _fₒ69;
+    static syl_thunk<syl_int> _fₒ42;
     static syl_int __;
     static syl_int __ˢ1;
     static syl_int _f·λₒ69(syl_env 𝒰)
     {
-      syl_int _f·λₒ69·x = 69;
+      syl_int _f·λₒ69·x = 69ll;
       return _f·λₒ69·x;
     }
     static syl_int _f·λₒ42(syl_env 𝒰)
     {
-      syl_int _f·λₒ42·x = 42;
+      syl_int _f·λₒ42·x = 42ll;
       return _f·λₒ42·x;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ69 = syl_mk_thunk(_f·λₒ69, _f·env);
-        _fₒ42 = syl_mk_thunk(_f·λₒ42, _f·env);
+        _fₒ69 = syl_thunk<syl_int>{_f·λₒ69, _f·env};
+        _fₒ42 = syl_thunk<syl_int>{_f·λₒ42, _f·env};
       }
-      __ = syl_app_thunk(_fₒ42);
-      __ˢ1 = syl_app_thunk(_fₒ69);
+      __ = _fₒ42();
+      __ˢ1 = _fₒ69();
       return 0;
     }
     |}]
@@ -5167,21 +5161,21 @@ let _ = f 10;;
   [%expect
     {|
     static syl_int _f·λₒ10(syl_env);
-    static syl_int _fₒ10;
+    static syl_thunk<syl_int> _fₒ10;
     static syl_int __;
     static syl_int _f·λₒ10(syl_env 𝒰)
     {
-      syl_int _f·λₒ10·x = 10;
-      syl_int _$ = 1;
+      syl_int _f·λₒ10·x = 10ll;
+      syl_int _$ = 1ll;
       return _f·λₒ10·x + _$;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ10 = syl_mk_thunk(_f·λₒ10, _f·env);
+        _fₒ10 = syl_thunk<syl_int>{_f·λₒ10, _f·env};
       }
-      __ = syl_app_thunk(_fₒ10);
+      __ = _fₒ10();
       return 0;
     }
     |}]
@@ -5198,22 +5192,22 @@ let _ = f 10;;
     {|
     static syl_int _y;
     static syl_int _f·λₒ10(syl_env);
-    static syl_int _fₒ10;
+    static syl_thunk<syl_int> _fₒ10;
     static syl_int __;
     static syl_int _f·λₒ10(syl_env 𝒰)
     {
-      syl_int _y = 𝒰[0];
-      syl_int _f·λₒ10·x = 10;
+      syl_int _y = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ10·x = 10ll;
       return _f·λₒ10·x + _y;
     }
     int main()
     {
-      _y = 1;
+      _y = 1ll;
       {
-        syl_env _f·env = syl_capture(1, _y);
-        _fₒ10 = syl_mk_thunk(_f·λₒ10, _f·env);
+        syl_env _f·env = syl_capture<syl_int>(_y);
+        _fₒ10 = syl_thunk<syl_int>{_f·λₒ10, _f·env};
       }
-      __ = syl_app_thunk(_fₒ10);
+      __ = _fₒ10();
       return 0;
     }
     |}]
@@ -5230,22 +5224,22 @@ let _ = f 10;;
     {|
     static syl_int _y;
     static syl_int _f·λₒ10(syl_env);
-    static syl_int _fₒ10;
+    static syl_thunk<syl_int> _fₒ10;
     static syl_int __;
     static syl_int _f·λₒ10(syl_env 𝒰)
     {
-      syl_int _y = 𝒰[0];
-      syl_int _f·λₒ10·x = 10;
+      syl_int _y = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ10·x = 10ll;
       return _f·λₒ10·x + _y;
     }
     int main()
     {
-      _y = 1;
+      _y = 1ll;
       {
-        syl_env _f·env = syl_capture(1, _y);
-        _fₒ10 = syl_mk_thunk(_f·λₒ10, _f·env);
+        syl_env _f·env = syl_capture<syl_int>(_y);
+        _fₒ10 = syl_thunk<syl_int>{_f·λₒ10, _f·env};
       }
-      __ = syl_app_thunk(_fₒ10);
+      __ = _fₒ10();
       return 0;
     }
     |}]
@@ -5265,20 +5259,20 @@ f 10;;
     static syl_int __;
     static syl_int __·f·λₒ10(syl_env 𝒰)
     {
-      syl_int _y = 𝒰[0];
-      syl_int __·f·λₒ10·x = 10;
+      syl_int _y = *(syl_int*)(𝒰 + 0);
+      syl_int __·f·λₒ10·x = 10ll;
       return __·f·λₒ10·x + _y;
     }
     int main()
     {
       {
-        syl_int __·y = 1;
-        syl_int __·fₒ10;
+        syl_int __·y = 1ll;
+        syl_thunk<syl_int> __·fₒ10;
         {
-          syl_env __·f·env = syl_capture(1, __·y);
-          __·fₒ10 = syl_mk_thunk(__·f·λₒ10, __·f·env);
+          syl_env __·f·env = syl_capture<syl_int>(__·y);
+          __·fₒ10 = syl_thunk<syl_int>{__·f·λₒ10, __·f·env};
         }
-        __ = syl_app_thunk(__·fₒ10);
+        __ = __·fₒ10();
       }
       return 0;
     }
@@ -5294,7 +5288,7 @@ let _ = f false;;
   [%expect
     {|
     static syl_bool _f·λₒF(syl_env);
-    static syl_bool _fₒF;
+    static syl_thunk<syl_bool> _fₒF;
     static syl_bool __;
     static syl_bool _f·λₒF(syl_env 𝒰)
     {
@@ -5306,9 +5300,9 @@ let _ = f false;;
     {
       {
         syl_env _f·env = NULL;
-        _fₒF = syl_mk_thunk(_f·λₒF, _f·env);
+        _fₒF = syl_thunk<syl_bool>{_f·λₒF, _f·env};
       }
-      __ = syl_app_thunk(_fₒF);
+      __ = _fₒF();
       return 0;
     }
     |}]
@@ -5325,50 +5319,50 @@ let _ = f 1 3;;
     {|
     static syl_int _f·λₒ1·λₒ2(syl_env);
     static syl_int _f·λₒ1·λₒ3(syl_env);
-    static syl_int _f·λₒ1ₒ2(syl_env);
-    static syl_int _f·λₒ1ₒ3(syl_env);
-    static syl_int _fₒ1ₒ2;
-    static syl_int _fₒ1ₒ3;
+    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env);
+    static syl_thunk<syl_int> _f·λₒ1ₒ3(syl_env);
+    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ2;
+    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ3;
     static syl_int __;
     static syl_int __ˢ1;
     static syl_int _f·λₒ1·λₒ2(syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
-      syl_int _f·λₒ1·λₒ2·y = 2;
+      syl_int _x = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ1·λₒ2·y = 2ll;
       return _x + _f·λₒ1·λₒ2·y;
     }
     static syl_int _f·λₒ1·λₒ3(syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
-      syl_int _f·λₒ1·λₒ3·y = 3;
+      syl_int _x = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ1·λₒ3·y = 3ll;
       return _x + _f·λₒ1·λₒ3·y;
     }
-    static syl_int _f·λₒ1ₒ2(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_env _f·λₒ1·env = syl_capture(1, _f·λₒ1·x);
-      return syl_mk_thunk(_f·λₒ1·λₒ2, _f·λₒ1·env);
+      syl_int _f·λₒ1·x = 1ll;
+      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
+      return syl_thunk<syl_int>{_f·λₒ1·λₒ2, _f·λₒ1·env};
     }
-    static syl_int _f·λₒ1ₒ3(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ1ₒ3(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_env _f·λₒ1·env = syl_capture(1, _f·λₒ1·x);
-      return syl_mk_thunk(_f·λₒ1·λₒ3, _f·λₒ1·env);
+      syl_int _f·λₒ1·x = 1ll;
+      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
+      return syl_thunk<syl_int>{_f·λₒ1·λₒ3, _f·λₒ1·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1ₒ2 = syl_mk_thunk(_f·λₒ1ₒ2, _f·env);
-        _fₒ1ₒ3 = syl_mk_thunk(_f·λₒ1ₒ3, _f·env);
+        _fₒ1ₒ2 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ2, _f·env};
+        _fₒ1ₒ3 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ3, _f·env};
       }
       {
-        syl_int _$ₒ2 = syl_app_thunk(_fₒ1ₒ2);
-        __ = syl_app_thunk(_$ₒ2);
+        syl_thunk<syl_int> _$ₒ2 = _fₒ1ₒ2();
+        __ = _$ₒ2();
       }
       {
-        syl_int _$ₒ3 = syl_app_thunk(_fₒ1ₒ3);
-        __ˢ1 = syl_app_thunk(_$ₒ3);
+        syl_thunk<syl_int> _$ₒ3 = _fₒ1ₒ3();
+        __ˢ1 = _$ₒ3();
       }
       return 0;
     }
@@ -5385,30 +5379,30 @@ let _ = g 2;;
   [%expect
     {|
     static syl_int _f·λₒ1·λₒ2(syl_env);
-    static syl_int _f·λₒ1ₒ2(syl_env);
-    static syl_int _fₒ1ₒ2;
-    static syl_int _gₒ2;
+    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env);
+    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ2;
+    static syl_thunk<syl_int> _gₒ2;
     static syl_int __;
     static syl_int _f·λₒ1·λₒ2(syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
-      syl_int _f·λₒ1·λₒ2·y = 2;
+      syl_int _x = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ1·λₒ2·y = 2ll;
       return _x;
     }
-    static syl_int _f·λₒ1ₒ2(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_env _f·λₒ1·env = syl_capture(1, _f·λₒ1·x);
-      return syl_mk_thunk(_f·λₒ1·λₒ2, _f·λₒ1·env);
+      syl_int _f·λₒ1·x = 1ll;
+      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
+      return syl_thunk<syl_int>{_f·λₒ1·λₒ2, _f·λₒ1·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1ₒ2 = syl_mk_thunk(_f·λₒ1ₒ2, _f·env);
+        _fₒ1ₒ2 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ2, _f·env};
       }
-      _gₒ2 = syl_app_thunk(_fₒ1ₒ2);
-      __ = syl_app_thunk(_gₒ2);
+      _gₒ2 = _fₒ1ₒ2();
+      __ = _gₒ2();
       return 0;
     }
     |}]
@@ -5424,30 +5418,30 @@ let _ = g 2;;
   [%expect
     {|
     static syl_int _f·λₒ1·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ1(syl_env);
-    static syl_closure _fₒ1;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f·λₒ1(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ1;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _f·λₒ1·λ(syl_int _y, syl_env 𝒰)
     {
       return _y;
     }
-    static syl_closure _f·λₒ1(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       syl_env _f·λₒ1·env = NULL;
-      return syl_mk_closure(_f·λₒ1·λ, _f·λₒ1·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ1·λ, _f·λₒ1·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
+        _fₒ1 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ1, _f·env};
       }
-      _g = syl_app_thunk(_fₒ1);
+      _g = _fₒ1();
       {
-        syl_int _$ = 2;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 2ll;
+        __ = _g(_$);
       }
       return 0;
     }
@@ -5466,49 +5460,49 @@ let _ = h true;;
   [%expect
     {|
     static syl_bool _f·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure _f·λₒ𝔹(syl_env);
+    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env);
     static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀(syl_env);
-    static syl_closure _fₒ𝔹;
-    static syl_closure _fₒ𝕀;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
-    static syl_closure _h;
+    static syl_closure<syl_bool,syl_bool> _h;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env 𝒰)
     {
       syl_env _f·λₒ𝔹·env = NULL;
-      return syl_mk_closure(_f·λₒ𝔹·λ, _f·λₒ𝔹·env);
+      return syl_closure<syl_bool,syl_bool>{_f·λₒ𝔹·λ, _f·λₒ𝔹·env};
     }
     static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λ, _f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ𝔹 = syl_mk_thunk(_f·λₒ𝔹, _f·env);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, _f·env);
+        _fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_f·λₒ𝔹, _f·env};
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, _f·env};
       }
-      _g = syl_app_thunk(_fₒ𝕀);
+      _g = _fₒ𝕀();
       {
-        syl_int _$ = 42;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 42ll;
+        __ = _g(_$);
       }
-      _h = syl_app_thunk(_fₒ𝔹);
+      _h = _fₒ𝔹();
       {
         syl_bool _$ = true;
-        __ˢ1 = syl_app_closure(_h, _$);
+        __ˢ1 = _h(_$);
       }
       return 0;
     }
@@ -5525,7 +5519,7 @@ let _ = if static true then 1 else true;;
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -5558,29 +5552,29 @@ let b = f 1;;
     {|
     static syl_bool _f·λₒ1(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_bool _fₒ1;
-    static syl_int _fₒ0;
+    static syl_thunk<syl_bool> _fₒ1;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int _a;
     static syl_bool _b;
     static syl_bool _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       return true;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      return 1;
+      syl_int _f·λₒ0·x = 0ll;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      _a = syl_app_thunk(_fₒ0);
-      _b = syl_app_thunk(_fₒ1);
+      _a = _fₒ0();
+      _b = _fₒ1();
       return 0;
     }
     |}]
@@ -5632,51 +5626,51 @@ let _ = h true;;
   [%expect
     {|
     static syl_bool _f·λₒ1·λ(syl_bool, syl_env);
-    static syl_closure _f·λₒ1(syl_env);
+    static syl_closure<syl_bool,syl_bool> _f·λₒ1(syl_env);
     static syl_int _f·λₒ0·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ0(syl_env);
-    static syl_closure _fₒ1;
-    static syl_closure _fₒ0;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f·λₒ0(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ1;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ0;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
-    static syl_closure _h;
+    static syl_closure<syl_bool,syl_bool> _h;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒ1·λ(syl_bool _y, syl_env 𝒰)
     {
       return _y;
     }
-    static syl_closure _f·λₒ1(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       syl_env _f·λₒ1·env = NULL;
-      return syl_mk_closure(_f·λₒ1·λ, _f·λₒ1·env);
+      return syl_closure<syl_bool,syl_bool>{_f·λₒ1·λ, _f·λₒ1·env};
     }
     static syl_int _f·λₒ0·λ(syl_int _y, syl_env 𝒰)
     {
       return _y;
     }
-    static syl_closure _f·λₒ0(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       syl_env _f·λₒ0·env = NULL;
-      return syl_mk_closure(_f·λₒ0·λ, _f·λₒ0·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ0·λ, _f·λₒ0·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_f·λₒ1, _f·env};
+        _fₒ0 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ0, _f·env};
       }
-      _g = syl_app_thunk(_fₒ0);
+      _g = _fₒ0();
       {
-        syl_int _$ = 42;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 42ll;
+        __ = _g(_$);
       }
-      _h = syl_app_thunk(_fₒ1);
+      _h = _fₒ1();
       {
         syl_bool _$ = true;
-        __ˢ1 = syl_app_closure(_h, _$);
+        __ˢ1 = _h(_$);
       }
       return 0;
     }
@@ -5693,7 +5687,7 @@ let _ = (if static true then 1 else true) : (if true then int else bool);;
     static syl_int __;
     int main()
     {
-      __ = 1;
+      __ = 1ll;
       return 0;
     }
     |}]
@@ -5741,35 +5735,35 @@ let _ = apply_type (fn (static erased t : type) -> fn (x : t) -> x);;
   [%expect
     {|
     static syl_int _apply_type·λₒλ4·f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _apply_type·λₒλ4·f·λₒ𝕀(syl_env);
-    static syl_closure _apply_type·λₒλ4(syl_env);
-    static syl_closure _apply_typeₒλ4;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4·f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _apply_typeₒλ4;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _apply_type·λₒλ4·f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _apply_type·λₒλ4·f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4·f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _apply_type·λₒλ4·f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_apply_type·λₒλ4·f·λₒ𝕀·λ, _apply_type·λₒλ4·f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_apply_type·λₒλ4·f·λₒ𝕀·λ, _apply_type·λₒλ4·f·λₒ𝕀·env};
     }
-    static syl_closure _apply_type·λₒλ4(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4(syl_env 𝒰)
     {
-      syl_closure _apply_type·λₒλ4·fₒ𝕀;
+      syl_thunk<syl_closure<syl_int,syl_int>> _apply_type·λₒλ4·fₒ𝕀;
       {
         syl_env _apply_type·λₒλ4·f·env = NULL;
-        _apply_type·λₒλ4·fₒ𝕀 = syl_mk_thunk(_apply_type·λₒλ4·f·λₒ𝕀, _apply_type·λₒλ4·f·env);
+        _apply_type·λₒλ4·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_type·λₒλ4·f·λₒ𝕀, _apply_type·λₒλ4·f·env};
       }
-      return syl_app_thunk(_apply_type·λₒλ4·fₒ𝕀);
+      return _apply_type·λₒλ4·fₒ𝕀();
     }
     int main()
     {
       {
         syl_env _apply_type·env = NULL;
-        _apply_typeₒλ4 = syl_mk_thunk(_apply_type·λₒλ4, _apply_type·env);
+        _apply_typeₒλ4 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_type·λₒλ4, _apply_type·env};
       }
-      __ = syl_app_thunk(_apply_typeₒλ4);
+      __ = _apply_typeₒλ4();
       return 0;
     }
     |}]
@@ -5802,20 +5796,20 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_thunk _fₒ0;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       return _f·λₒ0·x;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, 𝒰);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -5830,19 +5824,19 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_thunk _fₒ0;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, 𝒰);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -5859,22 +5853,21 @@ in ();;
   [%expect
     {|
     static syl_int __·f·λₒ0(syl_env);
-    static syl_unit __;
     static syl_int __·f·λₒ0(syl_env 𝒰)
     {
-      syl_int __·f·λₒ0·x = 0;
+      syl_int __·f·λₒ0·x = 0ll;
       return __·f·λₒ0·x;
     }
     int main()
     {
       {
-        syl_thunk __·fₒ0;
+        syl_thunk<syl_int> __·fₒ0;
         {
           syl_env 𝒰 = NULL;
-          __·fₒ0 = syl_mk_thunk(__·f·λₒ0, 𝒰);
+          __·fₒ0 = syl_thunk<syl_int>{__·f·λₒ0, 𝒰};
         }
-        syl_int __·_ = syl_app_thunk(__·fₒ0);
-        __ = 0;
+        syl_int __·_ = __·fₒ0();
+        ;
       }
       return 0;
     }
@@ -5891,47 +5884,47 @@ let _ = id bool true;;
   [%expect
     {|
     static syl_bool _id·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure _id·λₒ𝔹(syl_env);
+    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env);
     static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _id·λₒ𝕀(syl_env);
-    static syl_thunk _idₒ𝔹;
-    static syl_thunk _idₒ𝕀;
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _idₒ𝔹;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _id·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env 𝒰)
     {
       syl_env _id·λₒ𝔹·env = NULL;
-      return syl_mk_closure(_id·λₒ𝔹·λ, _id·λₒ𝔹·env);
+      return syl_closure<syl_bool,syl_bool>{_id·λₒ𝔹·λ, _id·λₒ𝔹·env};
     }
     static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _id·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_id·λₒ𝕀·λ, _id·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _idₒ𝔹 = syl_mk_thunk(_id·λₒ𝔹, 𝒰);
-        _idₒ𝕀 = syl_mk_thunk(_id·λₒ𝕀, 𝒰);
+        _idₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_id·λₒ𝔹, 𝒰};
+        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, 𝒰};
       }
       {
-        syl_closure _$ = syl_app_thunk(_idₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _idₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        __ = _$(_$ˢ1);
       }
       {
-        syl_closure _$ = syl_app_thunk(_idₒ𝔹);
+        syl_closure<syl_bool,syl_bool> _$ = _idₒ𝔹();
         syl_bool _$ˢ1 = true;
-        __ˢ1 = syl_app_closure(_$, _$ˢ1);
+        __ˢ1 = _$(_$ˢ1);
       }
       return 0;
     }
@@ -5946,18 +5939,18 @@ fun f (x : int) : int = f x;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[0];
-      return syl_app_closure(_f, _x);
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      return _f(_x);
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        𝒰[0] = _f;
+        syl_env 𝒰 = syl_env_rec(16);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
       }
       return 0;
     }
@@ -5974,40 +5967,40 @@ let _ = id2 int 0;;
   [%expect
     {|
     static syl_int _id1·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _id1·λₒ𝕀(syl_env);
-    static syl_thunk _id1ₒ𝕀;
-    static syl_closure _id2·λₒ𝕀(syl_env);
-    static syl_thunk _id2ₒ𝕀;
+    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀;
+    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _id2ₒ𝕀;
     static syl_int __;
     static syl_int _id1·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id1·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _id1·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_id1·λₒ𝕀·λ, _id1·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_id1·λₒ𝕀·λ, _id1·λₒ𝕀·env};
     }
-    static syl_closure _id2·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _id1ₒ𝕀 = 𝒰[0];
-      return syl_app_thunk(_id1ₒ𝕀);
+      syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      return _id1ₒ𝕀();
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _id1ₒ𝕀 = syl_mk_thunk(_id1·λₒ𝕀, 𝒰);
+        _id1ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id1·λₒ𝕀, 𝒰};
       }
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _id2ₒ𝕀 = syl_mk_thunk(_id2·λₒ𝕀, 𝒰);
-        𝒰[0] = _id1ₒ𝕀;
+        syl_env 𝒰 = syl_env_rec(16);
+        _id2ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id2·λₒ𝕀, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _id1ₒ𝕀;
       }
       {
-        syl_closure _$ = syl_app_thunk(_id2ₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _id2ₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -6023,19 +6016,19 @@ let _ = f 1;;
   [%expect
     {|
     static syl_int _f·λₒ1(syl_env);
-    static syl_int _fₒ1;
+    static syl_thunk<syl_int> _fₒ1;
     static syl_int __;
     static syl_int _f·λₒ1(syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
+        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
       }
-      __ = syl_app_thunk(_fₒ1);
+      __ = _fₒ1();
       return 0;
     }
     |}]
@@ -6067,7 +6060,7 @@ let _ = 5 : f ();;
     static syl_int __;
     int main()
     {
-      __ = 5;
+      __ = 5ll;
       return 0;
     }
     |}]
@@ -6105,31 +6098,31 @@ let _ = if true then f 0 else g 1;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ0;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int _g·λₒ1(syl_env);
-    static syl_int _gₒ1;
+    static syl_thunk<syl_int> _gₒ1;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      return 1;
+      syl_int _f·λₒ0·x = 0ll;
+      return 1ll;
     }
     static syl_int _g·λₒ1(syl_env 𝒰)
     {
-      syl_int _g·λₒ1·x = 1;
-      return 2;
+      syl_int _g·λₒ1·x = 1ll;
+      return 2ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
       {
         syl_env _g·env = NULL;
-        _gₒ1 = syl_mk_thunk(_g·λₒ1, _g·env);
+        _gₒ1 = syl_thunk<syl_int>{_g·λₒ1, _g·env};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -6152,88 +6145,87 @@ let _ = f 1 1;;
     {|
     static syl_int _f·λₒ1·λₒ1(syl_env);
     static syl_unit _f·λₒ1·λₒ0(syl_env);
-    static syl_int _f·λₒ1ₒ1(syl_env);
-    static syl_unit _f·λₒ1ₒ0(syl_env);
+    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env);
+    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env);
     static syl_bool _f·λₒ0·λₒ1(syl_env);
     static syl_int _f·λₒ0·λₒ0(syl_env);
-    static syl_bool _f·λₒ0ₒ1(syl_env);
-    static syl_int _f·λₒ0ₒ0(syl_env);
-    static syl_int _fₒ1ₒ1;
-    static syl_unit _fₒ1ₒ0;
-    static syl_bool _fₒ0ₒ1;
-    static syl_int _fₒ0ₒ0;
+    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env);
+    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env);
+    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ1;
+    static syl_thunk<syl_thunk<syl_unit>> _fₒ1ₒ0;
+    static syl_thunk<syl_thunk<syl_bool>> _fₒ0ₒ1;
+    static syl_thunk<syl_thunk<syl_int>> _fₒ0ₒ0;
     static syl_int __;
     static syl_bool __ˢ1;
-    static syl_unit __ˢ2;
     static syl_int __ˢ3;
     static syl_int _f·λₒ1·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·λₒ1·y = 1;
-      return 2;
+      syl_int _f·λₒ1·λₒ1·y = 1ll;
+      return 2ll;
     }
     static syl_unit _f·λₒ1·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·λₒ0·y = 0;
-      return 0;
+      syl_int _f·λₒ1·λₒ0·y = 0ll;
+      ;
     }
-    static syl_int _f·λₒ1ₒ1(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       syl_env _f·λₒ1·env = NULL;
-      return syl_mk_thunk(_f·λₒ1·λₒ1, _f·λₒ1·env);
+      return syl_thunk<syl_int>{_f·λₒ1·λₒ1, _f·λₒ1·env};
     }
-    static syl_unit _f·λₒ1ₒ0(syl_env 𝒰)
+    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       syl_env _f·λₒ1·env = NULL;
-      return syl_mk_thunk(_f·λₒ1·λₒ0, _f·λₒ1·env);
+      return syl_thunk<syl_unit>{_f·λₒ1·λₒ0, _f·λₒ1·env};
     }
     static syl_bool _f·λₒ0·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·λₒ1·y = 1;
+      syl_int _f·λₒ0·λₒ1·y = 1ll;
       return true;
     }
     static syl_int _f·λₒ0·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·λₒ0·y = 0;
-      return 1;
+      syl_int _f·λₒ0·λₒ0·y = 0ll;
+      return 1ll;
     }
-    static syl_bool _f·λₒ0ₒ1(syl_env 𝒰)
+    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       syl_env _f·λₒ0·env = NULL;
-      return syl_mk_thunk(_f·λₒ0·λₒ1, _f·λₒ0·env);
+      return syl_thunk<syl_bool>{_f·λₒ0·λₒ1, _f·λₒ0·env};
     }
-    static syl_int _f·λₒ0ₒ0(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       syl_env _f·λₒ0·env = NULL;
-      return syl_mk_thunk(_f·λₒ0·λₒ0, _f·λₒ0·env);
+      return syl_thunk<syl_int>{_f·λₒ0·λₒ0, _f·λₒ0·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1ₒ1 = syl_mk_thunk(_f·λₒ1ₒ1, _f·env);
-        _fₒ1ₒ0 = syl_mk_thunk(_f·λₒ1ₒ0, _f·env);
-        _fₒ0ₒ1 = syl_mk_thunk(_f·λₒ0ₒ1, _f·env);
-        _fₒ0ₒ0 = syl_mk_thunk(_f·λₒ0ₒ0, _f·env);
+        _fₒ1ₒ1 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ1, _f·env};
+        _fₒ1ₒ0 = syl_thunk<syl_thunk<syl_unit>>{_f·λₒ1ₒ0, _f·env};
+        _fₒ0ₒ1 = syl_thunk<syl_thunk<syl_bool>>{_f·λₒ0ₒ1, _f·env};
+        _fₒ0ₒ0 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ0ₒ0, _f·env};
       }
       {
-        syl_int _$ₒ0 = syl_app_thunk(_fₒ0ₒ0);
-        __ = syl_app_thunk(_$ₒ0);
+        syl_thunk<syl_int> _$ₒ0 = _fₒ0ₒ0();
+        __ = _$ₒ0();
       }
       {
-        syl_bool _$ₒ1 = syl_app_thunk(_fₒ0ₒ1);
-        __ˢ1 = syl_app_thunk(_$ₒ1);
+        syl_thunk<syl_bool> _$ₒ1 = _fₒ0ₒ1();
+        __ˢ1 = _$ₒ1();
       }
       {
-        syl_unit _$ₒ0 = syl_app_thunk(_fₒ1ₒ0);
-        __ˢ2 = syl_app_thunk(_$ₒ0);
+        syl_thunk<syl_unit> _$ₒ0 = _fₒ1ₒ0();
+        _$ₒ0();
       }
       {
-        syl_int _$ₒ1 = syl_app_thunk(_fₒ1ₒ1);
-        __ˢ3 = syl_app_thunk(_$ₒ1);
+        syl_thunk<syl_int> _$ₒ1 = _fₒ1ₒ1();
+        __ˢ3 = _$ₒ1();
       }
       return 0;
     }
@@ -6269,85 +6261,84 @@ let _ = f 1 1;;
     {|
     static syl_int _f·λₒ1·g·λₒ1(syl_env);
     static syl_unit _f·λₒ1·g·λₒ0(syl_env);
-    static syl_int _f·λₒ1ₒ1(syl_env);
-    static syl_unit _f·λₒ1ₒ0(syl_env);
+    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env);
+    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env);
     static syl_bool _f·λₒ0·g·λₒ1(syl_env);
     static syl_int _f·λₒ0·g·λₒ0(syl_env);
-    static syl_bool _f·λₒ0ₒ1(syl_env);
-    static syl_int _f·λₒ0ₒ0(syl_env);
-    static syl_thunk _fₒ1ₒ1;
-    static syl_thunk _fₒ1ₒ0;
-    static syl_thunk _fₒ0ₒ1;
-    static syl_thunk _fₒ0ₒ0;
+    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env);
+    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env);
+    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ1;
+    static syl_thunk<syl_thunk<syl_unit>> _fₒ1ₒ0;
+    static syl_thunk<syl_thunk<syl_bool>> _fₒ0ₒ1;
+    static syl_thunk<syl_thunk<syl_int>> _fₒ0ₒ0;
     static syl_int __;
     static syl_bool __ˢ1;
-    static syl_unit __ˢ2;
     static syl_int __ˢ3;
     static syl_int _f·λₒ1·g·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·g·λₒ1·y = 1;
-      return 2;
+      syl_int _f·λₒ1·g·λₒ1·y = 1ll;
+      return 2ll;
     }
     static syl_unit _f·λₒ1·g·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·g·λₒ0·y = 0;
-      return 0;
+      syl_int _f·λₒ1·g·λₒ0·y = 0ll;
+      ;
     }
-    static syl_int _f·λₒ1ₒ1(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_thunk _f·λₒ1·gₒ1;
-      syl_thunk _f·λₒ1·gₒ0;
+      syl_int _f·λₒ1·x = 1ll;
+      syl_thunk<syl_int> _f·λₒ1·gₒ1;
+      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
       {
         syl_env 𝒰 = NULL;
-        _f·λₒ1·gₒ1 = syl_mk_thunk(_f·λₒ1·g·λₒ1, 𝒰);
-        _f·λₒ1·gₒ0 = syl_mk_thunk(_f·λₒ1·g·λₒ0, 𝒰);
+        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
+        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
       }
       return _f·λₒ1·gₒ1;
     }
-    static syl_unit _f·λₒ1ₒ0(syl_env 𝒰)
+    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_thunk _f·λₒ1·gₒ1;
-      syl_thunk _f·λₒ1·gₒ0;
+      syl_int _f·λₒ1·x = 1ll;
+      syl_thunk<syl_int> _f·λₒ1·gₒ1;
+      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
       {
         syl_env 𝒰 = NULL;
-        _f·λₒ1·gₒ1 = syl_mk_thunk(_f·λₒ1·g·λₒ1, 𝒰);
-        _f·λₒ1·gₒ0 = syl_mk_thunk(_f·λₒ1·g·λₒ0, 𝒰);
+        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
+        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
       }
       return _f·λₒ1·gₒ0;
     }
     static syl_bool _f·λₒ0·g·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·g·λₒ1·y = 1;
+      syl_int _f·λₒ0·g·λₒ1·y = 1ll;
       return true;
     }
     static syl_int _f·λₒ0·g·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·g·λₒ0·y = 0;
-      return 1;
+      syl_int _f·λₒ0·g·λₒ0·y = 0ll;
+      return 1ll;
     }
-    static syl_bool _f·λₒ0ₒ1(syl_env 𝒰)
+    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      syl_thunk _f·λₒ0·gₒ1;
-      syl_thunk _f·λₒ0·gₒ0;
+      syl_int _f·λₒ0·x = 0ll;
+      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
+      syl_thunk<syl_int> _f·λₒ0·gₒ0;
       {
         syl_env 𝒰 = NULL;
-        _f·λₒ0·gₒ1 = syl_mk_thunk(_f·λₒ0·g·λₒ1, 𝒰);
-        _f·λₒ0·gₒ0 = syl_mk_thunk(_f·λₒ0·g·λₒ0, 𝒰);
+        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
+        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
       }
       return _f·λₒ0·gₒ1;
     }
-    static syl_int _f·λₒ0ₒ0(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      syl_thunk _f·λₒ0·gₒ1;
-      syl_thunk _f·λₒ0·gₒ0;
+      syl_int _f·λₒ0·x = 0ll;
+      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
+      syl_thunk<syl_int> _f·λₒ0·gₒ0;
       {
         syl_env 𝒰 = NULL;
-        _f·λₒ0·gₒ1 = syl_mk_thunk(_f·λₒ0·g·λₒ1, 𝒰);
-        _f·λₒ0·gₒ0 = syl_mk_thunk(_f·λₒ0·g·λₒ0, 𝒰);
+        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
+        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
       }
       return _f·λₒ0·gₒ0;
     }
@@ -6355,26 +6346,26 @@ let _ = f 1 1;;
     {
       {
         syl_env 𝒰 = NULL;
-        _fₒ1ₒ1 = syl_mk_thunk(_f·λₒ1ₒ1, 𝒰);
-        _fₒ1ₒ0 = syl_mk_thunk(_f·λₒ1ₒ0, 𝒰);
-        _fₒ0ₒ1 = syl_mk_thunk(_f·λₒ0ₒ1, 𝒰);
-        _fₒ0ₒ0 = syl_mk_thunk(_f·λₒ0ₒ0, 𝒰);
+        _fₒ1ₒ1 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ1, 𝒰};
+        _fₒ1ₒ0 = syl_thunk<syl_thunk<syl_unit>>{_f·λₒ1ₒ0, 𝒰};
+        _fₒ0ₒ1 = syl_thunk<syl_thunk<syl_bool>>{_f·λₒ0ₒ1, 𝒰};
+        _fₒ0ₒ0 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ0ₒ0, 𝒰};
       }
       {
-        syl_int _$ₒ0 = syl_app_thunk(_fₒ0ₒ0);
-        __ = syl_app_thunk(_$ₒ0);
+        syl_thunk<syl_int> _$ₒ0 = _fₒ0ₒ0();
+        __ = _$ₒ0();
       }
       {
-        syl_bool _$ₒ1 = syl_app_thunk(_fₒ0ₒ1);
-        __ˢ1 = syl_app_thunk(_$ₒ1);
+        syl_thunk<syl_bool> _$ₒ1 = _fₒ0ₒ1();
+        __ˢ1 = _$ₒ1();
       }
       {
-        syl_unit _$ₒ0 = syl_app_thunk(_fₒ1ₒ0);
-        __ˢ2 = syl_app_thunk(_$ₒ0);
+        syl_thunk<syl_unit> _$ₒ0 = _fₒ1ₒ0();
+        _$ₒ0();
       }
       {
-        syl_int _$ₒ1 = syl_app_thunk(_fₒ1ₒ1);
-        __ˢ3 = syl_app_thunk(_$ₒ1);
+        syl_thunk<syl_int> _$ₒ1 = _fₒ1ₒ1();
+        __ˢ3 = _$ₒ1();
       }
       return 0;
     }
@@ -6410,91 +6401,90 @@ let _ = f 1 1;;
     {|
     static syl_int _f·λₒ1·g·λₒ1(syl_env);
     static syl_unit _f·λₒ1·g·λₒ0(syl_env);
-    static syl_int _f·λₒ1ₒ1(syl_env);
-    static syl_unit _f·λₒ1ₒ0(syl_env);
+    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env);
+    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env);
     static syl_bool _f·λₒ0·g·λₒ1(syl_env);
     static syl_int _f·λₒ0·g·λₒ0(syl_env);
-    static syl_bool _f·λₒ0ₒ1(syl_env);
-    static syl_int _f·λₒ0ₒ0(syl_env);
-    static syl_thunk _fₒ1ₒ1;
-    static syl_thunk _fₒ1ₒ0;
-    static syl_thunk _fₒ0ₒ1;
-    static syl_thunk _fₒ0ₒ0;
+    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env);
+    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env);
+    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ1;
+    static syl_thunk<syl_thunk<syl_unit>> _fₒ1ₒ0;
+    static syl_thunk<syl_thunk<syl_bool>> _fₒ0ₒ1;
+    static syl_thunk<syl_thunk<syl_int>> _fₒ0ₒ0;
     static syl_int __;
     static syl_bool __ˢ1;
-    static syl_unit __ˢ2;
     static syl_int __ˢ3;
     static syl_int _f·λₒ1·g·λₒ1(syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
-      syl_int _f·λₒ1·g·λₒ1·y = 1;
+      syl_int _x = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ1·g·λₒ1·y = 1ll;
       return _x - _f·λₒ1·g·λₒ1·y;
     }
     static syl_unit _f·λₒ1·g·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·g·λₒ0·y = 0;
-      return 0;
+      syl_int _f·λₒ1·g·λₒ0·y = 0ll;
+      ;
     }
-    static syl_int _f·λₒ1ₒ1(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_thunk _f·λₒ1·gₒ1;
-      syl_thunk _f·λₒ1·gₒ0;
+      syl_int _f·λₒ1·x = 1ll;
+      syl_thunk<syl_int> _f·λₒ1·gₒ1;
+      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f·λₒ1·gₒ1 = syl_mk_thunk(_f·λₒ1·g·λₒ1, 𝒰);
-        _f·λₒ1·gₒ0 = syl_mk_thunk(_f·λₒ1·g·λₒ0, 𝒰);
-        𝒰[0] = _f·λₒ1·x;
+        syl_env 𝒰 = syl_env_rec(8);
+        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
+        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _f·λₒ1·x;
       }
       return _f·λₒ1·gₒ1;
     }
-    static syl_unit _f·λₒ1ₒ0(syl_env 𝒰)
+    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
-      syl_thunk _f·λₒ1·gₒ1;
-      syl_thunk _f·λₒ1·gₒ0;
+      syl_int _f·λₒ1·x = 1ll;
+      syl_thunk<syl_int> _f·λₒ1·gₒ1;
+      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f·λₒ1·gₒ1 = syl_mk_thunk(_f·λₒ1·g·λₒ1, 𝒰);
-        _f·λₒ1·gₒ0 = syl_mk_thunk(_f·λₒ1·g·λₒ0, 𝒰);
-        𝒰[0] = _f·λₒ1·x;
+        syl_env 𝒰 = syl_env_rec(8);
+        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
+        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _f·λₒ1·x;
       }
       return _f·λₒ1·gₒ0;
     }
     static syl_bool _f·λₒ0·g·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·g·λₒ1·y = 1;
+      syl_int _f·λₒ0·g·λₒ1·y = 1ll;
       return true;
     }
     static syl_int _f·λₒ0·g·λₒ0(syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
-      syl_int _f·λₒ0·g·λₒ0·y = 0;
+      syl_int _x = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ0·g·λₒ0·y = 0ll;
       return _x + _f·λₒ0·g·λₒ0·y;
     }
-    static syl_bool _f·λₒ0ₒ1(syl_env 𝒰)
+    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      syl_thunk _f·λₒ0·gₒ1;
-      syl_thunk _f·λₒ0·gₒ0;
+      syl_int _f·λₒ0·x = 0ll;
+      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
+      syl_thunk<syl_int> _f·λₒ0·gₒ0;
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f·λₒ0·gₒ1 = syl_mk_thunk(_f·λₒ0·g·λₒ1, 𝒰);
-        _f·λₒ0·gₒ0 = syl_mk_thunk(_f·λₒ0·g·λₒ0, 𝒰);
-        𝒰[0] = _f·λₒ0·x;
+        syl_env 𝒰 = syl_env_rec(8);
+        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
+        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _f·λₒ0·x;
       }
       return _f·λₒ0·gₒ1;
     }
-    static syl_int _f·λₒ0ₒ0(syl_env 𝒰)
+    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      syl_thunk _f·λₒ0·gₒ1;
-      syl_thunk _f·λₒ0·gₒ0;
+      syl_int _f·λₒ0·x = 0ll;
+      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
+      syl_thunk<syl_int> _f·λₒ0·gₒ0;
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f·λₒ0·gₒ1 = syl_mk_thunk(_f·λₒ0·g·λₒ1, 𝒰);
-        _f·λₒ0·gₒ0 = syl_mk_thunk(_f·λₒ0·g·λₒ0, 𝒰);
-        𝒰[0] = _f·λₒ0·x;
+        syl_env 𝒰 = syl_env_rec(8);
+        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
+        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _f·λₒ0·x;
       }
       return _f·λₒ0·gₒ0;
     }
@@ -6502,26 +6492,26 @@ let _ = f 1 1;;
     {
       {
         syl_env 𝒰 = NULL;
-        _fₒ1ₒ1 = syl_mk_thunk(_f·λₒ1ₒ1, 𝒰);
-        _fₒ1ₒ0 = syl_mk_thunk(_f·λₒ1ₒ0, 𝒰);
-        _fₒ0ₒ1 = syl_mk_thunk(_f·λₒ0ₒ1, 𝒰);
-        _fₒ0ₒ0 = syl_mk_thunk(_f·λₒ0ₒ0, 𝒰);
+        _fₒ1ₒ1 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ1, 𝒰};
+        _fₒ1ₒ0 = syl_thunk<syl_thunk<syl_unit>>{_f·λₒ1ₒ0, 𝒰};
+        _fₒ0ₒ1 = syl_thunk<syl_thunk<syl_bool>>{_f·λₒ0ₒ1, 𝒰};
+        _fₒ0ₒ0 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ0ₒ0, 𝒰};
       }
       {
-        syl_int _$ₒ0 = syl_app_thunk(_fₒ0ₒ0);
-        __ = syl_app_thunk(_$ₒ0);
+        syl_thunk<syl_int> _$ₒ0 = _fₒ0ₒ0();
+        __ = _$ₒ0();
       }
       {
-        syl_bool _$ₒ1 = syl_app_thunk(_fₒ0ₒ1);
-        __ˢ1 = syl_app_thunk(_$ₒ1);
+        syl_thunk<syl_bool> _$ₒ1 = _fₒ0ₒ1();
+        __ˢ1 = _$ₒ1();
       }
       {
-        syl_unit _$ₒ0 = syl_app_thunk(_fₒ1ₒ0);
-        __ˢ2 = syl_app_thunk(_$ₒ0);
+        syl_thunk<syl_unit> _$ₒ0 = _fₒ1ₒ0();
+        _$ₒ0();
       }
       {
-        syl_int _$ₒ1 = syl_app_thunk(_fₒ1ₒ1);
-        __ˢ3 = syl_app_thunk(_$ₒ1);
+        syl_thunk<syl_int> _$ₒ1 = _fₒ1ₒ1();
+        __ˢ3 = _$ₒ1();
       }
       return 0;
     }
@@ -6537,20 +6527,20 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_int _fₒ0;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·_ = 0;
-      return 42;
+      syl_int _f·λₒ0·_ = 0ll;
+      return 42ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
+      __ = _fₒ0();
       return 0;
     }
     |}]
@@ -6570,39 +6560,36 @@ let _ = print 1;;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _print_int;
+    static syl_closure<syl_int,syl_unit> _print_int;
     static syl_unit _print·λₒ1(syl_env);
     static syl_unit _print·λₒ0(syl_env);
-    static syl_unit _printₒ1;
-    static syl_unit _printₒ0;
-    static syl_unit __;
-    static syl_unit __ˢ1;
-    static syl_unit __ˢ2;
+    static syl_thunk<syl_unit> _printₒ1;
+    static syl_thunk<syl_unit> _printₒ0;
     static syl_unit _print·λₒ1(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ1·x = 1;
-      return syl_app_closure(_print_int, _print·λₒ1·x);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ1·x = 1ll;
+      _print_int(_print·λₒ1·x);
     }
     static syl_unit _print·λₒ0(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ0·x = 0;
-      return syl_app_closure(_print_int, _print·λₒ0·x);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ0·x = 0ll;
+      _print_int(_print·λₒ0·x);
     }
     int main()
     {
-      _print_int = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_env _print·env = syl_capture(1, _print_int);
-        _printₒ1 = syl_mk_thunk(_print·λₒ1, _print·env);
-        _printₒ0 = syl_mk_thunk(_print·λₒ0, _print·env);
+        syl_env _print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+        _printₒ1 = syl_thunk<syl_unit>{_print·λₒ1, _print·env};
+        _printₒ0 = syl_thunk<syl_unit>{_print·λₒ0, _print·env};
       }
-      __ = syl_app_thunk(_printₒ0);
-      __ˢ1 = syl_app_thunk(_printₒ0);
-      __ˢ2 = syl_app_thunk(_printₒ1);
+      _printₒ0();
+      _printₒ0();
+      _printₒ1();
       return 0;
     }
     |}]
@@ -6624,39 +6611,38 @@ let _ = print 1 in
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _print_int;
+    static syl_closure<syl_int,syl_unit> _print_int;
     static syl_unit __·print·λₒ1(syl_env);
     static syl_unit __·print·λₒ0(syl_env);
-    static syl_unit __;
     static syl_unit __·print·λₒ1(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int __·print·λₒ1·x = 1;
-      return syl_app_closure(_print_int, __·print·λₒ1·x);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int __·print·λₒ1·x = 1ll;
+      _print_int(__·print·λₒ1·x);
     }
     static syl_unit __·print·λₒ0(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int __·print·λₒ0·x = 0;
-      return syl_app_closure(_print_int, __·print·λₒ0·x);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int __·print·λₒ0·x = 0ll;
+      _print_int(__·print·λₒ0·x);
     }
     int main()
     {
-      _print_int = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_unit __·printₒ1;
-        syl_unit __·printₒ0;
+        syl_thunk<syl_unit> __·printₒ1;
+        syl_thunk<syl_unit> __·printₒ0;
         {
-          syl_env __·print·env = syl_capture(1, _print_int);
-          __·printₒ1 = syl_mk_thunk(__·print·λₒ1, __·print·env);
-          __·printₒ0 = syl_mk_thunk(__·print·λₒ0, __·print·env);
+          syl_env __·print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+          __·printₒ1 = syl_thunk<syl_unit>{__·print·λₒ1, __·print·env};
+          __·printₒ0 = syl_thunk<syl_unit>{__·print·λₒ0, __·print·env};
         }
-        syl_unit __·_ = syl_app_thunk(__·printₒ0);
-        syl_unit __·_ˢ1 = syl_app_thunk(__·printₒ0);
-        syl_unit __·_ˢ2 = syl_app_thunk(__·printₒ1);
-        __ = 0;
+        __·printₒ0();
+        __·printₒ0();
+        __·printₒ1();
+        ;
       }
       return 0;
     }
@@ -6679,83 +6665,80 @@ let _ = print 1 3;;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _print_int;
+    static syl_closure<syl_int,syl_unit> _print_int;
     static syl_unit _print·λₒ1·λₒ2(syl_env);
     static syl_unit _print·λₒ1·λₒ3(syl_env);
-    static syl_unit _print·λₒ1ₒ2(syl_env);
-    static syl_unit _print·λₒ1ₒ3(syl_env);
+    static syl_thunk<syl_unit> _print·λₒ1ₒ2(syl_env);
+    static syl_thunk<syl_unit> _print·λₒ1ₒ3(syl_env);
     static syl_unit _print·λₒ0·λₒ1(syl_env);
-    static syl_unit _print·λₒ0ₒ1(syl_env);
-    static syl_unit _printₒ1ₒ2;
-    static syl_unit _printₒ1ₒ3;
-    static syl_unit _printₒ0ₒ1;
-    static syl_unit __;
-    static syl_unit __ˢ1;
-    static syl_unit __ˢ2;
+    static syl_thunk<syl_unit> _print·λₒ0ₒ1(syl_env);
+    static syl_thunk<syl_thunk<syl_unit>> _printₒ1ₒ2;
+    static syl_thunk<syl_thunk<syl_unit>> _printₒ1ₒ3;
+    static syl_thunk<syl_thunk<syl_unit>> _printₒ0ₒ1;
     static syl_unit _print·λₒ1·λₒ2(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ1·λₒ2·y = 2;
-      return syl_app_closure(_print_int, _print·λₒ1·λₒ2·y);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ1·λₒ2·y = 2ll;
+      _print_int(_print·λₒ1·λₒ2·y);
     }
     static syl_unit _print·λₒ1·λₒ3(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ1·λₒ3·y = 3;
-      return syl_app_closure(_print_int, _print·λₒ1·λₒ3·y);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ1·λₒ3·y = 3ll;
+      _print_int(_print·λₒ1·λₒ3·y);
     }
-    static syl_unit _print·λₒ1ₒ2(syl_env 𝒰)
+    static syl_thunk<syl_unit> _print·λₒ1ₒ2(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ1·x = 1;
-      syl_unit _print·λₒ1·_ = syl_app_closure(_print_int, _print·λₒ1·x);
-      syl_env _print·λₒ1·env = syl_capture(1, _print_int);
-      return syl_mk_thunk(_print·λₒ1·λₒ2, _print·λₒ1·env);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ1·x = 1ll;
+      _print_int(_print·λₒ1·x);
+      syl_env _print·λₒ1·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+      return syl_thunk<syl_unit>{_print·λₒ1·λₒ2, _print·λₒ1·env};
     }
-    static syl_unit _print·λₒ1ₒ3(syl_env 𝒰)
+    static syl_thunk<syl_unit> _print·λₒ1ₒ3(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ1·x = 1;
-      syl_unit _print·λₒ1·_ = syl_app_closure(_print_int, _print·λₒ1·x);
-      syl_env _print·λₒ1·env = syl_capture(1, _print_int);
-      return syl_mk_thunk(_print·λₒ1·λₒ3, _print·λₒ1·env);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ1·x = 1ll;
+      _print_int(_print·λₒ1·x);
+      syl_env _print·λₒ1·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+      return syl_thunk<syl_unit>{_print·λₒ1·λₒ3, _print·λₒ1·env};
     }
     static syl_unit _print·λₒ0·λₒ1(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ0·λₒ1·y = 1;
-      return syl_app_closure(_print_int, _print·λₒ0·λₒ1·y);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ0·λₒ1·y = 1ll;
+      _print_int(_print·λₒ0·λₒ1·y);
     }
-    static syl_unit _print·λₒ0ₒ1(syl_env 𝒰)
+    static syl_thunk<syl_unit> _print·λₒ0ₒ1(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ0·x = 0;
-      syl_unit _print·λₒ0·_ = syl_app_closure(_print_int, _print·λₒ0·x);
-      syl_env _print·λₒ0·env = syl_capture(1, _print_int);
-      return syl_mk_thunk(_print·λₒ0·λₒ1, _print·λₒ0·env);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ0·x = 0ll;
+      _print_int(_print·λₒ0·x);
+      syl_env _print·λₒ0·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+      return syl_thunk<syl_unit>{_print·λₒ0·λₒ1, _print·λₒ0·env};
     }
     int main()
     {
-      _print_int = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_env _print·env = syl_capture(1, _print_int);
-        _printₒ1ₒ2 = syl_mk_thunk(_print·λₒ1ₒ2, _print·env);
-        _printₒ1ₒ3 = syl_mk_thunk(_print·λₒ1ₒ3, _print·env);
-        _printₒ0ₒ1 = syl_mk_thunk(_print·λₒ0ₒ1, _print·env);
+        syl_env _print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+        _printₒ1ₒ2 = syl_thunk<syl_thunk<syl_unit>>{_print·λₒ1ₒ2, _print·env};
+        _printₒ1ₒ3 = syl_thunk<syl_thunk<syl_unit>>{_print·λₒ1ₒ3, _print·env};
+        _printₒ0ₒ1 = syl_thunk<syl_thunk<syl_unit>>{_print·λₒ0ₒ1, _print·env};
       }
       {
-        syl_unit _$ₒ1 = syl_app_thunk(_printₒ0ₒ1);
-        __ = syl_app_thunk(_$ₒ1);
+        syl_thunk<syl_unit> _$ₒ1 = _printₒ0ₒ1();
+        _$ₒ1();
       }
       {
-        syl_unit _$ₒ2 = syl_app_thunk(_printₒ1ₒ2);
-        __ˢ1 = syl_app_thunk(_$ₒ2);
+        syl_thunk<syl_unit> _$ₒ2 = _printₒ1ₒ2();
+        _$ₒ2();
       }
       {
-        syl_unit _$ₒ3 = syl_app_thunk(_printₒ1ₒ3);
-        __ˢ2 = syl_app_thunk(_$ₒ3);
+        syl_thunk<syl_unit> _$ₒ3 = _printₒ1ₒ3();
+        _$ₒ3();
       }
       return 0;
     }
@@ -6770,38 +6753,38 @@ let _ = (id (int -> int)) (fn (x : int) -> x + 1) 5;;
 |};
   [%expect
     {|
-    static syl_closure _id·λₒ𝕀🡒𝕀·λ(syl_closure, syl_env);
-    static syl_closure _id·λₒ𝕀🡒𝕀(syl_env);
-    static syl_closure _idₒ𝕀🡒𝕀;
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀ᐳ𝕀·λ(syl_closure<syl_int,syl_int>, syl_env);
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>> _id·λₒ𝕀ᐳ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>>> _idₒ𝕀ᐳ𝕀;
     static syl_int __·λ(syl_int, syl_env);
     static syl_int __;
-    static syl_closure _id·λₒ𝕀🡒𝕀·λ(syl_closure _x, syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀ᐳ𝕀·λ(syl_closure<syl_int,syl_int> _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝕀🡒𝕀(syl_env 𝒰)
+    static syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>> _id·λₒ𝕀ᐳ𝕀(syl_env 𝒰)
     {
-      syl_env _id·λₒ𝕀🡒𝕀·env = NULL;
-      return syl_mk_closure(_id·λₒ𝕀🡒𝕀·λ, _id·λₒ𝕀🡒𝕀·env);
+      syl_env _id·λₒ𝕀ᐳ𝕀·env = NULL;
+      return syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>>{_id·λₒ𝕀ᐳ𝕀·λ, _id·λₒ𝕀ᐳ𝕀·env};
     }
     static syl_int __·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _$ = 1;
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     int main()
     {
       {
         syl_env _id·env = NULL;
-        _idₒ𝕀🡒𝕀 = syl_mk_thunk(_id·λₒ𝕀🡒𝕀, _id·env);
+        _idₒ𝕀ᐳ𝕀 = syl_thunk<syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>>>{_id·λₒ𝕀ᐳ𝕀, _id·env};
       }
       {
-        syl_closure _$ = syl_app_thunk(_idₒ𝕀🡒𝕀);
+        syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>> _$ = _idₒ𝕀ᐳ𝕀();
         syl_env __·env = NULL;
-        syl_closure _$ˢ1 = syl_mk_closure(__·λ, __·env);
-        syl_closure _$ˢ2 = syl_app_closure(_$, _$ˢ1);
-        syl_int _$ˢ3 = 5;
-        __ = syl_app_closure(_$ˢ2, _$ˢ3);
+        syl_closure<syl_int,syl_int> _$ˢ1 = syl_closure<syl_int,syl_int>{__·λ, __·env};
+        syl_closure<syl_int,syl_int> _$ˢ2 = _$(_$ˢ1);
+        syl_int _$ˢ3 = 5ll;
+        __ = _$ˢ2(_$ˢ3);
       }
       return 0;
     }
@@ -6819,8 +6802,8 @@ let _ = f false;;
     {|
     static syl_bool _f·λₒF(syl_env);
     static syl_int _f·λₒT(syl_env);
-    static syl_bool _fₒF;
-    static syl_int _fₒT;
+    static syl_thunk<syl_bool> _fₒF;
+    static syl_thunk<syl_int> _fₒT;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒF(syl_env 𝒰)
@@ -6831,17 +6814,17 @@ let _ = f false;;
     static syl_int _f·λₒT(syl_env 𝒰)
     {
       syl_bool _f·λₒT·b = true;
-      return 1;
+      return 1ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒF = syl_mk_thunk(_f·λₒF, _f·env);
-        _fₒT = syl_mk_thunk(_f·λₒT, _f·env);
+        _fₒF = syl_thunk<syl_bool>{_f·λₒF, _f·env};
+        _fₒT = syl_thunk<syl_int>{_f·λₒT, _f·env};
       }
-      __ = syl_app_thunk(_fₒT);
-      __ˢ1 = syl_app_thunk(_fₒF);
+      __ = _fₒT();
+      __ˢ1 = _fₒF();
       return 0;
     }
     |}]
@@ -6856,20 +6839,20 @@ let _ = double 5;;
   [%expect
     {|
     static syl_int _double·λₒ5(syl_env);
-    static syl_int _doubleₒ5;
+    static syl_thunk<syl_int> _doubleₒ5;
     static syl_int __;
     static syl_int _double·λₒ5(syl_env 𝒰)
     {
-      syl_int _double·λₒ5·x = 5;
+      syl_int _double·λₒ5·x = 5ll;
       return _double·λₒ5·x + _double·λₒ5·x;
     }
     int main()
     {
       {
         syl_env _double·env = NULL;
-        _doubleₒ5 = syl_mk_thunk(_double·λₒ5, _double·env);
+        _doubleₒ5 = syl_thunk<syl_int>{_double·λₒ5, _double·env};
       }
-      __ = syl_app_thunk(_doubleₒ5);
+      __ = _doubleₒ5();
       return 0;
     }
     |}]
@@ -6887,49 +6870,49 @@ let _ = g true;;
   [%expect
     {|
     static syl_bool _id·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure _id·λₒ𝔹(syl_env);
+    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env);
     static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _id·λₒ𝕀(syl_env);
-    static syl_closure _idₒ𝔹;
-    static syl_closure _idₒ𝕀;
-    static syl_closure _f;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _idₒ𝔹;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_bool,syl_bool> _g;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _id·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env 𝒰)
     {
       syl_env _id·λₒ𝔹·env = NULL;
-      return syl_mk_closure(_id·λₒ𝔹·λ, _id·λₒ𝔹·env);
+      return syl_closure<syl_bool,syl_bool>{_id·λₒ𝔹·λ, _id·λₒ𝔹·env};
     }
     static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _id·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _id·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_id·λₒ𝕀·λ, _id·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env _id·env = NULL;
-        _idₒ𝔹 = syl_mk_thunk(_id·λₒ𝔹, _id·env);
-        _idₒ𝕀 = syl_mk_thunk(_id·λₒ𝕀, _id·env);
+        _idₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_id·λₒ𝔹, _id·env};
+        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, _id·env};
       }
-      _f = syl_app_thunk(_idₒ𝕀);
-      _g = syl_app_thunk(_idₒ𝔹);
+      _f = _idₒ𝕀();
+      _g = _idₒ𝔹();
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       {
         syl_bool _$ = true;
-        __ˢ1 = syl_app_closure(_g, _$);
+        __ˢ1 = _g(_$);
       }
       return 0;
     }
@@ -6946,29 +6929,29 @@ let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
     {|
     static syl_int _choose·λₒλ4·f·λₒ0(syl_env);
     static syl_int _choose·λₒλ4(syl_env);
-    static syl_int _chooseₒλ4;
+    static syl_thunk<syl_int> _chooseₒλ4;
     static syl_int __;
     static syl_int _choose·λₒλ4·f·λₒ0(syl_env 𝒰)
     {
-      syl_int _choose·λₒλ4·f·λₒ0·x = 0;
-      return 0;
+      syl_int _choose·λₒλ4·f·λₒ0·x = 0ll;
+      return 0ll;
     }
     static syl_int _choose·λₒλ4(syl_env 𝒰)
     {
-      syl_int _choose·λₒλ4·fₒ0;
+      syl_thunk<syl_int> _choose·λₒλ4·fₒ0;
       {
         syl_env _choose·λₒλ4·f·env = NULL;
-        _choose·λₒλ4·fₒ0 = syl_mk_thunk(_choose·λₒλ4·f·λₒ0, _choose·λₒλ4·f·env);
+        _choose·λₒλ4·fₒ0 = syl_thunk<syl_int>{_choose·λₒλ4·f·λₒ0, _choose·λₒλ4·f·env};
       }
-      return syl_app_thunk(_choose·λₒλ4·fₒ0);
+      return _choose·λₒλ4·fₒ0();
     }
     int main()
     {
       {
         syl_env _choose·env = NULL;
-        _chooseₒλ4 = syl_mk_thunk(_choose·λₒλ4, _choose·env);
+        _chooseₒλ4 = syl_thunk<syl_int>{_choose·λₒλ4, _choose·env};
       }
-      __ = syl_app_thunk(_chooseₒλ4);
+      __ = _chooseₒλ4();
       return 0;
     }
     |}]
@@ -6985,22 +6968,22 @@ let _ = f 5;;
     {|
     static syl_int _n;
     static syl_int _f·λₒ5(syl_env);
-    static syl_int _fₒ5;
+    static syl_thunk<syl_int> _fₒ5;
     static syl_int __;
     static syl_int _f·λₒ5(syl_env 𝒰)
     {
-      syl_int _n = 𝒰[0];
-      syl_int _f·λₒ5·x = 5;
+      syl_int _n = *(syl_int*)(𝒰 + 0);
+      syl_int _f·λₒ5·x = 5ll;
       return _f·λₒ5·x + _n;
     }
     int main()
     {
-      _n = 10;
+      _n = 10ll;
       {
-        syl_env _f·env = syl_capture(1, _n);
-        _fₒ5 = syl_mk_thunk(_f·λₒ5, _f·env);
+        syl_env _f·env = syl_capture<syl_int>(_n);
+        _fₒ5 = syl_thunk<syl_int>{_f·λₒ5, _f·env};
       }
-      __ = syl_app_thunk(_fₒ5);
+      __ = _fₒ5();
       return 0;
     }
     |}]
@@ -7015,20 +6998,20 @@ let _ = f 42;;
   [%expect
     {|
     static syl_int _f·λₒ42(syl_env);
-    static syl_int _fₒ42;
+    static syl_thunk<syl_int> _fₒ42;
     static syl_int __;
     static syl_int _f·λₒ42(syl_env 𝒰)
     {
-      syl_int _f·λₒ42·x = 42;
+      syl_int _f·λₒ42·x = 42ll;
       return _f·λₒ42·x;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ42 = syl_mk_thunk(_f·λₒ42, _f·env);
+        _fₒ42 = syl_thunk<syl_int>{_f·λₒ42, _f·env};
       }
-      __ = syl_app_thunk(_fₒ42);
+      __ = _fₒ42();
       return 0;
     }
     |}]
@@ -7045,8 +7028,8 @@ let _ = f false;;
     {|
     static syl_bool _f·λₒF(syl_env);
     static syl_int _f·λₒT(syl_env);
-    static syl_bool _fₒF;
-    static syl_int _fₒT;
+    static syl_thunk<syl_bool> _fₒF;
+    static syl_thunk<syl_int> _fₒT;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒF(syl_env 𝒰)
@@ -7057,17 +7040,17 @@ let _ = f false;;
     static syl_int _f·λₒT(syl_env 𝒰)
     {
       syl_bool _f·λₒT·b = true;
-      return 0;
+      return 0ll;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒF = syl_mk_thunk(_f·λₒF, _f·env);
-        _fₒT = syl_mk_thunk(_f·λₒT, _f·env);
+        _fₒF = syl_thunk<syl_bool>{_f·λₒF, _f·env};
+        _fₒT = syl_thunk<syl_int>{_f·λₒT, _f·env};
       }
-      __ = syl_app_thunk(_fₒT);
-      __ˢ1 = syl_app_thunk(_fₒF);
+      __ = _fₒT();
+      __ˢ1 = _fₒF();
       return 0;
     }
     |}]
@@ -7083,30 +7066,30 @@ let _ = apply (fn (static x : int) -> x + 1);;
     {|
     static syl_int _apply·λₒλ4·f·λₒ5(syl_env);
     static syl_int _apply·λₒλ4(syl_env);
-    static syl_int _applyₒλ4;
+    static syl_thunk<syl_int> _applyₒλ4;
     static syl_int __;
     static syl_int _apply·λₒλ4·f·λₒ5(syl_env 𝒰)
     {
-      syl_int _apply·λₒλ4·f·λₒ5·x = 5;
-      syl_int _$ = 1;
+      syl_int _apply·λₒλ4·f·λₒ5·x = 5ll;
+      syl_int _$ = 1ll;
       return _apply·λₒλ4·f·λₒ5·x + _$;
     }
     static syl_int _apply·λₒλ4(syl_env 𝒰)
     {
-      syl_int _apply·λₒλ4·fₒ5;
+      syl_thunk<syl_int> _apply·λₒλ4·fₒ5;
       {
         syl_env _apply·λₒλ4·f·env = NULL;
-        _apply·λₒλ4·fₒ5 = syl_mk_thunk(_apply·λₒλ4·f·λₒ5, _apply·λₒλ4·f·env);
+        _apply·λₒλ4·fₒ5 = syl_thunk<syl_int>{_apply·λₒλ4·f·λₒ5, _apply·λₒλ4·f·env};
       }
-      return syl_app_thunk(_apply·λₒλ4·fₒ5);
+      return _apply·λₒλ4·fₒ5();
     }
     int main()
     {
       {
         syl_env _apply·env = NULL;
-        _applyₒλ4 = syl_mk_thunk(_apply·λₒλ4, _apply·env);
+        _applyₒλ4 = syl_thunk<syl_int>{_apply·λₒλ4, _apply·env};
       }
-      __ = syl_app_thunk(_applyₒλ4);
+      __ = _applyₒλ4();
       return 0;
     }
     |}]
@@ -7121,44 +7104,44 @@ let _ = f int bool 0 true;;
   [%expect
     {|
     static syl_int _f·λₒ𝕀·λₒ𝔹·λ·λ(syl_bool, syl_env);
-    static syl_closure _f·λₒ𝕀·λₒ𝔹·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀·λₒ𝔹(syl_env);
-    static syl_closure _f·λₒ𝕀ₒ𝔹(syl_env);
-    static syl_closure _fₒ𝕀ₒ𝔹;
+    static syl_closure<syl_bool,syl_int> _f·λₒ𝕀·λₒ𝔹·λ(syl_int, syl_env);
+    static syl_closure<syl_int,syl_closure<syl_bool,syl_int>> _f·λₒ𝕀·λₒ𝔹(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>> _f·λₒ𝕀ₒ𝔹(syl_env);
+    static syl_thunk<syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>>> _fₒ𝕀ₒ𝔹;
     static syl_int __;
     static syl_int _f·λₒ𝕀·λₒ𝔹·λ·λ(syl_bool _y, syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
+      syl_int _x = *(syl_int*)(𝒰 + 0);
       return _x;
     }
-    static syl_closure _f·λₒ𝕀·λₒ𝔹·λ(syl_int _x, syl_env 𝒰)
+    static syl_closure<syl_bool,syl_int> _f·λₒ𝕀·λₒ𝔹·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_env _f·λₒ𝕀·λₒ𝔹·λ·env = syl_capture(1, _x);
-      return syl_mk_closure(_f·λₒ𝕀·λₒ𝔹·λ·λ, _f·λₒ𝕀·λₒ𝔹·λ·env);
+      syl_env _f·λₒ𝕀·λₒ𝔹·λ·env = syl_capture<syl_int>(_x);
+      return syl_closure<syl_bool,syl_int>{_f·λₒ𝕀·λₒ𝔹·λ·λ, _f·λₒ𝕀·λₒ𝔹·λ·env};
     }
-    static syl_closure _f·λₒ𝕀·λₒ𝔹(syl_env 𝒰)
+    static syl_closure<syl_int,syl_closure<syl_bool,syl_int>> _f·λₒ𝕀·λₒ𝔹(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·λₒ𝔹·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λₒ𝔹·λ, _f·λₒ𝕀·λₒ𝔹·env);
+      return syl_closure<syl_int,syl_closure<syl_bool,syl_int>>{_f·λₒ𝕀·λₒ𝔹·λ, _f·λₒ𝕀·λₒ𝔹·env};
     }
-    static syl_closure _f·λₒ𝕀ₒ𝔹(syl_env 𝒰)
+    static syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>> _f·λₒ𝕀ₒ𝔹(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_thunk(_f·λₒ𝕀·λₒ𝔹, _f·λₒ𝕀·env);
+      return syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>>{_f·λₒ𝕀·λₒ𝔹, _f·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ𝕀ₒ𝔹 = syl_mk_thunk(_f·λₒ𝕀ₒ𝔹, _f·env);
+        _fₒ𝕀ₒ𝔹 = syl_thunk<syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>>>{_f·λₒ𝕀ₒ𝔹, _f·env};
       }
       {
-        syl_closure _$ₒ𝔹 = syl_app_thunk(_fₒ𝕀ₒ𝔹);
-        syl_closure _$ˢ1 = syl_app_thunk(_$ₒ𝔹);
-        syl_int _$ˢ2 = 0;
-        syl_closure _$ˢ3 = syl_app_closure(_$ˢ1, _$ˢ2);
+        syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>> _$ₒ𝔹 = _fₒ𝕀ₒ𝔹();
+        syl_closure<syl_int,syl_closure<syl_bool,syl_int>> _$ˢ1 = _$ₒ𝔹();
+        syl_int _$ˢ2 = 0ll;
+        syl_closure<syl_bool,syl_int> _$ˢ3 = _$ˢ1(_$ˢ2);
         syl_bool _$ˢ4 = true;
-        __ = syl_app_closure(_$ˢ3, _$ˢ4);
+        __ = _$ˢ3(_$ˢ4);
       }
       return 0;
     }
@@ -7178,31 +7161,31 @@ let _ = f 1;;
     {|
     static syl_bool _f·λₒ1(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_bool _fₒ1;
-    static syl_int _fₒ0;
+    static syl_thunk<syl_bool> _fₒ1;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_bool __ˢ1;
     static syl_bool _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       syl_bool _f·λₒ1·y = true;
       return _f·λₒ1·y;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      syl_int _f·λₒ0·y = 1;
+      syl_int _f·λₒ0·x = 0ll;
+      syl_int _f·λₒ0·y = 1ll;
       return _f·λₒ0·y;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, _f·env);
+        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
       }
-      __ = syl_app_thunk(_fₒ0);
-      __ˢ1 = syl_app_thunk(_fₒ1);
+      __ = _fₒ0();
+      __ˢ1 = _fₒ1();
       return 0;
     }
     |}]
@@ -7219,30 +7202,30 @@ let _ = x (fn (static x : int) -> int);;
   [%expect
     {|
     static syl_int _f·λₒλ10·λ(syl_int, syl_env);
-    static syl_closure _f·λₒλ10(syl_env);
-    static syl_closure _fₒλ10;
-    static syl_closure _xₒλ10;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _f·λₒλ10(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒλ10;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _xₒλ10;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _f·λₒλ10·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒλ10(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒλ10(syl_env 𝒰)
     {
       syl_env _f·λₒλ10·env = NULL;
-      return syl_mk_closure(_f·λₒλ10·λ, _f·λₒλ10·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒλ10·λ, _f·λₒλ10·env};
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ10 = syl_mk_thunk(_f·λₒλ10, _f·env);
+        _fₒλ10 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒλ10, _f·env};
       }
       {
         syl_env _h·env = NULL;
       }
       _xₒλ10 = _fₒλ10;
-      __ = syl_app_thunk(_xₒλ10);
+      __ = _xₒλ10();
       return 0;
     }
     |}]
@@ -7258,27 +7241,27 @@ let _ = wrap2 (fn (static x : int) -> int);;
   [%expect
     {|
     static syl_int _wrap·λₒλ9·λ(syl_int, syl_env);
-    static syl_closure _wrap·λₒλ9(syl_env);
-    static syl_closure _wrapₒλ9;
-    static syl_closure _wrap2ₒλ9;
-    static syl_closure __;
+    static syl_closure<syl_int,syl_int> _wrap·λₒλ9(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _wrapₒλ9;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _wrap2ₒλ9;
+    static syl_closure<syl_int,syl_int> __;
     static syl_int _wrap·λₒλ9·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _wrap·λₒλ9(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _wrap·λₒλ9(syl_env 𝒰)
     {
       syl_env _wrap·λₒλ9·env = NULL;
-      return syl_mk_closure(_wrap·λₒλ9·λ, _wrap·λₒλ9·env);
+      return syl_closure<syl_int,syl_int>{_wrap·λₒλ9·λ, _wrap·λₒλ9·env};
     }
     int main()
     {
       {
         syl_env _wrap·env = NULL;
-        _wrapₒλ9 = syl_mk_thunk(_wrap·λₒλ9, _wrap·env);
+        _wrapₒλ9 = syl_thunk<syl_closure<syl_int,syl_int>>{_wrap·λₒλ9, _wrap·env};
       }
       _wrap2ₒλ9 = _wrapₒλ9;
-      __ = syl_app_thunk(_wrap2ₒλ9);
+      __ = _wrap2ₒλ9();
       return 0;
     }
     |}]
@@ -7297,43 +7280,43 @@ let _ = x (fn (static f : static int -> int) -> f 0);;
     static syl_int _f·λₒλ17·apply·λₒλ20·f·λₒ0(syl_env);
     static syl_int _f·λₒλ17·apply·λₒλ20(syl_env);
     static syl_int _f·λₒλ17(syl_env);
-    static syl_int _fₒλ17;
-    static syl_int _xₒλ17;
+    static syl_thunk<syl_int> _fₒλ17;
+    static syl_thunk<syl_int> _xₒλ17;
     static syl_int __;
     static syl_int _f·λₒλ17·apply·λₒλ20·f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒλ17·apply·λₒλ20·f·λₒ0·x = 0;
-      return 0;
+      syl_int _f·λₒλ17·apply·λₒλ20·f·λₒ0·x = 0ll;
+      return 0ll;
     }
     static syl_int _f·λₒλ17·apply·λₒλ20(syl_env 𝒰)
     {
-      syl_int _f·λₒλ17·apply·λₒλ20·fₒ0;
+      syl_thunk<syl_int> _f·λₒλ17·apply·λₒλ20·fₒ0;
       {
         syl_env _f·λₒλ17·apply·λₒλ20·f·env = NULL;
-        _f·λₒλ17·apply·λₒλ20·fₒ0 = syl_mk_thunk(_f·λₒλ17·apply·λₒλ20·f·λₒ0, _f·λₒλ17·apply·λₒλ20·f·env);
+        _f·λₒλ17·apply·λₒλ20·fₒ0 = syl_thunk<syl_int>{_f·λₒλ17·apply·λₒλ20·f·λₒ0, _f·λₒλ17·apply·λₒλ20·f·env};
       }
-      return syl_app_thunk(_f·λₒλ17·apply·λₒλ20·fₒ0);
+      return _f·λₒλ17·apply·λₒλ20·fₒ0();
     }
     static syl_int _f·λₒλ17(syl_env 𝒰)
     {
-      syl_int _f·λₒλ17·applyₒλ20;
+      syl_thunk<syl_int> _f·λₒλ17·applyₒλ20;
       {
         syl_env _f·λₒλ17·apply·env = NULL;
-        _f·λₒλ17·applyₒλ20 = syl_mk_thunk(_f·λₒλ17·apply·λₒλ20, _f·λₒλ17·apply·env);
+        _f·λₒλ17·applyₒλ20 = syl_thunk<syl_int>{_f·λₒλ17·apply·λₒλ20, _f·λₒλ17·apply·env};
       }
-      return syl_app_thunk(_f·λₒλ17·applyₒλ20);
+      return _f·λₒλ17·applyₒλ20();
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒλ17 = syl_mk_thunk(_f·λₒλ17, _f·env);
+        _fₒλ17 = syl_thunk<syl_int>{_f·λₒλ17, _f·env};
       }
       {
         syl_env _g·env = NULL;
       }
       _xₒλ17 = _fₒλ17;
-      __ = syl_app_thunk(_xₒλ17);
+      __ = _xₒλ17();
       return 0;
     }
     |}]
@@ -7348,28 +7331,28 @@ let _ = (fn (_ : unit) -> f 0);;
   [%expect
     {|
     static syl_int _f·λₒ0(syl_env);
-    static syl_thunk _fₒ0;
-    static syl_int __·λ(syl_unit, syl_env);
-    static syl_closure __;
+    static syl_thunk<syl_int> _fₒ0;
+    static syl_int __·λ(syl_env);
+    static syl_closure<syl_unit,syl_int> __;
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       return _f·λₒ0·x;
     }
-    static syl_int __·λ(syl_unit __, syl_env 𝒰)
+    static syl_int __·λ(syl_env 𝒰)
     {
-      syl_int _fₒ0 = 𝒰[0];
-      return syl_app_thunk(_fₒ0);
+      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
+      return _fₒ0();
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, 𝒰);
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
       }
       {
-        syl_env __·env = syl_capture(1, _fₒ0);
-        __ = syl_mk_closure(__·λ, __·env);
+        syl_env __·env = syl_capture<syl_thunk<syl_int>>(_fₒ0);
+        __ = syl_closure<syl_unit,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -7386,38 +7369,38 @@ let _ = (fn (_ : unit) -> f 0 + f 1);;
     {|
     static syl_int _f·λₒ1(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_thunk _fₒ1;
-    static syl_thunk _fₒ0;
-    static syl_int __·λ(syl_unit, syl_env);
-    static syl_closure __;
+    static syl_thunk<syl_int> _fₒ1;
+    static syl_thunk<syl_int> _fₒ0;
+    static syl_int __·λ(syl_env);
+    static syl_closure<syl_unit,syl_int> __;
     static syl_int _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       return _f·λₒ1·x;
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       return _f·λₒ0·x;
     }
-    static syl_int __·λ(syl_unit __, syl_env 𝒰)
+    static syl_int __·λ(syl_env 𝒰)
     {
-      syl_int _fₒ0 = 𝒰[0];
-      syl_int _fₒ1 = 𝒰[1];
-      syl_int _$ = syl_app_thunk(_fₒ0);
-      syl_int _$ˢ1 = syl_app_thunk(_fₒ1);
+      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
+      syl_thunk<syl_int> _fₒ1 = *(syl_thunk<syl_int>*)(𝒰 + 16);
+      syl_int _$ = _fₒ0();
+      syl_int _$ˢ1 = _fₒ1();
       return _$ + _$ˢ1;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, 𝒰);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, 𝒰);
+        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, 𝒰};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
       }
       {
-        syl_env __·env = syl_capture(2, _fₒ0, _fₒ1);
-        __ = syl_mk_closure(__·λ, __·env);
+        syl_env __·env = syl_capture<syl_thunk<syl_int>, syl_thunk<syl_int>>(_fₒ0, _fₒ1);
+        __ = syl_closure<syl_unit,syl_int>{__·λ, __·env};
       }
       return 0;
     }
@@ -7434,37 +7417,37 @@ let _ = g 5;;
   [%expect
     {|
     static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
-    static syl_thunk _fₒ𝕀;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λ, _f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
     }
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _fₒ𝕀 = 𝒰[0];
-      syl_closure _$ = syl_app_thunk(_fₒ𝕀);
-      return syl_app_closure(_$, _x);
+      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
+      return _$(_x);
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _g = syl_mk_closure(_g·λ, 𝒰);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, 𝒰);
-        𝒰[0] = _fₒ𝕀;
+        syl_env 𝒰 = syl_env_rec(16);
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
       }
       {
-        syl_int _$ = 5;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 5ll;
+        __ = _g(_$);
       }
       return 0;
     }
@@ -7484,60 +7467,60 @@ let _ = choose false 5;;
     {|
     static syl_int _inc·λ(syl_int, syl_env);
     static syl_int _choose·λₒF·λ(syl_int, syl_env);
-    static syl_closure _choose·λₒF(syl_env);
+    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env);
     static syl_int _choose·λₒT·λ(syl_int, syl_env);
-    static syl_closure _choose·λₒT(syl_env);
-    static syl_closure _inc;
-    static syl_thunk _chooseₒF;
-    static syl_thunk _chooseₒT;
+    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env);
+    static syl_closure<syl_int,syl_int> _inc;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒF;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT;
     static syl_int __;
     static syl_int __ˢ1;
     static syl_int _inc·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _chooseₒT = 𝒰[0];
-      syl_closure _inc·λ·_ = syl_app_thunk(_chooseₒT);
-      syl_int _$ = 1;
+      syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      syl_closure<syl_int,syl_int> _inc·λ·_ = _chooseₒT();
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     static syl_int _choose·λₒF·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _choose·λₒF(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env 𝒰)
     {
       syl_env _choose·λₒF·env = NULL;
-      return syl_mk_closure(_choose·λₒF·λ, _choose·λₒF·env);
+      return syl_closure<syl_int,syl_int>{_choose·λₒF·λ, _choose·λₒF·env};
     }
     static syl_int _choose·λₒT·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _inc = 𝒰[0];
-      return syl_app_closure(_inc, _x);
+      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      return _inc(_x);
     }
-    static syl_closure _choose·λₒT(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env 𝒰)
     {
-      syl_closure _inc = 𝒰[1];
-      syl_env _choose·λₒT·env = syl_capture(1, _inc);
-      return syl_mk_closure(_choose·λₒT·λ, _choose·λₒT·env);
+      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
+      syl_env _choose·λₒT·env = syl_capture<syl_closure<syl_int,syl_int>>(_inc);
+      return syl_closure<syl_int,syl_int>{_choose·λₒT·λ, _choose·λₒT·env};
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(2);
-        _inc = syl_mk_closure(_inc·λ, 𝒰);
-        _chooseₒF = syl_mk_thunk(_choose·λₒF, 𝒰);
-        _chooseₒT = syl_mk_thunk(_choose·λₒT, 𝒰);
-        𝒰[0] = _chooseₒT;
-        𝒰[1] = _inc;
+        syl_env 𝒰 = syl_env_rec(32);
+        _inc = syl_closure<syl_int,syl_int>{_inc·λ, 𝒰};
+        _chooseₒF = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒF, 𝒰};
+        _chooseₒT = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒT, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _chooseₒT;
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = _inc;
       }
       {
-        syl_closure _$ = syl_app_thunk(_chooseₒT);
-        syl_int _$ˢ1 = 5;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _chooseₒT();
+        syl_int _$ˢ1 = 5ll;
+        __ = _$(_$ˢ1);
       }
       {
-        syl_closure _$ = syl_app_thunk(_chooseₒF);
-        syl_int _$ˢ1 = 5;
-        __ˢ1 = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _chooseₒF();
+        syl_int _$ˢ1 = 5ll;
+        __ˢ1 = _$(_$ˢ1);
       }
       return 0;
     }
@@ -7559,64 +7542,63 @@ let _ = choose false 5 in
     {|
     static syl_int __·inc·λ(syl_int, syl_env);
     static syl_int __·choose·λₒF·λ(syl_int, syl_env);
-    static syl_closure __·choose·λₒF(syl_env);
+    static syl_closure<syl_int,syl_int> __·choose·λₒF(syl_env);
     static syl_int __·choose·λₒT·λ(syl_int, syl_env);
-    static syl_closure __·choose·λₒT(syl_env);
-    static syl_unit __;
+    static syl_closure<syl_int,syl_int> __·choose·λₒT(syl_env);
     static syl_int __·inc·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _chooseₒT = 𝒰[0];
-      syl_closure __·inc·λ·_ = syl_app_thunk(_chooseₒT);
-      syl_int _$ = 1;
+      syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      syl_closure<syl_int,syl_int> __·inc·λ·_ = _chooseₒT();
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     static syl_int __·choose·λₒF·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure __·choose·λₒF(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> __·choose·λₒF(syl_env 𝒰)
     {
       syl_env __·choose·λₒF·env = NULL;
-      return syl_mk_closure(__·choose·λₒF·λ, __·choose·λₒF·env);
+      return syl_closure<syl_int,syl_int>{__·choose·λₒF·λ, __·choose·λₒF·env};
     }
     static syl_int __·choose·λₒT·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _inc = 𝒰[0];
-      return syl_app_closure(_inc, _x);
+      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      return _inc(_x);
     }
-    static syl_closure __·choose·λₒT(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> __·choose·λₒT(syl_env 𝒰)
     {
-      syl_closure _inc = 𝒰[1];
-      syl_env __·choose·λₒT·env = syl_capture(1, _inc);
-      return syl_mk_closure(__·choose·λₒT·λ, __·choose·λₒT·env);
+      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
+      syl_env __·choose·λₒT·env = syl_capture<syl_closure<syl_int,syl_int>>(_inc);
+      return syl_closure<syl_int,syl_int>{__·choose·λₒT·λ, __·choose·λₒT·env};
     }
     int main()
     {
       {
-        syl_closure __·inc;
-        syl_thunk __·chooseₒF;
-        syl_thunk __·chooseₒT;
+        syl_closure<syl_int,syl_int> __·inc;
+        syl_thunk<syl_closure<syl_int,syl_int>> __·chooseₒF;
+        syl_thunk<syl_closure<syl_int,syl_int>> __·chooseₒT;
         {
-          syl_env 𝒰 = syl_env_rec(2);
-          __·inc = syl_mk_closure(__·inc·λ, 𝒰);
-          __·chooseₒF = syl_mk_thunk(__·choose·λₒF, 𝒰);
-          __·chooseₒT = syl_mk_thunk(__·choose·λₒT, 𝒰);
-          𝒰[0] = __·chooseₒT;
-          𝒰[1] = __·inc;
+          syl_env 𝒰 = syl_env_rec(32);
+          __·inc = syl_closure<syl_int,syl_int>{__·inc·λ, 𝒰};
+          __·chooseₒF = syl_thunk<syl_closure<syl_int,syl_int>>{__·choose·λₒF, 𝒰};
+          __·chooseₒT = syl_thunk<syl_closure<syl_int,syl_int>>{__·choose·λₒT, 𝒰};
+          *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = __·chooseₒT;
+          *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = __·inc;
         }
         syl_int __·_;
         {
-          syl_closure _$ = syl_app_thunk(__·chooseₒT);
-          syl_int _$ˢ1 = 5;
-          __·_ = syl_app_closure(_$, _$ˢ1);
+          syl_closure<syl_int,syl_int> _$ = __·chooseₒT();
+          syl_int _$ˢ1 = 5ll;
+          __·_ = _$(_$ˢ1);
         }
         syl_int __·_ˢ1;
         {
-          syl_closure _$ = syl_app_thunk(__·chooseₒF);
-          syl_int _$ˢ1 = 5;
-          __·_ˢ1 = syl_app_closure(_$, _$ˢ1);
+          syl_closure<syl_int,syl_int> _$ = __·chooseₒF();
+          syl_int _$ˢ1 = 5ll;
+          __·_ˢ1 = _$(_$ˢ1);
         }
-        __ = 0;
+        ;
       }
       return 0;
     }
@@ -7633,21 +7615,21 @@ let _ = g 0;;
   [%expect
     {|
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _g·λ(syl_int _y, syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _g = syl_mk_closure(_g·λ, 𝒰);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 0ll;
+        __ = _g(_$);
       }
       return 0;
     }
@@ -7664,20 +7646,20 @@ fun f (x : int) : int = let _ = a in x;;
     {|
     static syl_int _a;
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _a = 𝒰[0];
+      syl_int _a = *(syl_int*)(𝒰 + 0);
       syl_int _f·λ·_ = _a;
       return _x;
     }
     int main()
     {
-      _a = 0;
+      _a = 0ll;
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        𝒰[0] = _a;
+        syl_env 𝒰 = syl_env_rec(8);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _a;
       }
       return 0;
     }
@@ -7694,22 +7676,22 @@ fun f (x : int) : int = let _ = a in f x;;
     {|
     static syl_int _a;
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[1];
-      syl_int _a = 𝒰[0];
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 8);
+      syl_int _a = *(syl_int*)(𝒰 + 0);
       syl_int _f·λ·_ = _a;
-      return syl_app_closure(_f, _x);
+      return _f(_x);
     }
     int main()
     {
-      _a = 0;
+      _a = 0ll;
       {
-        syl_env 𝒰 = syl_env_rec(2);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        𝒰[0] = _a;
-        𝒰[1] = _f;
+        syl_env 𝒰 = syl_env_rec(24);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _a;
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 8) = _f;
       }
       return 0;
     }
@@ -7729,26 +7711,25 @@ fun f (x : int) : int = let _ = a in f x in
     {|
     static syl_int _a;
     static syl_int __·f·λ(syl_int, syl_env);
-    static syl_unit __;
     static syl_int __·f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[1];
-      syl_int _a = 𝒰[0];
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 8);
+      syl_int _a = *(syl_int*)(𝒰 + 0);
       syl_int __·f·λ·_ = _a;
-      return syl_app_closure(_f, _x);
+      return _f(_x);
     }
     int main()
     {
-      _a = 0;
+      _a = 0ll;
       {
-        syl_closure __·f;
+        syl_closure<syl_int,syl_int> __·f;
         {
-          syl_env 𝒰 = syl_env_rec(2);
-          __·f = syl_mk_closure(__·f·λ, 𝒰);
-          𝒰[0] = _a;
-          𝒰[1] = __·f;
+          syl_env 𝒰 = syl_env_rec(24);
+          __·f = syl_closure<syl_int,syl_int>{__·f·λ, 𝒰};
+          *(syl_int*)(𝒰 + 0) = _a;
+          *(syl_closure<syl_int,syl_int>*)(𝒰 + 8) = __·f;
         }
-        __ = 0;
+        ;
       }
       return 0;
     }
@@ -7771,40 +7752,40 @@ and g (y : int) : int = let _ = a in let _ = c in f y;;
     static syl_int _c;
     static syl_int _f·λ(syl_int, syl_env);
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _g = 𝒰[4];
-      syl_int _b = 𝒰[1];
-      syl_int _a = 𝒰[0];
+      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 40);
+      syl_int _b = *(syl_int*)(𝒰 + 8);
+      syl_int _a = *(syl_int*)(𝒰 + 0);
       syl_int _f·λ·_ = _a;
       syl_int _f·λ·_ˢ1 = _b;
-      return syl_app_closure(_g, _x);
+      return _g(_x);
     }
     static syl_int _g·λ(syl_int _y, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[3];
-      syl_int _c = 𝒰[2];
-      syl_int _a = 𝒰[0];
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 24);
+      syl_int _c = *(syl_int*)(𝒰 + 16);
+      syl_int _a = *(syl_int*)(𝒰 + 0);
       syl_int _g·λ·_ = _a;
       syl_int _g·λ·_ˢ1 = _c;
-      return syl_app_closure(_f, _y);
+      return _f(_y);
     }
     int main()
     {
-      _a = 0;
-      _b = 1;
-      _c = 2;
+      _a = 0ll;
+      _b = 1ll;
+      _c = 2ll;
       {
-        syl_env 𝒰 = syl_env_rec(5);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        _g = syl_mk_closure(_g·λ, 𝒰);
-        𝒰[0] = _a;
-        𝒰[1] = _b;
-        𝒰[2] = _c;
-        𝒰[3] = _f;
-        𝒰[4] = _g;
+        syl_env 𝒰 = syl_env_rec(56);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _a;
+        *(syl_int*)(𝒰 + 8) = _b;
+        *(syl_int*)(𝒰 + 16) = _c;
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 24) = _f;
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 40) = _g;
       }
       return 0;
     }
@@ -7821,21 +7802,21 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _f = syl_mk_closure(_f·λ, 𝒰);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -7854,8 +7835,8 @@ let _ = f 0;;
     int main()
     {
       {
-        syl_int __·x = 0;
-        __ = 0;
+        syl_int __·x = 0ll;
+        __ = 0ll;
       }
       return 0;
     }
@@ -7874,8 +7855,8 @@ let _ = f 0;;
     int main()
     {
       {
-        syl_int __·x = 0;
-        __ = 0;
+        syl_int __·x = 0ll;
+        __ = 0ll;
       }
       return 0;
     }
@@ -7893,7 +7874,7 @@ let _ = f 0;;
     static syl_int __;
     int main()
     {
-      __ = 0;
+      __ = 0ll;
       return 0;
     }
     |}]
@@ -7910,7 +7891,7 @@ let _ = f 0;;
     static syl_int __;
     int main()
     {
-      __ = 0;
+      __ = 0ll;
       return 0;
     }
     |}]
@@ -7926,47 +7907,47 @@ let _ = (f @ erased) 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[0];
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
       syl_int _f·λ·y = _x;
-      syl_int _$ = 0;
+      syl_int _$ = 0ll;
       syl_int _f·λ·if;
       if(_f·λ·y == _$)
       {
-        _f·λ·if = 0;
+        _f·λ·if = 0ll;
       }
       else
       {
-        syl_int _$ = 1;
+        syl_int _$ = 1ll;
         syl_int _$ˢ1 = _f·λ·y - _$;
-        _f·λ·if = syl_app_closure(_f, _$ˢ1);
+        _f·λ·if = _f(_$ˢ1);
       }
       return _f·λ·if;
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        𝒰[0] = _f;
+        syl_env 𝒰 = syl_env_rec(16);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
       }
       {
-        syl_int __·x = 0;
+        syl_int __·x = 0ll;
         syl_int __·y = __·x;
-        syl_int _$ = 0;
+        syl_int _$ = 0ll;
         syl_int __·if;
         if(__·y == _$)
         {
-          __·if = 0;
+          __·if = 0ll;
         }
         else
         {
-          syl_int _$ = 1;
+          syl_int _$ = 1ll;
           syl_int _$ˢ1 = __·y - _$;
-          __·if = syl_app_closure(_f, _$ˢ1);
+          __·if = _f(_$ˢ1);
         }
         __ = __·if;
       }
@@ -7986,8 +7967,8 @@ let _ = (fn (static x : int) -> x + 1) 0;;
     int main()
     {
       {
-        syl_int __·x = 0;
-        syl_int _$ = 1;
+        syl_int __·x = 0ll;
+        syl_int _$ = 1ll;
         __ = __·x + _$;
       }
       return 0;
@@ -8006,35 +7987,35 @@ let _ = f int 0;;
     {|
     static syl_int _inc·λ(syl_int, syl_env);
     static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀(syl_env);
-    static syl_closure _inc;
-    static syl_thunk _fₒ𝕀;
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _inc;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
     static syl_int __;
     static syl_int _inc·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _$ = 1;
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λ, _f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _inc = syl_mk_closure(_inc·λ, 𝒰);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, 𝒰);
+        _inc = syl_closure<syl_int,syl_int>{_inc·λ, 𝒰};
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
       }
       {
-        syl_closure _$ = syl_app_thunk(_fₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -8051,37 +8032,37 @@ let _ = g 5;;
   [%expect
     {|
     static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
-    static syl_thunk _fₒ𝕀;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λ, _f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
     }
     static syl_int _g·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _fₒ𝕀 = 𝒰[0];
-      syl_closure _$ = syl_app_thunk(_fₒ𝕀);
-      return syl_app_closure(_$, _x);
+      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
+      return _$(_x);
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _g = syl_mk_closure(_g·λ, 𝒰);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, 𝒰);
-        𝒰[0] = _fₒ𝕀;
+        syl_env 𝒰 = syl_env_rec(16);
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
       }
       {
-        syl_int _$ = 5;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 5ll;
+        __ = _g(_$);
       }
       return 0;
     }
@@ -8101,57 +8082,57 @@ let _ = choose false 5;;
     {|
     static syl_int _inc·λ(syl_int, syl_env);
     static syl_int _choose·λₒF·λ(syl_int, syl_env);
-    static syl_closure _choose·λₒF(syl_env);
+    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env);
     static syl_int _choose·λₒT·λ(syl_int, syl_env);
-    static syl_closure _choose·λₒT(syl_env);
-    static syl_closure _inc;
-    static syl_thunk _chooseₒF;
-    static syl_thunk _chooseₒT;
+    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env);
+    static syl_closure<syl_int,syl_int> _inc;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒF;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT;
     static syl_int __;
     static syl_int __ˢ1;
     static syl_int _inc·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_int _$ = 1;
+      syl_int _$ = 1ll;
       return _x + _$;
     }
     static syl_int _choose·λₒF·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _choose·λₒF(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env 𝒰)
     {
       syl_env _choose·λₒF·env = NULL;
-      return syl_mk_closure(_choose·λₒF·λ, _choose·λₒF·env);
+      return syl_closure<syl_int,syl_int>{_choose·λₒF·λ, _choose·λₒF·env};
     }
     static syl_int _choose·λₒT·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _inc = 𝒰[0];
-      return syl_app_closure(_inc, _x);
+      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      return _inc(_x);
     }
-    static syl_closure _choose·λₒT(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env 𝒰)
     {
-      syl_closure _inc = 𝒰[0];
-      syl_env _choose·λₒT·env = syl_capture(1, _inc);
-      return syl_mk_closure(_choose·λₒT·λ, _choose·λₒT·env);
+      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_env _choose·λₒT·env = syl_capture<syl_closure<syl_int,syl_int>>(_inc);
+      return syl_closure<syl_int,syl_int>{_choose·λₒT·λ, _choose·λₒT·env};
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _inc = syl_mk_closure(_inc·λ, 𝒰);
-        _chooseₒF = syl_mk_thunk(_choose·λₒF, 𝒰);
-        _chooseₒT = syl_mk_thunk(_choose·λₒT, 𝒰);
-        𝒰[0] = _inc;
+        syl_env 𝒰 = syl_env_rec(16);
+        _inc = syl_closure<syl_int,syl_int>{_inc·λ, 𝒰};
+        _chooseₒF = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒF, 𝒰};
+        _chooseₒT = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒT, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _inc;
       }
       {
-        syl_closure _$ = syl_app_thunk(_chooseₒT);
-        syl_int _$ˢ1 = 5;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _chooseₒT();
+        syl_int _$ˢ1 = 5ll;
+        __ = _$(_$ˢ1);
       }
       {
-        syl_closure _$ = syl_app_thunk(_chooseₒF);
-        syl_int _$ˢ1 = 5;
-        __ˢ1 = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _chooseₒF();
+        syl_int _$ˢ1 = 5ll;
+        __ˢ1 = _$(_$ˢ1);
       }
       return 0;
     }
@@ -8168,37 +8149,37 @@ let _ = g int 0;;
   [%expect
     {|
     static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀(syl_env);
-    static syl_closure _g·λₒ𝕀(syl_env);
-    static syl_thunk _fₒ𝕀;
-    static syl_thunk _gₒ𝕀;
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀;
     static syl_int __;
     static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λ, _f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
     }
-    static syl_closure _g·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _fₒ𝕀 = 𝒰[0];
-      return syl_app_thunk(_fₒ𝕀);
+      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      return _fₒ𝕀();
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, 𝒰);
-        _gₒ𝕀 = syl_mk_thunk(_g·λₒ𝕀, 𝒰);
-        𝒰[0] = _fₒ𝕀;
+        syl_env 𝒰 = syl_env_rec(16);
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
+        _gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_g·λₒ𝕀, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
       }
       {
-        syl_closure _$ = syl_app_thunk(_gₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _gₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -8217,47 +8198,47 @@ let _ = f 3;;
     static syl_int _f·λₒ2(syl_env);
     static syl_int _f·λₒ3(syl_env);
     static syl_int _f·λₒ0(syl_env);
-    static syl_thunk _fₒ1;
-    static syl_thunk _fₒ2;
-    static syl_thunk _fₒ3;
-    static syl_thunk _fₒ0;
+    static syl_thunk<syl_int> _fₒ1;
+    static syl_thunk<syl_int> _fₒ2;
+    static syl_thunk<syl_int> _fₒ3;
+    static syl_thunk<syl_int> _fₒ0;
     static syl_int __;
     static syl_int _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _fₒ0 = 𝒰[0];
-      syl_int _f·λₒ1·x = 1;
-      return syl_app_thunk(_fₒ0);
+      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
+      syl_int _f·λₒ1·x = 1ll;
+      return _fₒ0();
     }
     static syl_int _f·λₒ2(syl_env 𝒰)
     {
-      syl_int _fₒ1 = 𝒰[2];
-      syl_int _f·λₒ2·x = 2;
-      return syl_app_thunk(_fₒ1);
+      syl_thunk<syl_int> _fₒ1 = *(syl_thunk<syl_int>*)(𝒰 + 32);
+      syl_int _f·λₒ2·x = 2ll;
+      return _fₒ1();
     }
     static syl_int _f·λₒ3(syl_env 𝒰)
     {
-      syl_int _fₒ2 = 𝒰[1];
-      syl_int _f·λₒ3·x = 3;
-      return syl_app_thunk(_fₒ2);
+      syl_thunk<syl_int> _fₒ2 = *(syl_thunk<syl_int>*)(𝒰 + 16);
+      syl_int _f·λₒ3·x = 3ll;
+      return _fₒ2();
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
+      syl_int _f·λₒ0·x = 0ll;
       return _f·λₒ0·x;
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(3);
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, 𝒰);
-        _fₒ2 = syl_mk_thunk(_f·λₒ2, 𝒰);
-        _fₒ3 = syl_mk_thunk(_f·λₒ3, 𝒰);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, 𝒰);
-        𝒰[0] = _fₒ0;
-        𝒰[1] = _fₒ2;
-        𝒰[2] = _fₒ1;
+        syl_env 𝒰 = syl_env_rec(48);
+        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, 𝒰};
+        _fₒ2 = syl_thunk<syl_int>{_f·λₒ2, 𝒰};
+        _fₒ3 = syl_thunk<syl_int>{_f·λₒ3, 𝒰};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
+        *(syl_thunk<syl_int>*)(𝒰 + 0) = _fₒ0;
+        *(syl_thunk<syl_int>*)(𝒰 + 16) = _fₒ2;
+        *(syl_thunk<syl_int>*)(𝒰 + 32) = _fₒ1;
       }
-      __ = syl_app_thunk(_fₒ3);
+      __ = _fₒ3();
       return 0;
     }
     |}]
@@ -8289,9 +8270,9 @@ let _ = apply_double int 5;;
     {|
     static syl_int _double·λ(syl_int, syl_env);
     static syl_int _apply_double·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _apply_double·λₒ𝕀(syl_env);
-    static syl_closure _double;
-    static syl_thunk _apply_doubleₒ𝕀;
+    static syl_closure<syl_int,syl_int> _apply_double·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _double;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _apply_doubleₒ𝕀;
     static syl_int __;
     static syl_int _double·λ(syl_int _x, syl_env 𝒰)
     {
@@ -8299,27 +8280,27 @@ let _ = apply_double int 5;;
     }
     static syl_int _apply_double·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _double = 𝒰[0];
-      return syl_app_closure(_double, _x);
+      syl_closure<syl_int,syl_int> _double = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      return _double(_x);
     }
-    static syl_closure _apply_double·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _apply_double·λₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _double = 𝒰[0];
-      syl_env _apply_double·λₒ𝕀·env = syl_capture(1, _double);
-      return syl_mk_closure(_apply_double·λₒ𝕀·λ, _apply_double·λₒ𝕀·env);
+      syl_closure<syl_int,syl_int> _double = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_env _apply_double·λₒ𝕀·env = syl_capture<syl_closure<syl_int,syl_int>>(_double);
+      return syl_closure<syl_int,syl_int>{_apply_double·λₒ𝕀·λ, _apply_double·λₒ𝕀·env};
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _double = syl_mk_closure(_double·λ, 𝒰);
-        _apply_doubleₒ𝕀 = syl_mk_thunk(_apply_double·λₒ𝕀, 𝒰);
-        𝒰[0] = _double;
+        syl_env 𝒰 = syl_env_rec(16);
+        _double = syl_closure<syl_int,syl_int>{_double·λ, 𝒰};
+        _apply_doubleₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_double·λₒ𝕀, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _double;
       }
       {
-        syl_closure _$ = syl_app_thunk(_apply_doubleₒ𝕀);
-        syl_int _$ˢ1 = 5;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _apply_doubleₒ𝕀();
+        syl_int _$ˢ1 = 5ll;
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -8354,7 +8335,7 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
@@ -8365,11 +8346,11 @@ let _ = f 0;;
     {
       {
         syl_env 𝒰 = NULL;
-        _f = syl_mk_closure(_f·λ, 𝒰);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -8387,8 +8368,8 @@ let _ = f 0;;
     {|
     static syl_int _f·λ(syl_int, syl_env);
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
@@ -8403,12 +8384,12 @@ let _ = f 0;;
     {
       {
         syl_env 𝒰 = NULL;
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        _g = syl_mk_closure(_g·λ, 𝒰);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -8441,7 +8422,7 @@ let _ = f 0;;
   [%expect
     {|
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _g·λ(syl_int _y, syl_env 𝒰)
     {
@@ -8451,10 +8432,10 @@ let _ = f 0;;
     {
       {
         syl_env 𝒰 = NULL;
-        _g = syl_mk_closure(_g·λ, 𝒰);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
       }
       {
-        syl_int __·x = 0;
+        syl_int __·x = 0ll;
         syl_int __·y = __·x;
         __ = __·y;
       }
@@ -8474,55 +8455,55 @@ let _ = f 0;;
     {|
     static syl_int _f·λ(syl_int, syl_env);
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _g = 𝒰[1];
-      syl_int _$ = 0;
+      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
+      syl_int _$ = 0ll;
       syl_int _f·λ·if;
       if(_x == _$)
       {
-        _f·λ·if = 0;
+        _f·λ·if = 0ll;
       }
       else
       {
-        syl_int _$ = 1;
+        syl_int _$ = 1ll;
         syl_int _$ˢ1 = _x - _$;
-        _f·λ·if = syl_app_closure(_g, _$ˢ1);
+        _f·λ·if = _g(_$ˢ1);
       }
       return _f·λ·if;
     }
     static syl_int _g·λ(syl_int _y, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[0];
-      syl_int _$ = 0;
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_int _$ = 0ll;
       syl_int _g·λ·if;
       if(_y == _$)
       {
-        _g·λ·if = 0;
+        _g·λ·if = 0ll;
       }
       else
       {
-        syl_int _$ = 1;
+        syl_int _$ = 1ll;
         syl_int _$ˢ1 = _y - _$;
-        _g·λ·if = syl_app_closure(_f, _$ˢ1);
+        _g·λ·if = _f(_$ˢ1);
       }
       return _g·λ·if;
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(2);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        _g = syl_mk_closure(_g·λ, 𝒰);
-        𝒰[0] = _f;
-        𝒰[1] = _g;
+        syl_env 𝒰 = syl_env_rec(32);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = _g;
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -8539,35 +8520,35 @@ let _ = (f @ erased) 0;;
   [%expect
     {|
     static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_int> _f;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _f = 𝒰[0];
-      syl_int _$ = 0;
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_int _$ = 0ll;
       syl_int _f·λ·if;
       if(_x == _$)
       {
-        _f·λ·if = 0;
+        _f·λ·if = 0ll;
       }
       else
       {
         syl_int _f·λ·if·y;
         {
-          syl_int _$ = 1;
+          syl_int _$ = 1ll;
           _f·λ·if·y = _x - _$;
         }
-        syl_int _$ = 0;
+        syl_int _$ = 0ll;
         syl_int _f·λ·if·if;
         if(_f·λ·if·y == _$)
         {
-          _f·λ·if·if = 0;
+          _f·λ·if·if = 0ll;
         }
         else
         {
-          syl_int _$ = 1;
+          syl_int _$ = 1ll;
           syl_int _$ˢ1 = _f·λ·if·y - _$;
-          _f·λ·if·if = syl_app_closure(_f, _$ˢ1);
+          _f·λ·if·if = _f(_$ˢ1);
         }
         _f·λ·if = _f·λ·if·if;
       }
@@ -8576,36 +8557,36 @@ let _ = (f @ erased) 0;;
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        𝒰[0] = _f;
+        syl_env 𝒰 = syl_env_rec(16);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
       }
       {
-        syl_int __·x = 0;
-        syl_int _$ = 0;
+        syl_int __·x = 0ll;
+        syl_int _$ = 0ll;
         syl_int __·if;
         if(__·x == _$)
         {
-          __·if = 0;
+          __·if = 0ll;
         }
         else
         {
           syl_int __·if·y;
           {
-            syl_int _$ = 1;
+            syl_int _$ = 1ll;
             __·if·y = __·x - _$;
           }
-          syl_int _$ = 0;
+          syl_int _$ = 0ll;
           syl_int __·if·if;
           if(__·if·y == _$)
           {
-            __·if·if = 0;
+            __·if·if = 0ll;
           }
           else
           {
-            syl_int _$ = 1;
+            syl_int _$ = 1ll;
             syl_int _$ˢ1 = __·if·y - _$;
-            __·if·if = syl_app_closure(_f, _$ˢ1);
+            __·if·if = _f(_$ˢ1);
           }
           __·if = __·if·if;
         }
@@ -8627,53 +8608,53 @@ let _ = f 0;;
     {|
     static syl_int _f·λ(syl_int, syl_env);
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _f·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _g = 𝒰[0];
-      syl_int _$ = 0;
+      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_int _$ = 0ll;
       syl_int _f·λ·if;
       if(_x == _$)
       {
-        _f·λ·if = 0;
+        _f·λ·if = 0ll;
       }
       else
       {
-        syl_int _$ = 1;
+        syl_int _$ = 1ll;
         syl_int _$ˢ1 = _x - _$;
-        _f·λ·if = syl_app_closure(_g, _$ˢ1);
+        _f·λ·if = _g(_$ˢ1);
       }
       return _f·λ·if;
     }
     static syl_int _g·λ(syl_int _y, syl_env 𝒰)
     {
-      syl_closure _g = 𝒰[0];
-      syl_int _$ = 0;
+      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_int _$ = 0ll;
       syl_int _g·λ·if;
       if(_y == _$)
       {
-        _g·λ·if = 0;
+        _g·λ·if = 0ll;
       }
       else
       {
         syl_int _g·λ·if·x;
         {
-          syl_int _$ = 1;
+          syl_int _$ = 1ll;
           _g·λ·if·x = _y - _$;
         }
-        syl_int _$ = 0;
+        syl_int _$ = 0ll;
         syl_int _g·λ·if·if;
         if(_g·λ·if·x == _$)
         {
-          _g·λ·if·if = 0;
+          _g·λ·if·if = 0ll;
         }
         else
         {
-          syl_int _$ = 1;
+          syl_int _$ = 1ll;
           syl_int _$ˢ1 = _g·λ·if·x - _$;
-          _g·λ·if·if = syl_app_closure(_g, _$ˢ1);
+          _g·λ·if·if = _g(_$ˢ1);
         }
         _g·λ·if = _g·λ·if·if;
       }
@@ -8682,14 +8663,14 @@ let _ = f 0;;
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        _g = syl_mk_closure(_g·λ, 𝒰);
-        𝒰[0] = _g;
+        syl_env 𝒰 = syl_env_rec(16);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _g;
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -8706,21 +8687,21 @@ let _ = g 0;;
   [%expect
     {|
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _g·λ(syl_int _y, syl_env 𝒰)
     {
-      return 0;
+      return 0ll;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _g = syl_mk_closure(_g·λ, 𝒰);
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_g, _$);
+        syl_int _$ = 0ll;
+        __ = _g(_$);
       }
       return 0;
     }
@@ -8739,8 +8720,8 @@ let _ = f 0;;
     int main()
     {
       {
-        syl_int __·x = 0;
-        __ = 0;
+        syl_int __·x = 0ll;
+        __ = 0ll;
       }
       return 0;
     }
@@ -8759,8 +8740,8 @@ let _ = f 0;;
     int main()
     {
       {
-        syl_int __·x = 0;
-        __ = 0;
+        syl_int __·x = 0ll;
+        __ = 0ll;
       }
       return 0;
     }
@@ -8776,20 +8757,20 @@ let _ = f (f 1);;
   [%expect
     {|
     static syl_int _f·λₒ1(syl_env);
-    static syl_int _fₒ1;
+    static syl_thunk<syl_int> _fₒ1;
     static syl_int __;
     static syl_int _f·λₒ1(syl_env 𝒰)
     {
-      syl_int _f·λₒ1·x = 1;
+      syl_int _f·λₒ1·x = 1ll;
       return _f·λₒ1·x;
     }
     int main()
     {
       {
         syl_env _f·env = NULL;
-        _fₒ1 = syl_mk_thunk(_f·λₒ1, _f·env);
+        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
       }
-      __ = syl_app_thunk(_fₒ1);
+      __ = _fₒ1();
       return 0;
     }
     |}]
@@ -8806,15 +8787,15 @@ let _ = f 0;;
     {|
     static syl_int _f·λ(syl_int, syl_env);
     static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure _f;
-    static syl_closure _g;
+    static syl_closure<syl_int,syl_int> _f;
+    static syl_closure<syl_int,syl_int> _g;
     static syl_int __;
     static syl_int _f·λ(syl_int _a, syl_env 𝒰)
     {
-      syl_closure _g = 𝒰[0];
-      syl_int _$ = 1;
+      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_int _$ = 1ll;
       syl_int _$ˢ1 = _a + _$;
-      return syl_app_closure(_g, _$ˢ1);
+      return _g(_$ˢ1);
     }
     static syl_int _g·λ(syl_int _b, syl_env 𝒰)
     {
@@ -8823,14 +8804,14 @@ let _ = f 0;;
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _f = syl_mk_closure(_f·λ, 𝒰);
-        _g = syl_mk_closure(_g·λ, 𝒰);
-        𝒰[0] = _g;
+        syl_env 𝒰 = syl_env_rec(16);
+        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
+        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _g;
       }
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        __ = _f(_$);
       }
       return 0;
     }
@@ -8849,38 +8830,38 @@ let _ = f 2;;
     static syl_int _f·λₒ2(syl_env);
     static syl_int _f·λₒ0(syl_env);
     static syl_int _g·λₒ1(syl_env);
-    static syl_thunk _fₒ2;
-    static syl_thunk _fₒ0;
-    static syl_thunk _gₒ1;
+    static syl_thunk<syl_int> _fₒ2;
+    static syl_thunk<syl_int> _fₒ0;
+    static syl_thunk<syl_int> _gₒ1;
     static syl_int __;
     static syl_int _f·λₒ2(syl_env 𝒰)
     {
-      syl_int _gₒ1 = 𝒰[1];
-      syl_int _f·λₒ2·x = 2;
-      return syl_app_thunk(_gₒ1);
+      syl_thunk<syl_int> _gₒ1 = *(syl_thunk<syl_int>*)(𝒰 + 16);
+      syl_int _f·λₒ2·x = 2ll;
+      return _gₒ1();
     }
     static syl_int _f·λₒ0(syl_env 𝒰)
     {
-      syl_int _f·λₒ0·x = 0;
-      return 0;
+      syl_int _f·λₒ0·x = 0ll;
+      return 0ll;
     }
     static syl_int _g·λₒ1(syl_env 𝒰)
     {
-      syl_int _fₒ0 = 𝒰[0];
-      syl_int _g·λₒ1·y = 1;
-      return syl_app_thunk(_fₒ0);
+      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
+      syl_int _g·λₒ1·y = 1ll;
+      return _fₒ0();
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(2);
-        _fₒ2 = syl_mk_thunk(_f·λₒ2, 𝒰);
-        _fₒ0 = syl_mk_thunk(_f·λₒ0, 𝒰);
-        _gₒ1 = syl_mk_thunk(_g·λₒ1, 𝒰);
-        𝒰[0] = _fₒ0;
-        𝒰[1] = _gₒ1;
+        syl_env 𝒰 = syl_env_rec(32);
+        _fₒ2 = syl_thunk<syl_int>{_f·λₒ2, 𝒰};
+        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
+        _gₒ1 = syl_thunk<syl_int>{_g·λₒ1, 𝒰};
+        *(syl_thunk<syl_int>*)(𝒰 + 0) = _fₒ0;
+        *(syl_thunk<syl_int>*)(𝒰 + 16) = _gₒ1;
       }
-      __ = syl_app_thunk(_fₒ2);
+      __ = _fₒ2();
       return 0;
     }
     |}]
@@ -8895,38 +8876,38 @@ let _ = f int 0;;
 |};
   [%expect
     {|
-    static syl_closure _f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
     static syl_int _g·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _g·λₒ𝕀(syl_env);
-    static syl_thunk _fₒ𝕀;
-    static syl_thunk _gₒ𝕀;
+    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀;
     static syl_int __;
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _gₒ𝕀 = 𝒰[0];
-      return syl_app_thunk(_gₒ𝕀);
+      syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      return _gₒ𝕀();
     }
     static syl_int _g·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _g·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _g·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_g·λₒ𝕀·λ, _g·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_g·λₒ𝕀·λ, _g·λₒ𝕀·env};
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, 𝒰);
-        _gₒ𝕀 = syl_mk_thunk(_g·λₒ𝕀, 𝒰);
-        𝒰[0] = _gₒ𝕀;
+        syl_env 𝒰 = syl_env_rec(16);
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
+        _gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_g·λₒ𝕀, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _gₒ𝕀;
       }
       {
-        syl_closure _$ = syl_app_thunk(_fₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -8943,37 +8924,37 @@ let _ = g int 0;;
   [%expect
     {|
     static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure _f·λₒ𝕀(syl_env);
-    static syl_closure _g·λₒ𝕀(syl_env);
-    static syl_thunk _fₒ𝕀;
-    static syl_thunk _gₒ𝕀;
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
+    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env);
+    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
+    static syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀;
     static syl_int __;
     static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _f·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
     {
       syl_env _f·λₒ𝕀·env = NULL;
-      return syl_mk_closure(_f·λₒ𝕀·λ, _f·λₒ𝕀·env);
+      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
     }
-    static syl_closure _g·λₒ𝕀(syl_env 𝒰)
+    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env 𝒰)
     {
-      syl_closure _fₒ𝕀 = 𝒰[0];
-      return syl_app_thunk(_fₒ𝕀);
+      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
+      return _fₒ𝕀();
     }
     int main()
     {
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _fₒ𝕀 = syl_mk_thunk(_f·λₒ𝕀, 𝒰);
-        _gₒ𝕀 = syl_mk_thunk(_g·λₒ𝕀, 𝒰);
-        𝒰[0] = _fₒ𝕀;
+        syl_env 𝒰 = syl_env_rec(16);
+        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
+        _gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_g·λₒ𝕀, 𝒰};
+        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
       }
       {
-        syl_closure _$ = syl_app_thunk(_gₒ𝕀);
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_int> _$ = _gₒ𝕀();
+        syl_int _$ˢ1 = 0ll;
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -8992,32 +8973,32 @@ let _ = outer 5;;
     {|
     static syl_int _outer·λ·inner·λ(syl_int, syl_env);
     static syl_int _outer·λ(syl_int, syl_env);
-    static syl_closure _outer;
+    static syl_closure<syl_int,syl_int> _outer;
     static syl_int __;
     static syl_int _outer·λ·inner·λ(syl_int _y, syl_env 𝒰)
     {
-      syl_int _x = 𝒰[0];
+      syl_int _x = *(syl_int*)(𝒰 + 0);
       return _y + _x;
     }
     static syl_int _outer·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _outer·λ·inner;
+      syl_closure<syl_int,syl_int> _outer·λ·inner;
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _outer·λ·inner = syl_mk_closure(_outer·λ·inner·λ, 𝒰);
-        𝒰[0] = _x;
+        syl_env 𝒰 = syl_env_rec(8);
+        _outer·λ·inner = syl_closure<syl_int,syl_int>{_outer·λ·inner·λ, 𝒰};
+        *(syl_int*)(𝒰 + 0) = _x;
       }
-      return syl_app_closure(_outer·λ·inner, _x);
+      return _outer·λ·inner(_x);
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _outer = syl_mk_closure(_outer·λ, 𝒰);
+        _outer = syl_closure<syl_int,syl_int>{_outer·λ, 𝒰};
       }
       {
-        syl_int _$ = 5;
-        __ = syl_app_closure(_outer, _$);
+        syl_int _$ = 5ll;
+        __ = _outer(_$);
       }
       return 0;
     }
@@ -9038,66 +9019,66 @@ let _ = outer 5;;
     static syl_int _outer·λ·f·λ(syl_int, syl_env);
     static syl_int _outer·λ·g·λ(syl_int, syl_env);
     static syl_int _outer·λ(syl_int, syl_env);
-    static syl_closure _outer;
+    static syl_closure<syl_int,syl_int> _outer;
     static syl_int __;
     static syl_int _outer·λ·f·λ(syl_int _a, syl_env 𝒰)
     {
-      syl_int _x = 𝒰[2];
-      syl_closure _g = 𝒰[1];
-      syl_int _$ = 0;
+      syl_int _x = *(syl_int*)(𝒰 + 32);
+      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
+      syl_int _$ = 0ll;
       syl_int _outer·λ·f·λ·if;
       if(_a == _$)
       {
-        _outer·λ·f·λ·if = 0;
+        _outer·λ·f·λ·if = 0ll;
       }
       else
       {
         syl_int _$ = _a + _x;
-        _outer·λ·f·λ·if = syl_app_closure(_g, _$);
+        _outer·λ·f·λ·if = _g(_$);
       }
       return _outer·λ·f·λ·if;
     }
     static syl_int _outer·λ·g·λ(syl_int _b, syl_env 𝒰)
     {
-      syl_int _x = 𝒰[2];
-      syl_closure _f = 𝒰[0];
-      syl_int _$ = 0;
+      syl_int _x = *(syl_int*)(𝒰 + 32);
+      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
+      syl_int _$ = 0ll;
       syl_int _outer·λ·g·λ·if;
       if(_b == _$)
       {
-        _outer·λ·g·λ·if = 0;
+        _outer·λ·g·λ·if = 0ll;
       }
       else
       {
         syl_int _$ = _b + _x;
-        _outer·λ·g·λ·if = syl_app_closure(_f, _$);
+        _outer·λ·g·λ·if = _f(_$);
       }
       return _outer·λ·g·λ·if;
     }
     static syl_int _outer·λ(syl_int _x, syl_env 𝒰)
     {
-      syl_closure _outer·λ·f;
-      syl_closure _outer·λ·g;
+      syl_closure<syl_int,syl_int> _outer·λ·f;
+      syl_closure<syl_int,syl_int> _outer·λ·g;
       {
-        syl_env 𝒰 = syl_env_rec(3);
-        _outer·λ·f = syl_mk_closure(_outer·λ·f·λ, 𝒰);
-        _outer·λ·g = syl_mk_closure(_outer·λ·g·λ, 𝒰);
-        𝒰[0] = _outer·λ·f;
-        𝒰[1] = _outer·λ·g;
-        𝒰[2] = _x;
+        syl_env 𝒰 = syl_env_rec(40);
+        _outer·λ·f = syl_closure<syl_int,syl_int>{_outer·λ·f·λ, 𝒰};
+        _outer·λ·g = syl_closure<syl_int,syl_int>{_outer·λ·g·λ, 𝒰};
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _outer·λ·f;
+        *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = _outer·λ·g;
+        *(syl_int*)(𝒰 + 32) = _x;
       }
-      syl_int _$ = 0;
-      return syl_app_closure(_outer·λ·f, _$);
+      syl_int _$ = 0ll;
+      return _outer·λ·f(_$);
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _outer = syl_mk_closure(_outer·λ, 𝒰);
+        _outer = syl_closure<syl_int,syl_int>{_outer·λ, 𝒰};
       }
       {
-        syl_int _$ = 5;
-        __ = syl_app_closure(_outer, _$);
+        syl_int _$ = 5ll;
+        __ = _outer(_$);
       }
       return 0;
     }
@@ -9116,28 +9097,27 @@ let _ = print ();;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _print_int;
+    static syl_closure<syl_int,syl_unit> _print_int;
     static syl_unit _print·λₒø(syl_env);
-    static syl_thunk _printₒø;
-    static syl_unit __;
+    static syl_thunk<syl_unit> _printₒø;
     static syl_unit _print·λₒø(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_unit _print·λₒø·_ = 0;
-      syl_int _$ = 0;
-      return syl_app_closure(_print_int, _$);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      ;
+      syl_int _$ = 0ll;
+      _print_int(_$);
     }
     int main()
     {
-      _print_int = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _printₒø = syl_mk_thunk(_print·λₒø, 𝒰);
-        𝒰[0] = _print_int;
+        syl_env 𝒰 = syl_env_rec(16);
+        _printₒø = syl_thunk<syl_unit>{_print·λₒø, 𝒰};
+        *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0) = _print_int;
       }
-      __ = syl_app_thunk(_printₒø);
+      _printₒø();
       return 0;
     }
     |}]
@@ -9154,16 +9134,15 @@ let _ = f 0;;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _f;
-    static syl_unit __;
+    static syl_closure<syl_int,syl_unit> _f;
     int main()
     {
-      _f = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _f = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_int _$ = 0;
-        __ = syl_app_closure(_f, _$);
+        syl_int _$ = 0ll;
+        _f(_$);
       }
       return 0;
     }
@@ -9181,22 +9160,21 @@ let _ = (f @ erased) 0;;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _f;
+    static syl_closure<syl_int,syl_unit> _f;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit __·syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_unit __;
     int main()
     {
-      _f = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _f = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_closure _$ = syl_mk_closure(__·syl_print_int·λ, SYL_ENV_EMPTY);
-        syl_int _$ˢ1 = 0;
-        __ = syl_app_closure(_$, _$ˢ1);
+        syl_closure<syl_int,syl_unit> _$ = syl_closure<syl_int,syl_unit>{__·syl_print_int·λ, NULL};
+        syl_int _$ˢ1 = 0ll;
+        _$(_$ˢ1);
       }
       return 0;
     }
@@ -9216,37 +9194,35 @@ let _ = print 1;;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _print_int;
+    static syl_closure<syl_int,syl_unit> _print_int;
     static syl_unit _print·λₒ1(syl_env);
     static syl_unit _print·λₒ0(syl_env);
-    static syl_unit _printₒ1;
-    static syl_unit _printₒ0;
-    static syl_unit __;
-    static syl_unit __ˢ1;
+    static syl_thunk<syl_unit> _printₒ1;
+    static syl_thunk<syl_unit> _printₒ0;
     static syl_unit _print·λₒ1(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ1·x = 1;
-      return syl_app_closure(_print_int, _print·λₒ1·x);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ1·x = 1ll;
+      _print_int(_print·λₒ1·x);
     }
     static syl_unit _print·λₒ0(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _print·λₒ0·x = 0;
-      return syl_app_closure(_print_int, _print·λₒ0·x);
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_int _print·λₒ0·x = 0ll;
+      _print_int(_print·λₒ0·x);
     }
     int main()
     {
-      _print_int = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_env _print·env = syl_capture(1, _print_int);
-        _printₒ1 = syl_mk_thunk(_print·λₒ1, _print·env);
-        _printₒ0 = syl_mk_thunk(_print·λₒ0, _print·env);
+        syl_env _print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+        _printₒ1 = syl_thunk<syl_unit>{_print·λₒ1, _print·env};
+        _printₒ0 = syl_thunk<syl_unit>{_print·λₒ0, _print·env};
       }
-      __ = syl_app_thunk(_printₒ0);
-      __ˢ1 = syl_app_thunk(_printₒ1);
+      _printₒ0();
+      _printₒ1();
       return 0;
     }
     |}]
@@ -9261,21 +9237,21 @@ let x = apply (fn (x : int) -> x + 1);;
   [%expect
     {|
     static syl_int _apply·λₒλ2(syl_env);
-    static syl_thunk _applyₒλ2;
+    static syl_thunk<syl_int> _applyₒλ2;
     static syl_int _x;
     static syl_int _apply·λₒλ2(syl_env 𝒰)
     {
-      syl_int _apply·λₒλ2·x = 0;
-      syl_int _$ = 1;
+      syl_int _apply·λₒλ2·x = 0ll;
+      syl_int _$ = 1ll;
       return _apply·λₒλ2·x + _$;
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _applyₒλ2 = syl_mk_thunk(_apply·λₒλ2, 𝒰);
+        _applyₒλ2 = syl_thunk<syl_int>{_apply·λₒλ2, 𝒰};
       }
-      _x = syl_app_thunk(_applyₒλ2);
+      _x = _applyₒλ2();
       return 0;
     }
     |}]
@@ -9293,28 +9269,28 @@ let _ = mk_ident (fn (static _ : unit) -> if 1 + 1 == 2 then bool else unit) tru
   [%expect
     {|
     static syl_bool _mk_ident·λₒλ6·λ(syl_bool, syl_env);
-    static syl_closure _mk_ident·λₒλ6(syl_env);
-    static syl_thunk _mk_identₒλ6;
+    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _mk_identₒλ6;
     static syl_bool __;
     static syl_bool _mk_ident·λₒλ6·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _mk_ident·λₒλ6(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env 𝒰)
     {
       syl_env _mk_ident·λₒλ6·env = NULL;
-      return syl_mk_closure(_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env);
+      return syl_closure<syl_bool,syl_bool>{_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _mk_identₒλ6 = syl_mk_thunk(_mk_ident·λₒλ6, 𝒰);
+        _mk_identₒλ6 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_mk_ident·λₒλ6, 𝒰};
       }
       {
-        syl_closure _$ = syl_app_thunk(_mk_identₒλ6);
+        syl_closure<syl_bool,syl_bool> _$ = _mk_identₒλ6();
         syl_bool _$ˢ1 = true;
-        __ = syl_app_closure(_$, _$ˢ1);
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -9334,38 +9310,38 @@ let _ = mk_ident (fn (static _ : unit) -> 1) true;;
     {|
     static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env);
     static syl_bool _mk_ident·λₒλ6·λ(syl_bool, syl_env);
-    static syl_closure _mk_ident·λₒλ6(syl_env);
-    static syl_thunk _mk_identₒλ6;
+    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _mk_identₒλ6;
     static syl_bool __;
     static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env 𝒰)
     {
-      syl_unit _mk_ident·λₒλ6·pick_t·λₒø·_ = 0;
-      return 1;
+      ;
+      return 1ll;
     }
     static syl_bool _mk_ident·λₒλ6·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _mk_ident·λₒλ6(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env 𝒰)
     {
-      syl_int _mk_ident·λₒλ6·pick_tₒø;
+      syl_thunk<syl_int> _mk_ident·λₒλ6·pick_tₒø;
       {
         syl_env _mk_ident·λₒλ6·pick_t·env = NULL;
-        _mk_ident·λₒλ6·pick_tₒø = syl_mk_thunk(_mk_ident·λₒλ6·pick_t·λₒø, _mk_ident·λₒλ6·pick_t·env);
+        _mk_ident·λₒλ6·pick_tₒø = syl_thunk<syl_int>{_mk_ident·λₒλ6·pick_t·λₒø, _mk_ident·λₒλ6·pick_t·env};
       }
       syl_env _mk_ident·λₒλ6·env = NULL;
-      return syl_mk_closure(_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env);
+      return syl_closure<syl_bool,syl_bool>{_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env};
     }
     int main()
     {
       {
         syl_env 𝒰 = NULL;
-        _mk_identₒλ6 = syl_mk_thunk(_mk_ident·λₒλ6, 𝒰);
+        _mk_identₒλ6 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_mk_ident·λₒλ6, 𝒰};
       }
       {
-        syl_closure _$ = syl_app_thunk(_mk_identₒλ6);
+        syl_closure<syl_bool,syl_bool> _$ = _mk_identₒλ6();
         syl_bool _$ˢ1 = true;
-        __ = syl_app_closure(_$, _$ˢ1);
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -9390,54 +9366,53 @@ let _ = mk_ident (fn (static _ : unit) -> let _ = print_int 10 in 1) true;;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _print_int;
+    static syl_closure<syl_int,syl_unit> _print_int;
     static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env);
     static syl_bool _mk_ident·λₒλ6·λ(syl_bool, syl_env);
-    static syl_closure _mk_ident·λₒλ6(syl_env);
-    static syl_thunk _mk_identₒλ6;
+    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env);
+    static syl_thunk<syl_closure<syl_bool,syl_bool>> _mk_identₒλ6;
     static syl_bool __;
     static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_unit _mk_ident·λₒλ6·pick_t·λₒø·_ = 0;
-      syl_unit _mk_ident·λₒλ6·pick_t·λₒø·_ˢ1;
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      ;
       {
-        syl_int _$ = 10;
-        _mk_ident·λₒλ6·pick_t·λₒø·_ˢ1 = syl_app_closure(_print_int, _$);
+        syl_int _$ = 10ll;
+        _print_int(_$);
       }
-      return 1;
+      return 1ll;
     }
     static syl_bool _mk_ident·λₒλ6·λ(syl_bool _x, syl_env 𝒰)
     {
       return _x;
     }
-    static syl_closure _mk_ident·λₒλ6(syl_env 𝒰)
+    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env 𝒰)
     {
-      syl_closure _print_int = 𝒰[0];
-      syl_int _mk_ident·λₒλ6·pick_tₒø;
+      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
+      syl_thunk<syl_int> _mk_ident·λₒλ6·pick_tₒø;
       {
-        syl_env _mk_ident·λₒλ6·pick_t·env = syl_capture(1, _print_int);
-        _mk_ident·λₒλ6·pick_tₒø = syl_mk_thunk(_mk_ident·λₒλ6·pick_t·λₒø, _mk_ident·λₒλ6·pick_t·env);
+        syl_env _mk_ident·λₒλ6·pick_t·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
+        _mk_ident·λₒλ6·pick_tₒø = syl_thunk<syl_int>{_mk_ident·λₒλ6·pick_t·λₒø, _mk_ident·λₒλ6·pick_t·env};
       }
-      syl_int _mk_ident·λₒλ6·_ = syl_app_thunk(_mk_ident·λₒλ6·pick_tₒø);
-      syl_int _mk_ident·λₒλ6·_ˢ1 = syl_app_thunk(_mk_ident·λₒλ6·pick_tₒø);
+      syl_int _mk_ident·λₒλ6·_ = _mk_ident·λₒλ6·pick_tₒø();
+      syl_int _mk_ident·λₒλ6·_ˢ1 = _mk_ident·λₒλ6·pick_tₒø();
       syl_env _mk_ident·λₒλ6·env = NULL;
-      return syl_mk_closure(_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env);
+      return syl_closure<syl_bool,syl_bool>{_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env};
     }
     int main()
     {
-      _print_int = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       {
-        syl_env 𝒰 = syl_env_rec(1);
-        _mk_identₒλ6 = syl_mk_thunk(_mk_ident·λₒλ6, 𝒰);
-        𝒰[0] = _print_int;
+        syl_env 𝒰 = syl_env_rec(16);
+        _mk_identₒλ6 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_mk_ident·λₒλ6, 𝒰};
+        *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0) = _print_int;
       }
       {
-        syl_closure _$ = syl_app_thunk(_mk_identₒλ6);
+        syl_closure<syl_bool,syl_bool> _$ = _mk_identₒλ6();
         syl_bool _$ˢ1 = true;
-        __ = syl_app_closure(_$, _$ˢ1);
+        __ = _$(_$ˢ1);
       }
       return 0;
     }
@@ -9454,12 +9429,12 @@ external print_int : int -> unit = syl_print_int;;
     extern syl_unit syl_print_int(syl_int);
     static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
     {
-      return syl_print_int(_);
+      syl_print_int(_);
     }
-    static syl_closure _print_int;
+    static syl_closure<syl_int,syl_unit> _print_int;
     int main()
     {
-      _print_int = syl_mk_closure(_syl_print_int·λ, SYL_ENV_EMPTY);
+      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
       return 0;
     }
     |}]
@@ -9477,7 +9452,7 @@ let _ = let _ = let _ = x + x in x + x in x + x;;
     static syl_int __;
     int main()
     {
-      _x = 1;
+      _x = 1ll;
       {
         syl_int __·_;
         {
@@ -9508,18 +9483,18 @@ let _ = if c then 0 else if !c then 1 else 2;;
         syl_int __·if;
         if(_c)
         {
-          __·if = 0;
+          __·if = 0ll;
         }
         else
         {
           syl_int __·if·if;
           if(!_c)
           {
-            __·if·if = 1;
+            __·if·if = 1ll;
           }
           else
           {
-            __·if·if = 2;
+            __·if·if = 2ll;
           }
           __·if = __·if·if;
         }
