@@ -9,7 +9,7 @@ module Ty : sig
         { arg_ty : t
         ; ret_ty : t
         }
-    | Pack of ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
+    | Pack of (Tst.Value.Concrete.t, t) Hashtbl.t
   [@@deriving sexp]
 
   val arg : t -> t
@@ -26,7 +26,7 @@ module Scalar : sig
 end
 
 module Expr : sig
-  type pack = ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
+  type pack = (Tst.Value.Concrete.t, t * Ty.t Ident.Map.t) Hashtbl.t [@@deriving sexp]
 
   and fun_ =
     | Mono of
@@ -124,6 +124,7 @@ module Expr : sig
   [@@deriving sexp]
 
   val ty : t -> Ty.t
+  val with_ty : t -> Ty.t -> t
   val loc : t -> Lex.Location.t
   val free_keys : t -> Tst.Value.Concrete.Set.t Ident.Map.t
 end

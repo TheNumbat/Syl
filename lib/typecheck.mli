@@ -3,6 +3,7 @@ open Tst
 
 module Error : sig
   type t =
+    | Unbound_ident of Ident.t
     | Mode_mismatch of
         { got : Modes.Modes.t
         ; need : Modes.Modes.t
@@ -15,11 +16,11 @@ module Error : sig
         { lhs : Value.t
         ; rhs : Value.t
         }
-    | Unbound_ident of Ident.t
+    | Inline_self of Ident.t Nonempty_list.t
+    | Inline_dynamic of Ident.t
+    | Static_external of Ident.t
     | Recursion_limit of int
-    | Dynamic_erased
-    | Inline_self
-    | Bad_external
+    | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
   [@@deriving sexp]
 end
 

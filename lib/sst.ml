@@ -38,7 +38,7 @@ module Scalar = struct
 end
 
 module Expr = struct
-  type pack = ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
+  type pack = ((Tst.Value.Concrete.t, t * Ty.t Ident.Map.t) Hashtbl.t[@sexp.opaque])
 
   and fun_ =
     | Mono of
@@ -150,6 +150,22 @@ module Expr = struct
     | External { ty; _ } -> ty
   ;;
 
+  let with_ty t ty =
+    match t with
+    | Scalar expr -> Scalar { expr with ty }
+    | Fun expr -> Fun { expr with ty }
+    | Lambda expr -> Lambda { expr with ty }
+    | Apply expr -> Apply { expr with ty }
+    | Let expr -> Let { expr with ty }
+    | Unop expr -> Unop { expr with ty }
+    | Binop expr -> Binop { expr with ty }
+    | If expr -> If { expr with ty }
+    | Var expr -> Var { expr with ty }
+    | Pack expr -> Pack { expr with ty }
+    | Symbol expr -> Symbol { expr with ty }
+    | External expr -> External { expr with ty }
+  ;;
+
   let loc : t -> Lex.Location.t = function
     | Scalar { loc; _ }
     | Fun { loc; _ }
@@ -185,7 +201,7 @@ module Expr = struct
         ~combine:(fun ~key:_ -> Set.union)
     | Pack { pack; _ } ->
       Hashtbl.data pack
-      |> List.map ~f:free_keys
+      |> List.map ~f:(fun (expr, _) -> free_keys expr)
       |> List.fold ~init:Ident.Map.empty ~f:(Map.merge_skewed ~combine:(fun ~key:_ -> Set.union))
     | Fun { funs; rest; _ } ->
       let bound_ids =
@@ -203,7 +219,7 @@ module Expr = struct
           | Pack { pack; _ } ->
             let fvs =
               Hashtbl.data pack
-              |> List.map ~f:free_keys
+              |> List.map ~f:(fun (expr, _) -> free_keys expr)
               |> List.fold
                    ~init:Ident.Map.empty
                    ~f:(Map.merge_skewed ~combine:(fun ~key:_ -> Set.union))

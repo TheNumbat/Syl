@@ -172,7 +172,6 @@ module Modes = struct
   ;;
 
   let create ~staticity ~erasure = { staticity; erasure }
-  let capture t ~var = { t with staticity = Staticity.join t.staticity var.staticity }
   let return t ~ret = { t with erasure = Erasure.join t.erasure ret.erasure }
 
   let cond ~cond then_ else_ =

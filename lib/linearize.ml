@@ -129,22 +129,50 @@ let unarize_thunks state path captures bind expr loc =
     State.decl state (Decl.Thunk_body { path; captures; bind; return; loc }))
 ;;
 
-let unarize_free_vars ~find (fvs : Sst.Ty.t Ident.Map.t) =
+let unarize_env env (fvs : Sst.Ty.t Ident.Map.t) =
+  let path_to_bind = Hashtbl.create (module Path) in
+  let rec unarize outer_path inner_path ty =
+    match ty with
+    | Sst.Ty.Pack pack ->
+      Hashtbl.to_alist pack
+      |> List.concat_map ~f:(fun (key, ty) ->
+        unarize (Path.with_key outer_path key) (Path.with_key inner_path key) ty)
+    | _ ->
+      let ty = linearize_ty ty in
+      Hashtbl.set path_to_bind ~key:inner_path ~data:(inner_path, ty, Hashtbl.length path_to_bind);
+      [ outer_path, ty ]
+  in
+  let paths =
+    Map.to_sequence fvs
+    |> Sequence.concat_map ~f:(fun (id, ty) ->
+      let outer_path = Env.find env id in
+      (* We know all free ids are unique *)
+      let inner_path = Path.with_id Path.empty id in
+      Sequence.of_list (unarize outer_path inner_path ty))
+    |> Sequence.to_array
+  in
+  paths, path_to_bind
+;;
+
+let bind_env state env (fvs : Sst.Ty.t Ident.Map.t) path_to_bind =
   let rec unarize path ty =
     match ty with
     | Sst.Ty.Pack pack ->
       Hashtbl.to_alist pack
       |> List.concat_map ~f:(fun (key, ty) -> unarize (Path.with_key path key) ty)
-    | _ -> [ path, linearize_ty ty ]
+    | _ -> [ path ]
   in
-  let paths =
-    Map.to_sequence fvs
-    |> Sequence.concat_map ~f:(fun (id, ty) ->
-      let path = find id in
-      Sequence.of_list (unarize path ty))
-    |> Vec.of_sequence
+  let env, binds =
+    Map.fold fvs ~init:(env, []) ~f:(fun ~key:id ~data:ty (env, binds) ->
+      let env = Env.bind env id (State.local state id) in
+      let bind =
+        (* We know all free ids are unique *)
+        unarize (Path.with_id Path.empty id) ty
+        |> Array.of_list_map ~f:(Hashtbl.find_exn path_to_bind)
+      in
+      env, bind :: binds)
   in
-  Vec.to_array paths
+  env, Array.concat binds
 ;;
 
 let linearize_external state symbol ty loc : Expr.t =
@@ -182,24 +210,13 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
   | Lambda { arg; fvs; ty; body; loc } ->
     let arg_ty, _ = linearize_arrow ~loc ty in
     let env_path = State.global state Id.env in
-    let outer_captures = unarize_free_vars ~find:(Env.find env) fvs in
+    let outer_captures, path_to_bind = unarize_env env fvs in
     State.bind_one state env_path (Make_env { captures = outer_captures; ty = Env; loc }) loc;
     let body_path = State.global state Id.lambda in
     let (return, arg_path, inner_captures), bind =
       State.scope state body_path ~f:(fun () ->
         let arg_path = State.local state arg in
-        let cap_paths = Hashtbl.create (module Ident) in
-        let inner_captures =
-          unarize_free_vars
-            ~find:(fun id ->
-              let path = State.local state id in
-              Hashtbl.set cap_paths ~key:id ~data:path;
-              path)
-            fvs
-        in
-        let env =
-          Hashtbl.fold cap_paths ~init:env ~f:(fun ~key:id ~data:path env -> Env.bind env id path)
-        in
+        let env, inner_captures = bind_env state env fvs path_to_bind in
         let env = Env.bind env arg arg_path in
         linearize_expr state env body, arg_path, inner_captures)
     in
@@ -213,42 +230,27 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
     let arg = linearize_path state env arg in
     Apply_closure { fn; arg; ty = linearize_ty ty; loc }
   | Symbol { fn; arg; ty; loc } ->
-    (match linearize_expr state env fn with
-     | Ident { path = fn; loc; _ } | Apply_thunk { fn; loc; _ } ->
-       Apply_thunk { fn = Path.with_key fn arg; ty = linearize_ty ty; loc }
-     | expr ->
-       raise_s
-         [%message "Sym: expected Ident or Apply_thunk" (expr : Expr.t) (loc : Lex.Location.t)])
+    let fn = linearize_path state env fn in
+    Apply_thunk { fn = Path.with_key fn arg; ty = linearize_ty ty; loc }
   | Fun { funs; fvs; rest; loc; _ } ->
     let bind = linearize_funs ~loc state env fvs funs in
     let env = Nonempty_list.fold bind ~init:env ~f:(fun env (var, path) -> Env.bind env var path) in
     linearize_expr state env rest
   | Pack { pack; fvs; ty; loc } ->
     let env_path = State.global state Id.env in
-    let outer_captures = unarize_free_vars ~find:(Env.find env) fvs in
+    let outer_captures, path_to_bind = unarize_env env fvs in
     State.bind_one state env_path (Make_env { captures = outer_captures; ty = Env; loc }) loc;
     let body_path = State.global state Id.lambda in
-    linearize_pack ~loc state env body_path fvs pack;
+    linearize_pack ~loc state env body_path pack path_to_bind;
     Make_thunk { body = body_path; env = Some env_path; ty = linearize_ty ty; loc }
 
-and linearize_pack ~loc state env path fvs pack =
-  Hashtbl.iteri pack ~f:(fun ~key ~data ->
+and linearize_pack ~loc state env path pack path_to_bind =
+  Hashtbl.iteri pack ~f:(fun ~key ~data:(expr, fvs) ->
     let path = Path.with_key path key in
     let (return, inner_captures), bind =
       State.scope state path ~f:(fun () ->
-        let cap_paths = Hashtbl.create (module Ident) in
-        let inner_captures =
-          unarize_free_vars
-            ~find:(fun id ->
-              let path = State.local state id in
-              Hashtbl.set cap_paths ~key:id ~data:path;
-              path)
-            fvs
-        in
-        let env =
-          Hashtbl.fold cap_paths ~init:env ~f:(fun ~key:id ~data:path env -> Env.bind env id path)
-        in
-        linearize_expr state env data, inner_captures)
+        let env, inner_captures = bind_env state env fvs path_to_bind in
+        linearize_expr state env expr, inner_captures)
     in
     unarize_thunks state path inner_captures bind return loc)
 
@@ -258,7 +260,7 @@ and linearize_funs ~loc state env fvs (funs : Sst.Expr.fun_ Nonempty_list.t) =
         var, State.global state var)
   in
   let env = Nonempty_list.fold binds ~init:env ~f:(fun env (var, path) -> Env.bind env var path) in
-  let outer_captures = unarize_free_vars ~find:(Env.find env) fvs in
+  let outer_captures, path_to_bind = unarize_env env fvs in
   let closures, thunks =
     let closures, thunks = Vec.create (), Vec.create () in
     List.iter2_exn
@@ -267,24 +269,12 @@ and linearize_funs ~loc state env fvs (funs : Sst.Expr.fun_ Nonempty_list.t) =
       ~f:(fun fun_ (_, path) ->
         let body_path = Path.with_id path Id.lambda in
         match fun_ with
-        | Mono { arg; body; ty; loc; _ } ->
+        | Mono { arg; body; fvs; ty; loc; _ } ->
           let arg_ty, _ = linearize_arrow ~loc ty in
           let (return, arg_path, inner_captures), bind =
             State.scope state body_path ~f:(fun () ->
               let arg_path = State.local state arg in
-              let cap_paths = Hashtbl.create (module Ident) in
-              let inner_captures =
-                unarize_free_vars
-                  ~find:(fun id ->
-                    let path = State.local state id in
-                    Hashtbl.set cap_paths ~key:id ~data:path;
-                    path)
-                  fvs
-              in
-              let env =
-                Hashtbl.fold cap_paths ~init:env ~f:(fun ~key:id ~data:path env ->
-                  Env.bind env id path)
-              in
+              let env, inner_captures = bind_env state env fvs path_to_bind in
               let env = Env.bind env arg arg_path in
               linearize_expr state env body, arg_path, inner_captures)
           in
@@ -301,7 +291,7 @@ and linearize_funs ~loc state env fvs (funs : Sst.Expr.fun_ Nonempty_list.t) =
                });
           Vec.push_back closures (path, body_path)
         | Pack { pack; ty; loc; _ } ->
-          linearize_pack ~loc state env body_path fvs pack;
+          linearize_pack ~loc state env body_path pack path_to_bind;
           let rec unarize_thunks path body_path (ty : Ty.t) =
             match ty with
             | Pack pack ->

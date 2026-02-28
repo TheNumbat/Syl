@@ -6,11 +6,11 @@ module Path = struct
       | Id of Ident.t
       | Shadow of int
       | Key of Tst.Value.Concrete.t
-    [@@deriving sexp, compare, equal]
+    [@@deriving sexp, compare, hash, equal]
   end
 
   module T = struct
-    type t = Entry.t list [@@deriving sexp, compare, equal]
+    type t = Entry.t list [@@deriving sexp, compare, equal, hash]
   end
 
   open Entry
@@ -35,6 +35,14 @@ module Ty = struct
   [@@deriving sexp]
 end
 
+module Env = struct
+  type t = (Path.t * Ty.t) array [@@deriving sexp]
+
+  module Sub = struct
+    type t = (Path.t * Ty.t * int) array [@@deriving sexp]
+  end
+end
+
 module Expr = struct
   type t =
     | Scalar of
@@ -43,7 +51,7 @@ module Expr = struct
         ; loc : Lex.Location.t
         }
     | Make_env of
-        { captures : (Path.t * Ty.t) array
+        { captures : Env.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -114,7 +122,7 @@ module Stmt = struct
   and functions =
     { closures : (Path.t * Path.t) array
     ; thunks : (Path.t * Path.t) array
-    ; captures : (Path.t * Ty.t) array
+    ; captures : Env.t
     ; loc : Lex.Location.t
     }
   [@@deriving sexp]
@@ -142,14 +150,14 @@ module Decl = struct
         { path : Path.t
         ; arg : Path.t
         ; arg_ty : Ty.t
-        ; captures : (Path.t * Ty.t) array
+        ; captures : Env.Sub.t
         ; bind : Stmt.t array
         ; return : Expr.t
         ; loc : Lex.Location.t
         }
     | Thunk_body of
         { path : Path.t
-        ; captures : (Path.t * Ty.t) array
+        ; captures : Env.Sub.t
         ; bind : Stmt.t array
         ; return : Expr.t
         ; loc : Lex.Location.t

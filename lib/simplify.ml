@@ -93,19 +93,22 @@ let rec simplify_value ~loc env (value : Tst.Value.t) : Expr.t =
 and simplify_mono ~loc env mono =
   let pack =
     Hashtbl.map mono ~f:(fun { Tst.Binder.Mono.arg; arg_mode; arg_desc; body; _ } ->
-      if Modes.is_erased arg_mode
-      then simplify env body
-      else (
-        let arg_val = simplify_value env ~loc (Lazy.force arg_desc.static) in
-        let body = simplify (Env.bind env arg (Expr.ty arg_val)) body in
-        Expr.Let { var = arg; bind = arg_val; rest = body; ty = Expr.ty body; loc }))
+      let body =
+        if Modes.is_erased arg_mode
+        then simplify env body
+        else (
+          let arg_val = simplify_value env ~loc (Lazy.force arg_desc.static) in
+          let body = simplify (Env.bind env arg (Expr.ty arg_val)) body in
+          Expr.Let { var = arg; bind = arg_val; rest = body; ty = Expr.ty body; loc })
+      in
+      let fvs = free_vars env arg body in
+      body, fvs)
   in
   let free_keys =
-    Hashtbl.fold pack ~init:Ident.Map.empty ~f:(fun ~key:_ ~data acc ->
-      Map.merge_skewed acc (Expr.free_keys data) ~combine:(fun ~key:_ -> Set.union))
+    Hashtbl.fold pack ~init:Ident.Map.empty ~f:(fun ~key:_ ~data:(body, _) acc ->
+      Map.merge_skewed acc (Expr.free_keys body) ~combine:(fun ~key:_ -> Set.union))
   in
-  (* TODO we need to narrow per mono *)
-  let ty = Hashtbl.map pack ~f:Expr.ty in
+  let ty = Hashtbl.map pack ~f:(fun (expr, _) -> Expr.ty expr) in
   pack, collect_free_keys env free_keys, Ty.Pack ty
 
 and simplify env (expr : Tst.Expr.t) : Expr.t =
@@ -138,8 +141,13 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
   | Symbol { fn; key; mode; loc; _ } ->
     assert (not (Modes.is_erased mode));
     (match simplify env fn with
-     | Pack { pack; _ } -> Hashtbl.find_exn pack key
-     | fn -> Symbol { fn; arg = key; ty = Ty.find (Expr.ty fn) key; loc })
+     | Pack { pack; _ } -> fst (Hashtbl.find_exn pack key)
+     | fn ->
+       let ty = Ty.find (Expr.ty fn) key in
+       let fn =
+         Expr.with_ty fn (Pack (Hashtbl.of_alist_exn (module Tst.Value.Concrete) [ key, ty ]))
+       in
+       Symbol { fn; arg = key; ty; loc })
   | Let { var; bind; rest; loc; _ } ->
     if erased bind
     then simplify env rest

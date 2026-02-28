@@ -289,9 +289,9 @@ and emit_bind_functions state { Stmt.closures; thunks; captures; _ } =
     Array.iteri captures ~f:(fun i (path, _) -> State.line state "𝒰[%d] = %s;" i (print_path path)))
 ;;
 
-let emit_captures state captures =
-  Array.iteri captures ~f:(fun idx (path, ty) ->
-    State.line state "%s %s = 𝒰[%d];" (print_ty ty) (print_path path) idx)
+let emit_env_sub state captures =
+  Array.iter captures ~f:(fun (path, ty, offset) ->
+    State.line state "%s %s = 𝒰[%d];" (print_ty ty) (print_path path) offset)
 ;;
 
 let emit_procs_and_thunks state (lst : Program.t) =
@@ -305,13 +305,13 @@ let emit_procs_and_thunks state (lst : Program.t) =
         (print_ty arg_ty)
         (print_path arg);
       State.scope state ~f:(fun () ->
-        emit_captures state captures;
+        emit_env_sub state captures;
         emit_stmts state bind;
         emit_return state return)
     | Thunk_body { path; captures; bind; return; _ } ->
       State.line state "static %s %s(syl_env 𝒰)" (print_ty (Expr.ty return)) (print_path path);
       State.scope state ~f:(fun () ->
-        emit_captures state captures;
+        emit_env_sub state captures;
         emit_stmts state bind;
         emit_return state return)
     | Functions _ | Values _ | External _ -> ())

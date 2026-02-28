@@ -63,7 +63,6 @@ module Modes : sig
   val annotate : t -> Maybe.t -> t
 
   (* Transforms *)
-  val capture : t -> var:t -> t
   val return : t -> ret:t -> t
   val cond : cond:t -> t -> t -> t
 

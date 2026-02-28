@@ -1618,7 +1618,7 @@ let _ =
     |}]
 ;;
 
-let%expect_test "dynamic closure" =
+let%expect_test "dynamic capture" =
   go
     {|
 let y = 1 @ dynamic;;
@@ -1655,10 +1655,19 @@ let _ =
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Dynamic) (erasure Unerased)))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 4) (column 3)))))
        (loc ((line 3) (column 0))))))
     |}]
+;;
+
+let%expect_test "dynamic capture inline" =
+  go
+    {|
+let y = 1 @ dynamic;;
+let f = (fn (x : int) -> x + y);;
+let _ = (f @ erased) 0;;|};
+  [%expect {| ((loc ((line 4) (column 8))) (reason (Inline_dynamic y))) |}]
 ;;
 
 let%expect_test "static closure arg" =
@@ -4061,7 +4070,7 @@ let _ =
             (arg_mode ((staticity Dynamic) (erasure Unerased)))
             (ret_ty (Type Int))
             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-         (mode ((staticity Dynamic) (erasure Unerased)))
+         (mode ((staticity Static) (erasure Unerased)))
          (loc ((line 4) (column 2)))))
        (loc ((line 3) (column 0))))))
     |}]
@@ -9198,7 +9207,7 @@ let%expect_test "external" =
 external f : static int -> int = asdf;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 0))) (reason Bad_external)) |}]
+  [%expect {| ((loc ((line 2) (column 0))) (reason (Static_external f))) |}]
 ;;
 
 let%expect_test "external" =
@@ -9207,7 +9216,7 @@ let%expect_test "external" =
 external f : int -> static int = asdf;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 0))) (reason Bad_external)) |}]
+  [%expect {| ((loc ((line 2) (column 0))) (reason (Static_external f))) |}]
 ;;
 
 let%expect_test "nested if static with different types per level" =

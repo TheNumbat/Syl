@@ -1007,7 +1007,7 @@ let _ =
            (Scalar (value (Int 1)) (ty Int) (loc ((line 2) (column 8)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Closure_body (path ((Id "\206\187") (Id _))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id y)) Int))) (bind ())
+       (captures ((((Id y)) Int 0))) (bind ())
        (return
         (Binop (op Add) (lhs ((Id x))) (rhs ((Id y))) (ty Int)
          (loc ((line 4) (column 21)))))
@@ -2711,7 +2711,7 @@ let _ =
            (Scalar (value (Int 1)) (ty Int) (loc ((line 2) (column 8)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Closure_body (path ((Id "\206\187") (Id _))) (arg ((Id y))) (arg_ty Int)
-       (captures ((((Id x)) Int))) (bind ())
+       (captures ((((Id x)) Int 0))) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 4) (column 18)))))
        (loc ((line 4) (column 2))))
       (Values
@@ -2745,7 +2745,7 @@ let _ =
            (Scalar (value (Int 1)) (ty Int) (loc ((line 2) (column 8)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Closure_body (path ((Id "\206\187") (Id _))) (arg ((Id y))) (arg_ty Int)
-       (captures ((((Id x)) Int))) (bind ())
+       (captures ((((Id x)) Int 0))) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 4) (column 18)))))
        (loc ((line 4) (column 2))))
       (Values
@@ -2941,7 +2941,7 @@ let g = (f 1 ()) @ unerased;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Key (Int 1)) (Id "\206\187") (Id f)))
-       (arg ((Id _))) (arg_ty Unit) (captures ((((Id x)) Int))) (bind ())
+       (arg ((Id _))) (arg_ty Unit) (captures ((((Id x)) Int 0))) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 2) (column 48)))))
        (loc ((line 2) (column 31))))
       (Thunk_body (path ((Key (Int 1)) (Id "\206\187") (Id f))) (captures ())
@@ -4182,8 +4182,7 @@ let h = f bool;;
        (path
         ((Key BoolT) (Id "\206\187") (Key (Closure 7)) (Id "\206\187")
          (Id apply)))
-       (captures ((((Key IntT) (Id f)) Closure) (((Key BoolT) (Id f)) Closure)))
-       (bind ())
+       (captures ((((Key BoolT) (Id f)) Closure 1))) (bind ())
        (return
         (Apply_thunk (fn ((Key BoolT) (Id f))) (ty Closure)
          (loc ((line 2) (column 96)))))
@@ -4191,8 +4190,7 @@ let h = f bool;;
       (Thunk_body
        (path
         ((Key IntT) (Id "\206\187") (Key (Closure 7)) (Id "\206\187") (Id apply)))
-       (captures ((((Key IntT) (Id f)) Closure) (((Key BoolT) (Id f)) Closure)))
-       (bind ())
+       (captures ((((Key IntT) (Id f)) Closure 0))) (bind ())
        (return
         (Apply_thunk (fn ((Key IntT) (Id f))) (ty Closure)
          (loc ((line 2) (column 96)))))
@@ -4466,7 +4464,7 @@ fun f (x : int) : int = f x;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id f)) Closure))) (bind ())
+       (captures ((((Id f)) Closure 0))) (bind ())
        (return
         (Apply_closure (fn ((Id f))) (arg ((Id x))) (ty Int)
          (loc ((line 2) (column 24)))))
@@ -4767,7 +4765,7 @@ let x = id2 int (0 @ dynamic);;
         (thunks ((((Key IntT) (Id id1)) ((Key IntT) (Id "\206\187") (Id id1)))))
         (captures ()) (loc ((line 2) (column 0)))))
       (Thunk_body (path ((Key IntT) (Id "\206\187") (Id id2)))
-       (captures ((((Key IntT) (Id id1)) Closure))) (bind ())
+       (captures ((((Key IntT) (Id id1)) Closure 0))) (bind ())
        (return
         (Apply_thunk (fn ((Key IntT) (Id id1))) (ty Closure)
          (loc ((line 3) (column 44)))))
@@ -6339,7 +6337,7 @@ let _ = f 1 2;;
      ((Thunk_body
        (path
         ((Key (Int 2)) (Id "\206\187") (Key (Int 1)) (Id "\206\187") (Id f)))
-       (captures ((((Id x)) Int)))
+       (captures ((((Id x)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -6392,9 +6390,16 @@ let _ = f 1 2;;
       (Values
        ((exprs
          ((((Id _))
-           (Apply_thunk (fn ((Key (Int 2)) (Key (Int 1)) (Id f))) (ty Int)
+           (Apply_thunk (fn ((Key (Int 2)) (Id $))) (ty Int)
             (loc ((line 3) (column 8)))))))
-        (bind ()) (loc ((line 3) (column 0)))))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 2)) (Id $))
+               (Apply_thunk (fn ((Key (Int 2)) (Key (Int 1)) (Id f))) (ty Int)
+                (loc ((line 3) (column 8)))))))
+            (bind ()) (loc ((line 3) (column 8)))))))
+        (loc ((line 3) (column 0)))))))
     |}]
 ;;
 
@@ -6410,7 +6415,7 @@ let _ = g 2;;
      ((Thunk_body
        (path
         ((Key (Int 2)) (Id "\206\187") (Key (Int 1)) (Id "\206\187") (Id f)))
-       (captures ((((Id x)) Int)))
+       (captures ((((Id x)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -7158,7 +7163,7 @@ fun f (x : int) : int = f x;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id f)) Closure))) (bind ())
+       (captures ((((Id f)) Closure 0))) (bind ())
        (return
         (Apply_closure (fn ((Id f))) (arg ((Id x))) (ty Int)
          (loc ((line 2) (column 24)))))
@@ -7200,7 +7205,7 @@ let _ = id2 int 0;;
         (thunks ((((Key IntT) (Id id1)) ((Key IntT) (Id "\206\187") (Id id1)))))
         (captures ()) (loc ((line 2) (column 0)))))
       (Thunk_body (path ((Key IntT) (Id "\206\187") (Id id2)))
-       (captures ((((Key IntT) (Id id1)) Closure))) (bind ())
+       (captures ((((Key IntT) (Id id1)) Closure 0))) (bind ())
        (return
         (Apply_thunk (fn ((Key IntT) (Id id1))) (ty Closure)
          (loc ((line 3) (column 44)))))
@@ -7556,27 +7561,55 @@ let _ = f 1 1;;
       (Values
        ((exprs
          ((((Id _))
-           (Apply_thunk (fn ((Key (Int 0)) (Key (Int 0)) (Id f))) (ty Int)
+           (Apply_thunk (fn ((Key (Int 0)) (Id $))) (ty Int)
             (loc ((line 7) (column 8)))))))
-        (bind ()) (loc ((line 7) (column 0)))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 0)) (Id $))
+               (Apply_thunk (fn ((Key (Int 0)) (Key (Int 0)) (Id f))) (ty Int)
+                (loc ((line 7) (column 8)))))))
+            (bind ()) (loc ((line 7) (column 8)))))))
+        (loc ((line 7) (column 0)))))
       (Values
        ((exprs
          ((((Shadow 1) (Id _))
-           (Apply_thunk (fn ((Key (Int 1)) (Key (Int 0)) (Id f))) (ty Bool)
+           (Apply_thunk (fn ((Key (Int 1)) (Id $))) (ty Bool)
             (loc ((line 8) (column 8)))))))
-        (bind ()) (loc ((line 8) (column 0)))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 1)) (Id $))
+               (Apply_thunk (fn ((Key (Int 1)) (Key (Int 0)) (Id f))) (ty Bool)
+                (loc ((line 8) (column 8)))))))
+            (bind ()) (loc ((line 8) (column 8)))))))
+        (loc ((line 8) (column 0)))))
       (Values
        ((exprs
          ((((Shadow 2) (Id _))
-           (Apply_thunk (fn ((Key (Int 0)) (Key (Int 1)) (Id f))) (ty Unit)
+           (Apply_thunk (fn ((Key (Int 0)) (Id $))) (ty Unit)
             (loc ((line 9) (column 8)))))))
-        (bind ()) (loc ((line 9) (column 0)))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 0)) (Id $))
+               (Apply_thunk (fn ((Key (Int 0)) (Key (Int 1)) (Id f))) (ty Unit)
+                (loc ((line 9) (column 8)))))))
+            (bind ()) (loc ((line 9) (column 8)))))))
+        (loc ((line 9) (column 0)))))
       (Values
        ((exprs
          ((((Shadow 3) (Id _))
-           (Apply_thunk (fn ((Key (Int 1)) (Key (Int 1)) (Id f))) (ty Int)
+           (Apply_thunk (fn ((Key (Int 1)) (Id $))) (ty Int)
             (loc ((line 10) (column 8)))))))
-        (bind ()) (loc ((line 10) (column 0)))))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 1)) (Id $))
+               (Apply_thunk (fn ((Key (Int 1)) (Key (Int 1)) (Id f))) (ty Int)
+                (loc ((line 10) (column 8)))))))
+            (bind ()) (loc ((line 10) (column 8)))))))
+        (loc ((line 10) (column 0)))))))
     |}]
 ;;
 
@@ -7767,27 +7800,55 @@ let _ = f 1 1;;
       (Values
        ((exprs
          ((((Id _))
-           (Apply_thunk (fn ((Key (Int 0)) (Key (Int 0)) (Id f))) (ty Int)
+           (Apply_thunk (fn ((Key (Int 0)) (Id $))) (ty Int)
             (loc ((line 19) (column 8)))))))
-        (bind ()) (loc ((line 19) (column 0)))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 0)) (Id $))
+               (Apply_thunk (fn ((Key (Int 0)) (Key (Int 0)) (Id f))) (ty Int)
+                (loc ((line 19) (column 8)))))))
+            (bind ()) (loc ((line 19) (column 8)))))))
+        (loc ((line 19) (column 0)))))
       (Values
        ((exprs
          ((((Shadow 1) (Id _))
-           (Apply_thunk (fn ((Key (Int 1)) (Key (Int 0)) (Id f))) (ty Bool)
+           (Apply_thunk (fn ((Key (Int 1)) (Id $))) (ty Bool)
             (loc ((line 20) (column 8)))))))
-        (bind ()) (loc ((line 20) (column 0)))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 1)) (Id $))
+               (Apply_thunk (fn ((Key (Int 1)) (Key (Int 0)) (Id f))) (ty Bool)
+                (loc ((line 20) (column 8)))))))
+            (bind ()) (loc ((line 20) (column 8)))))))
+        (loc ((line 20) (column 0)))))
       (Values
        ((exprs
          ((((Shadow 2) (Id _))
-           (Apply_thunk (fn ((Key (Int 0)) (Key (Int 1)) (Id f))) (ty Unit)
+           (Apply_thunk (fn ((Key (Int 0)) (Id $))) (ty Unit)
             (loc ((line 21) (column 8)))))))
-        (bind ()) (loc ((line 21) (column 0)))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 0)) (Id $))
+               (Apply_thunk (fn ((Key (Int 0)) (Key (Int 1)) (Id f))) (ty Unit)
+                (loc ((line 21) (column 8)))))))
+            (bind ()) (loc ((line 21) (column 8)))))))
+        (loc ((line 21) (column 0)))))
       (Values
        ((exprs
          ((((Shadow 3) (Id _))
-           (Apply_thunk (fn ((Key (Int 1)) (Key (Int 1)) (Id f))) (ty Int)
+           (Apply_thunk (fn ((Key (Int 1)) (Id $))) (ty Int)
             (loc ((line 22) (column 8)))))))
-        (bind ()) (loc ((line 22) (column 0)))))))
+        (bind
+         ((Values
+           ((exprs
+             ((((Key (Int 1)) (Id $))
+               (Apply_thunk (fn ((Key (Int 1)) (Key (Int 1)) (Id f))) (ty Int)
+                (loc ((line 22) (column 8)))))))
+            (bind ()) (loc ((line 22) (column 8)))))))
+        (loc ((line 22) (column 0)))))))
     |}]
 ;;
 
@@ -7849,7 +7910,7 @@ let _ = print 1;;
             (ty Closure) (loc ((line 2) (column 0)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Thunk_body (path ((Key (Int 1)) (Id "\206\187") (Id print)))
-       (captures ((((Id print_int)) Closure)))
+       (captures ((((Id print_int)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -7862,7 +7923,7 @@ let _ = print 1;;
          (loc ((line 3) (column 35)))))
        (loc ((line 3) (column 12))))
       (Thunk_body (path ((Key (Int 0)) (Id "\206\187") (Id print)))
-       (captures ((((Id print_int)) Closure)))
+       (captures ((((Id print_int)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -8324,7 +8385,7 @@ let _ = f 5;;
            (Scalar (value (Int 10)) (ty Int) (loc ((line 2) (column 8)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Thunk_body (path ((Key (Int 5)) (Id "\206\187") (Id f)))
-       (captures ((((Id n)) Int)))
+       (captures ((((Id n)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -8546,7 +8607,7 @@ let _ = f int bool 0 true;;
        (path
         ((Id "\206\187") (Id "\206\187") (Key BoolT) (Id "\206\187") (Key IntT)
          (Id "\206\187") (Id f)))
-       (arg ((Id y))) (arg_ty Bool) (captures ((((Id x)) Int))) (bind ())
+       (arg ((Id y))) (arg_ty Bool) (captures ((((Id x)) Int 0))) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 2) (column 102)))))
        (loc ((line 2) (column 87))))
       (Closure_body
@@ -8621,29 +8682,35 @@ let _ = f int bool 0 true;;
       (Values
        ((exprs
          ((((Id _))
-           (Apply_closure (fn ((Shadow 2) (Id $))) (arg ((Shadow 3) (Id $)))
+           (Apply_closure (fn ((Shadow 3) (Id $))) (arg ((Shadow 4) (Id $)))
             (ty Int) (loc ((line 3) (column 8)))))))
         (bind
          ((Values
            ((exprs
-             ((((Id $))
+             ((((Key BoolT) (Id $))
                (Apply_thunk (fn ((Key BoolT) (Key IntT) (Id f))) (ty Closure)
                 (loc ((line 3) (column 8)))))))
             (bind ()) (loc ((line 3) (column 8)))))
           (Values
            ((exprs
              ((((Shadow 1) (Id $))
+               (Apply_thunk (fn ((Key BoolT) (Id $))) (ty Closure)
+                (loc ((line 3) (column 8)))))))
+            (bind ()) (loc ((line 3) (column 8)))))
+          (Values
+           ((exprs
+             ((((Shadow 2) (Id $))
                (Scalar (value (Int 0)) (ty Int) (loc ((line 3) (column 19)))))))
             (bind ()) (loc ((line 3) (column 19)))))
           (Values
            ((exprs
-             ((((Shadow 2) (Id $))
-               (Apply_closure (fn ((Id $))) (arg ((Shadow 1) (Id $)))
+             ((((Shadow 3) (Id $))
+               (Apply_closure (fn ((Shadow 1) (Id $))) (arg ((Shadow 2) (Id $)))
                 (ty Closure) (loc ((line 3) (column 8)))))))
             (bind ()) (loc ((line 3) (column 8)))))
           (Values
            ((exprs
-             ((((Shadow 3) (Id $))
+             ((((Shadow 4) (Id $))
                (Scalar (value (Bool true)) (ty Bool)
                 (loc ((line 3) (column 21)))))))
             (bind ()) (loc ((line 3) (column 21)))))))
@@ -8981,8 +9048,7 @@ let _ = g 5;;
        (arg ((Id x))) (arg_ty Int) (captures ()) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 2) (column 56)))))
        (loc ((line 2) (column 42))))
-      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id f)))
-       (captures ((((Key IntT) (Id f)) Closure)))
+      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id f))) (captures ())
        (bind
         ((Values
           ((exprs
@@ -8995,7 +9061,7 @@ let _ = g 5;;
          (loc ((line 2) (column 42)))))
        (loc ((line 2) (column 4))))
       (Closure_body (path ((Id "\206\187") (Id g))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Key IntT) (Id f)) Closure)))
+       (captures ((((Key IntT) (Id f)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -9038,7 +9104,7 @@ let _ = choose false 5;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id inc))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id inc)) Closure)))
+       (captures ())
        (bind
         ((Values
           ((exprs
@@ -9055,7 +9121,7 @@ let _ = choose false 5;;
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 4) (column 62)))))
        (loc ((line 4) (column 46))))
       (Thunk_body (path ((Key (Bool false)) (Id "\206\187") (Id choose)))
-       (captures ((((Id inc)) Closure)))
+       (captures ())
        (bind
         ((Values
           ((exprs
@@ -9070,13 +9136,13 @@ let _ = choose false 5;;
        (loc ((line 3) (column 4))))
       (Closure_body
        (path ((Id "\206\187") (Key (Bool true)) (Id "\206\187") (Id choose)))
-       (arg ((Id x))) (arg_ty Int) (captures ((((Id inc)) Closure))) (bind ())
+       (arg ((Id x))) (arg_ty Int) (captures ((((Id inc)) Closure 0))) (bind ())
        (return
         (Apply_closure (fn ((Id inc))) (arg ((Id x))) (ty Int)
          (loc ((line 4) (column 35)))))
        (loc ((line 4) (column 19))))
       (Thunk_body (path ((Key (Bool true)) (Id "\206\187") (Id choose)))
-       (captures ((((Id inc)) Closure)))
+       (captures ((((Id inc)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -9289,7 +9355,7 @@ let _ = (f @ erased) 0;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id f)) Closure)))
+       (captures ((((Id f)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -9426,8 +9492,7 @@ let _ = g 5;;
        (arg ((Id x))) (arg_ty Int) (captures ()) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 2) (column 56)))))
        (loc ((line 2) (column 42))))
-      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id f)))
-       (captures ((((Key IntT) (Id f)) Closure)))
+      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id f))) (captures ())
        (bind
         ((Values
           ((exprs
@@ -9440,7 +9505,7 @@ let _ = g 5;;
          (loc ((line 2) (column 42)))))
        (loc ((line 2) (column 4))))
       (Closure_body (path ((Id "\206\187") (Id g))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Key IntT) (Id f)) Closure)))
+       (captures ((((Key IntT) (Id f)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -9483,7 +9548,7 @@ let _ = choose false 5;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id inc))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id inc)) Closure)))
+       (captures ())
        (bind
         ((Values
           ((exprs
@@ -9500,7 +9565,7 @@ let _ = choose false 5;;
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 4) (column 62)))))
        (loc ((line 4) (column 46))))
       (Thunk_body (path ((Key (Bool false)) (Id "\206\187") (Id choose)))
-       (captures ((((Id inc)) Closure)))
+       (captures ())
        (bind
         ((Values
           ((exprs
@@ -9515,13 +9580,13 @@ let _ = choose false 5;;
        (loc ((line 3) (column 4))))
       (Closure_body
        (path ((Id "\206\187") (Key (Bool true)) (Id "\206\187") (Id choose)))
-       (arg ((Id x))) (arg_ty Int) (captures ((((Id inc)) Closure))) (bind ())
+       (arg ((Id x))) (arg_ty Int) (captures ((((Id inc)) Closure 0))) (bind ())
        (return
         (Apply_closure (fn ((Id inc))) (arg ((Id x))) (ty Int)
          (loc ((line 4) (column 35)))))
        (loc ((line 4) (column 19))))
       (Thunk_body (path ((Key (Bool true)) (Id "\206\187") (Id choose)))
-       (captures ((((Id inc)) Closure)))
+       (captures ((((Id inc)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -9595,8 +9660,7 @@ let _ = g int 0;;
        (arg ((Id x))) (arg_ty Int) (captures ()) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 2) (column 56)))))
        (loc ((line 2) (column 42))))
-      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id f)))
-       (captures ((((Key IntT) (Id f)) Closure)))
+      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id f))) (captures ())
        (bind
         ((Values
           ((exprs
@@ -9609,7 +9673,7 @@ let _ = g int 0;;
          (loc ((line 2) (column 42)))))
        (loc ((line 2) (column 4))))
       (Thunk_body (path ((Key IntT) (Id "\206\187") (Id g)))
-       (captures ((((Key IntT) (Id f)) Closure))) (bind ())
+       (captures ((((Key IntT) (Id f)) Closure 0))) (bind ())
        (return
         (Apply_thunk (fn ((Key IntT) (Id f))) (ty Closure)
          (loc ((line 3) (column 42)))))
@@ -9650,9 +9714,7 @@ let _ = f 3;;
   [%expect {|
     (lst
      ((Thunk_body (path ((Key (Int 1)) (Id "\206\187") (Id f)))
-       (captures
-        ((((Key (Int 0)) (Id f)) Int) (((Key (Int 2)) (Id f)) Int)
-         (((Key (Int 1)) (Id f)) Int)))
+       (captures ((((Key (Int 0)) (Id f)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -9664,9 +9726,7 @@ let _ = f 3;;
          (loc ((line 2) (column 60)))))
        (loc ((line 2) (column 4))))
       (Thunk_body (path ((Key (Int 2)) (Id "\206\187") (Id f)))
-       (captures
-        ((((Key (Int 0)) (Id f)) Int) (((Key (Int 2)) (Id f)) Int)
-         (((Key (Int 1)) (Id f)) Int)))
+       (captures ((((Key (Int 1)) (Id f)) Int 2)))
        (bind
         ((Values
           ((exprs
@@ -9678,9 +9738,7 @@ let _ = f 3;;
          (loc ((line 2) (column 60)))))
        (loc ((line 2) (column 4))))
       (Thunk_body (path ((Key (Int 3)) (Id "\206\187") (Id f)))
-       (captures
-        ((((Key (Int 0)) (Id f)) Int) (((Key (Int 2)) (Id f)) Int)
-         (((Key (Int 1)) (Id f)) Int)))
+       (captures ((((Key (Int 2)) (Id f)) Int 1)))
        (bind
         ((Values
           ((exprs
@@ -9691,10 +9749,7 @@ let _ = f 3;;
         (Apply_thunk (fn ((Key (Int 2)) (Id f))) (ty Int)
          (loc ((line 2) (column 60)))))
        (loc ((line 2) (column 4))))
-      (Thunk_body (path ((Key (Int 0)) (Id "\206\187") (Id f)))
-       (captures
-        ((((Key (Int 0)) (Id f)) Int) (((Key (Int 2)) (Id f)) Int)
-         (((Key (Int 1)) (Id f)) Int)))
+      (Thunk_body (path ((Key (Int 0)) (Id "\206\187") (Id f))) (captures ())
        (bind
         ((Values
           ((exprs
@@ -9744,20 +9799,21 @@ let _ = apply_double int 5;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id double))) (arg ((Id x)))
-       (arg_ty Int) (captures ((((Id double)) Closure))) (bind ())
+       (arg_ty Int) (captures ()) (bind ())
        (return
         (Binop (op Add) (lhs ((Id x))) (rhs ((Id x))) (ty Int)
          (loc ((line 2) (column 31)))))
        (loc ((line 2) (column 4))))
       (Closure_body
        (path ((Id "\206\187") (Key IntT) (Id "\206\187") (Id apply_double)))
-       (arg ((Id x))) (arg_ty Int) (captures ((((Id double)) Closure))) (bind ())
+       (arg ((Id x))) (arg_ty Int) (captures ((((Id double)) Closure 0)))
+       (bind ())
        (return
         (Apply_closure (fn ((Id double))) (arg ((Id x))) (ty Int)
          (loc ((line 3) (column 73)))))
        (loc ((line 3) (column 57))))
       (Thunk_body (path ((Key IntT) (Id "\206\187") (Id apply_double)))
-       (captures ((((Id double)) Closure)))
+       (captures ((((Id double)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -9951,13 +10007,13 @@ let _ = f 0;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id f)) Closure) (((Id g)) Closure))) (bind ())
+       (captures ((((Id g)) Closure 1))) (bind ())
        (return
         (Apply_closure (fn ((Id g))) (arg ((Id x))) (ty Int)
          (loc ((line 2) (column 24)))))
        (loc ((line 2) (column 4))))
       (Closure_body (path ((Id "\206\187") (Id g))) (arg ((Id y))) (arg_ty Int)
-       (captures ((((Id f)) Closure) (((Id g)) Closure))) (bind ())
+       (captures ((((Id f)) Closure 0))) (bind ())
        (return
         (Apply_closure (fn ((Id f))) (arg ((Id y))) (ty Int)
          (loc ((line 3) (column 24)))))
@@ -9997,7 +10053,7 @@ fun f (x : int) : int = let _ = a in x;;
            (Scalar (value (Int 0)) (ty Int) (loc ((line 2) (column 8)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id a)) Int)))
+       (captures ((((Id a)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -10039,9 +10095,7 @@ and g (y : int) : int = let _ = a in let _ = c in f y;;
            (Scalar (value (Int 2)) (ty Int) (loc ((line 4) (column 8)))))))
         (bind ()) (loc ((line 4) (column 0)))))
       (Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures
-        ((((Id a)) Int) (((Id b)) Int) (((Id c)) Int) (((Id f)) Closure)
-         (((Id g)) Closure)))
+       (captures ((((Id g)) Closure 4) (((Id b)) Int 1) (((Id a)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -10058,9 +10112,7 @@ and g (y : int) : int = let _ = a in let _ = c in f y;;
          (loc ((line 5) (column 50)))))
        (loc ((line 5) (column 4))))
       (Closure_body (path ((Id "\206\187") (Id g))) (arg ((Id y))) (arg_ty Int)
-       (captures
-        ((((Id a)) Int) (((Id b)) Int) (((Id c)) Int) (((Id f)) Closure)
-         (((Id g)) Closure)))
+       (captures ((((Id f)) Closure 3) (((Id c)) Int 2) (((Id a)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -10098,7 +10150,7 @@ let _ = (f @ erased) 0;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id f)) Closure)))
+       (captures ((((Id f)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -10143,13 +10195,13 @@ let _ = f 0;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id x))) (arg_ty Int)
-       (captures ((((Id g)) Closure))) (bind ())
+       (captures ((((Id g)) Closure 0))) (bind ())
        (return
         (Apply_closure (fn ((Id g))) (arg ((Id x))) (ty Int)
          (loc ((line 2) (column 24)))))
        (loc ((line 2) (column 4))))
       (Closure_body (path ((Id "\206\187") (Id g))) (arg ((Id y))) (arg_ty Int)
-       (captures ((((Id g)) Closure)))
+       (captures ((((Id g)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -10307,13 +10359,13 @@ let _ = f 0;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id a))) (arg_ty Int)
-       (captures ((((Id f)) Closure) (((Id g)) Closure))) (bind ())
+       (captures ((((Id g)) Closure 1))) (bind ())
        (return
         (Apply_closure (fn ((Id g))) (arg ((Id a))) (ty Int)
          (loc ((line 2) (column 24)))))
        (loc ((line 2) (column 4))))
       (Closure_body (path ((Id "\206\187") (Id g))) (arg ((Id b))) (arg_ty Int)
-       (captures ((((Id f)) Closure) (((Id g)) Closure))) (bind ())
+       (captures ((((Id f)) Closure 0))) (bind ())
        (return
         (Apply_closure (fn ((Id f))) (arg ((Id b))) (ty Int)
          (loc ((line 3) (column 24)))))
@@ -10349,7 +10401,7 @@ let _ = f 0;;
   [%expect {|
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f))) (arg ((Id a))) (arg_ty Int)
-       (captures ((((Id g)) Closure)))
+       (captures ((((Id g)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -10367,7 +10419,7 @@ let _ = f 0;;
          (loc ((line 2) (column 24)))))
        (loc ((line 2) (column 4))))
       (Closure_body (path ((Id "\206\187") (Id g))) (arg ((Id b))) (arg_ty Int)
-       (captures ((((Id g)) Closure))) (bind ())
+       (captures ()) (bind ())
        (return (Ident (path ((Id b))) (ty Int) (loc ((line 3) (column 24)))))
        (loc ((line 3) (column 4))))
       (Functions
@@ -10400,7 +10452,7 @@ let _ = f 2;;
   [%expect {|
     (lst
      ((Thunk_body (path ((Key (Int 2)) (Id "\206\187") (Id f)))
-       (captures ((((Key (Int 0)) (Id f)) Int) (((Key (Int 1)) (Id g)) Int)))
+       (captures ((((Key (Int 1)) (Id g)) Int 1)))
        (bind
         ((Values
           ((exprs
@@ -10411,8 +10463,7 @@ let _ = f 2;;
         (Apply_thunk (fn ((Key (Int 1)) (Id g))) (ty Int)
          (loc ((line 2) (column 60)))))
        (loc ((line 2) (column 4))))
-      (Thunk_body (path ((Key (Int 0)) (Id "\206\187") (Id f)))
-       (captures ((((Key (Int 0)) (Id f)) Int) (((Key (Int 1)) (Id g)) Int)))
+      (Thunk_body (path ((Key (Int 0)) (Id "\206\187") (Id f))) (captures ())
        (bind
         ((Values
           ((exprs
@@ -10422,7 +10473,7 @@ let _ = f 2;;
        (return (Scalar (value (Int 0)) (ty Int) (loc ((line 2) (column 53)))))
        (loc ((line 2) (column 4))))
       (Thunk_body (path ((Key (Int 1)) (Id "\206\187") (Id g)))
-       (captures ((((Key (Int 0)) (Id f)) Int) (((Key (Int 1)) (Id g)) Int)))
+       (captures ((((Key (Int 0)) (Id f)) Int 0)))
        (bind
         ((Values
           ((exprs
@@ -10460,7 +10511,7 @@ let _ = f int 0;;
   [%expect {|
     (lst
      ((Thunk_body (path ((Key IntT) (Id "\206\187") (Id f)))
-       (captures ((((Key IntT) (Id g)) Closure))) (bind ())
+       (captures ((((Key IntT) (Id g)) Closure 0))) (bind ())
        (return
         (Apply_thunk (fn ((Key IntT) (Id g))) (ty Closure)
          (loc ((line 2) (column 42)))))
@@ -10469,8 +10520,7 @@ let _ = f int 0;;
        (arg ((Id x))) (arg_ty Int) (captures ()) (bind ())
        (return (Ident (path ((Id x))) (ty Int) (loc ((line 3) (column 56)))))
        (loc ((line 3) (column 42))))
-      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id g)))
-       (captures ((((Key IntT) (Id g)) Closure)))
+      (Thunk_body (path ((Key IntT) (Id "\206\187") (Id g))) (captures ())
        (bind
         ((Values
           ((exprs
@@ -10521,7 +10571,7 @@ let _ = outer 5;;
     (lst
      ((Closure_body
        (path ((Id "\206\187") (Id inner) (Id "\206\187") (Id outer)))
-       (arg ((Id y))) (arg_ty Int) (captures ((((Id x)) Int))) (bind ())
+       (arg ((Id y))) (arg_ty Int) (captures ((((Id x)) Int 0))) (bind ())
        (return
         (Binop (op Add) (lhs ((Id y))) (rhs ((Id x))) (ty Int)
          (loc ((line 3) (column 32)))))
@@ -10569,7 +10619,7 @@ let _ = outer 5;;
     (lst
      ((Closure_body (path ((Id "\206\187") (Id f) (Id "\206\187") (Id outer)))
        (arg ((Id a))) (arg_ty Int)
-       (captures ((((Id f)) Closure) (((Id g)) Closure) (((Id x)) Int)))
+       (captures ((((Id x)) Int 2) (((Id g)) Closure 1)))
        (bind
         ((Values
           ((exprs
@@ -10583,7 +10633,7 @@ let _ = outer 5;;
        (loc ((line 3) (column 6))))
       (Closure_body (path ((Id "\206\187") (Id g) (Id "\206\187") (Id outer)))
        (arg ((Id b))) (arg_ty Int)
-       (captures ((((Id f)) Closure) (((Id g)) Closure) (((Id x)) Int)))
+       (captures ((((Id x)) Int 2) (((Id f)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -10655,7 +10705,7 @@ let _ = print ();;
             (ty Closure) (loc ((line 2) (column 0)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Thunk_body (path ((Key Unit) (Id "\206\187") (Id print)))
-       (captures ((((Id print_int)) Closure)))
+       (captures ((((Id print_int)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -10777,7 +10827,7 @@ let _ = print 1;;
             (ty Closure) (loc ((line 2) (column 0)))))))
         (bind ()) (loc ((line 2) (column 0)))))
       (Thunk_body (path ((Key (Int 1)) (Id "\206\187") (Id print)))
-       (captures ((((Id print_int)) Closure)))
+       (captures ((((Id print_int)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -10790,7 +10840,7 @@ let _ = print 1;;
          (loc ((line 3) (column 35)))))
        (loc ((line 3) (column 12))))
       (Thunk_body (path ((Key (Int 0)) (Id "\206\187") (Id print)))
-       (captures ((((Id print_int)) Closure)))
+       (captures ((((Id print_int)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -11052,7 +11102,7 @@ let _ = mk_ident (fn (static _ : unit) -> let _ = print_int 10 in 1) true;;
        (path
         ((Key Unit) (Id "\206\187") (Id pick_t) (Key (Closure 6)) (Id "\206\187")
          (Id mk_ident)))
-       (captures ((((Id print_int)) Closure)))
+       (captures ((((Id print_int)) Closure 0)))
        (bind
         ((Values
           ((exprs
@@ -11082,7 +11132,7 @@ let _ = mk_ident (fn (static _ : unit) -> let _ = print_int 10 in 1) true;;
        (return (Ident (path ((Id x))) (ty Bool) (loc ((line 7) (column 51)))))
        (loc ((line 7) (column 2))))
       (Thunk_body (path ((Key (Closure 6)) (Id "\206\187") (Id mk_ident)))
-       (captures ((((Id print_int)) Closure)))
+       (captures ((((Id print_int)) Closure 0)))
        (bind
         ((Values
           ((exprs

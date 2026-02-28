@@ -1,2 +1,11 @@
-external f : int -> int = syl_print_int;;
-let _ = (f @ erased) 0;;
+external print_int : int -> unit = syl_print_int;;
+
+let _ = (print_int @ erased) 0;;
+
+let print = fn (static x : int) ->
+  let _ = print_int x in
+  fn (static y : int) -> print_int y;;
+
+let _ = print 0 1;;
+let _ = print 1 2;;
+let _ = print 1 3;;

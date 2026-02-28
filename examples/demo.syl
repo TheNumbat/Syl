@@ -100,18 +100,22 @@ let _ = (1 + 2) @ static;;
 let r = (take_static 0) @ static;;
 let _ = (fn (_ : unit) -> r) @ static;;
 
-(* Functions that capture dynamic are dynamic *)
+(* Functions that capture dynamic are _not_ dynamic (i.e. implicit dynamic modality) *)
 
 let d = 0 @ dynamic;;
-let _ = (fn (_ : unit) -> d) @ dynamic;;
+let _ = (fn (_ : unit) -> d) @ static;;
 
-(* Functions that return erased are erased *)
+(* While the function can be erased, inlining the dynamic modalities will fail *)
 
-let _ = (fn (_ : unit) -> int) @ erased;;
+let _ = (fn (_ : unit) -> d) @ erased;;
 
-(* Functions that cpature erased are _not_ erased *)
+(* Functions that capture erased are _not_ erased (i.e. implicit erased modality) *)
 
 let _ = (fn (_ : unit) -> let _ = int in ()) @ unerased;;
+
+(* Functions that _return_ erased are erased *)
+
+let _ = (fn (_ : unit) -> int) @ erased;;
 
 (* -----------------------------------------------------
    Inlining with erasure

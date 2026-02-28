@@ -825,7 +825,7 @@ let%expect_test "recursive inlining" =
 fun f (x : int) : erased int = f x;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason Inline_self)) |}]
+  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self (f)))) |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -1208,7 +1208,7 @@ fun erased f (x : int) : int = g x
 and erased g (y : int) : int = f y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason Inline_self)) |}]
+  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self (f g)))) |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -1430,7 +1430,7 @@ fun f (x : int) : int = (g @ erased) x
 and g (y : int) : int = (f @ erased) y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason Inline_self)) |}]
+  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self (f g)))) |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -1440,7 +1440,7 @@ fun f (x : int) : int = (g @ erased) x
 and g (y : int) : int = (f @ erased) y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason Inline_self)) |}]
+  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self (f g)))) |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -1450,7 +1450,7 @@ fun f (x : int) : erased int = g x @ erased
 and g (y : int) : erased int = (f @ erased) y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason Inline_self)) |}]
+  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self (f g)))) |}]
 ;;
 
 let%expect_test "recursive inlining" =
