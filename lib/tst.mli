@@ -83,6 +83,8 @@ and Bool : sig
     | Gte of Value.t * Value.t
     | Not of Value.t
   [@@deriving sexp]
+
+  val reduce : t -> Value.t
 end
 
 and Int : sig
@@ -95,6 +97,8 @@ and Int : sig
     | Mod of Value.t * Value.t
     | Neg of Value.t
   [@@deriving sexp]
+
+  val reduce : t -> Value.t
 end
 
 and Closure : sig
@@ -176,6 +180,7 @@ and Value : sig
   [@@deriving sexp]
 
   val of_literal : Cst.Literal.t -> t
+  val is_true : t -> bool
 end
 
 and Desc : sig
@@ -264,14 +269,14 @@ and Expr : sig
         ; loc : Lex.Location.t
         }
     | Unop of
-        { op : Cst.Unop.t
+        { op : Ident.Unop.t
         ; arg : t
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
     | Binop of
-        { op : Cst.Binop.t
+        { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
         ; ty : Value.t
@@ -329,6 +334,12 @@ module Top_level : sig
     | External of
         { var : Ident.t
         ; symbol : string
+        ; ty : Value.t
+        ; loc : Lex.Location.t
+        }
+    | Builtin of
+        { var : Ident.t
+        ; builtin : Builtin0.t
         ; ty : Value.t
         ; loc : Lex.Location.t
         }

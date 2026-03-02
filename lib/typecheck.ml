@@ -19,9 +19,11 @@ module Error = struct
         ; rhs : Value.t
         }
     | Inline_self of Ident.t Nonempty_list.t
-    | Inline_dynamic of Ident.t
-    | Static_external of Ident.t
+    | Static_external of Ident.t * string
+    | Unknown_builtin of Ident.t * string
     | Recursion_limit of int
+    | Static_assert of [ `Failed | `Ambiguous of Value.t ]
+    | Divide_by_zero of Int.t
     | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
   [@@deriving sexp]
 end
@@ -36,8 +38,10 @@ module Fail = struct
   let unbound_ident ~loc id = raise (Error { loc; reason = Unbound_ident id })
   let recursion_limit ~loc limit = raise (Error { loc; reason = Recursion_limit limit })
   let inline_self ~loc id = raise (Error { loc; reason = Inline_self id })
-  let inline_dynamic ~loc id = raise (Error { loc; reason = Inline_dynamic id })
-  let static_external ~loc id = raise (Error { loc; reason = Static_external id })
+  let static_external ~loc id sym = raise (Error { loc; reason = Static_external (id, sym) })
+  let unknown_builtin ~loc id name = raise (Error { loc; reason = Unknown_builtin (id, name) })
+  let static_assert ~loc expr = raise (Error { loc; reason = Static_assert expr })
+  let divide_by_zero ~loc expr = raise (Error { loc; reason = Divide_by_zero expr })
 
   let unreachable ~loc =
     Lazy.from_fun (fun () -> raise_s [%message "Bug: forced dynamic" (loc : Lex.Location.t)])
@@ -68,7 +72,7 @@ module State = struct
     res
   ;;
 
-  let fresh t = Value.Var (Ident.of_string ("$" ^ Core.Int.to_string (fresh_id t)))
+  let fresh t = Value.Var (Ident.id ("$" ^ Core.Int.to_string (fresh_id t)))
 end
 
 let rec concrete state (v : Value.t) : Value.Concrete.t option =
@@ -106,77 +110,55 @@ let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~m
   Expr.with_ expr ~ty:dst_ty ~mode:dst_mode, { Desc.ty = dst_ty; mode = dst_mode; static }
 ;;
 
-let bind_unop ~(op : Cst.Unop.t) v =
+let bind_unop ~(op : Ident.Unop.t) v =
   match op with
-  | Neg ->
-    Lazy.map v ~f:(function
-      | Value.Int (T v) -> Value.Int (T (Int64.neg v))
-      | v -> Int (Neg v))
-  | Not ->
-    Lazy.map v ~f:(function
-      | Value.Bool (T v) -> Value.Bool (T (not v))
-      | v -> Bool (Not v))
+  | Neg -> Lazy.map v ~f:(fun v -> Int.reduce (Neg v))
+  | Not -> Lazy.map v ~f:(fun v -> Bool.reduce (Not v))
 ;;
 
-let bind_binop ~(op : Cst.Binop.t) (lhs : Value.t Lazy.t) (rhs : Value.t Lazy.t) =
+let bind_binop ~loc ~(op : Ident.Binop.t) (lhs : Value.t Lazy.t) (rhs : Value.t Lazy.t) =
   let open Lazy.Let_syntax in
-  let int_op (f : int64 -> int64 -> Value.t) v =
+  let int_op (f : Value.t -> Value.t -> Int.t) =
     let%map lhs = lhs
     and rhs = rhs in
-    match lhs, rhs with
-    | Int (T lhs), Int (T rhs) -> f lhs rhs
-    | _ -> v lhs rhs
+    Int.reduce (f lhs rhs)
   in
-  let bool_op (f : bool -> bool -> Value.t) v =
+  let bool_op (f : Value.t -> Value.t -> Bool.t) =
     let%map lhs = lhs
     and rhs = rhs in
-    match lhs, rhs with
-    | Bool (T lhs), Bool (T rhs) -> f lhs rhs
-    | _ -> v lhs rhs
+    Bool.reduce (f lhs rhs)
   in
   match op with
-  | Add -> int_op (fun x y -> Int (T (Int64.( + ) x y))) (fun x y -> Int (Add (x, y)))
-  | Sub -> int_op (fun x y -> Int (T (Int64.( - ) x y))) (fun x y -> Int (Sub (x, y)))
-  | Mul -> int_op (fun x y -> Int (T (Int64.( * ) x y))) (fun x y -> Int (Mul (x, y)))
-  | Div -> int_op (fun x y -> Int (T (Int64.( / ) x y))) (fun x y -> Int (Div (x, y)))
-  | Mod -> int_op (fun x y -> Int (T (Int64.( % ) x y))) (fun x y -> Int (Mod (x, y)))
-  | And -> bool_op (fun x y -> Bool (T (x && y))) (fun x y -> Bool (And (x, y)))
-  | Or -> bool_op (fun x y -> Bool (T (x || y))) (fun x y -> Bool (Or (x, y)))
-  | Eq -> int_op (fun x y -> Bool (T (Int64.( = ) x y))) (fun x y -> Bool (Eq (x, y)))
-  | Neq -> int_op (fun x y -> Bool (T (Int64.( <> ) x y))) (fun x y -> Bool (Neq (x, y)))
-  | Lt -> int_op (fun x y -> Bool (T (Int64.( < ) x y))) (fun x y -> Bool (Lt (x, y)))
-  | Lte -> int_op (fun x y -> Bool (T (Int64.( <= ) x y))) (fun x y -> Bool (Lte (x, y)))
-  | Gt -> int_op (fun x y -> Bool (T (Int64.( > ) x y))) (fun x y -> Bool (Gt (x, y)))
-  | Gte -> int_op (fun x y -> Bool (T (Int64.( >= ) x y))) (fun x y -> Bool (Gte (x, y)))
-;;
-
-let inline ~loc ~(env : Env.t) ~arg_id ~arg ~arg_mode body =
-  let ty = Expr.ty body in
-  let mode = Expr.mode body in
-  let fvs = Set.remove (Expr.free_vars body) arg_id in
-  let body =
-    if Modes.is_erased arg_mode
-    then body
-    else Expr.Let { var = arg_id; bind = arg; rest = body; ty; mode; loc }
-  in
-  Set.fold fvs ~init:body ~f:(fun acc id ->
-    match Map.find env id with
-    | Some (desc : Desc.t) when not (Modes.is_erased desc.mode) ->
-      (* This should be specific to the dynamic modality. *)
-      if not (Modes.is_static desc.mode) then Fail.inline_dynamic ~loc id;
-      let value = Lazy.force desc.static in
-      let bind = Expr.Literal { value; ty = desc.ty; mode = desc.mode; loc } in
-      Expr.Let { var = id; bind; rest = acc; ty; mode; loc }
-    | _ -> acc)
+  | Add -> int_op (fun x y -> Add (x, y))
+  | Sub -> int_op (fun x y -> Sub (x, y))
+  | Mul -> int_op (fun x y -> Mul (x, y))
+  | Div ->
+    int_op (fun x y ->
+      match y with
+      | Int (T 0L) -> Fail.divide_by_zero ~loc (Div (x, y))
+      | _ -> Div (x, y))
+  | Mod ->
+    int_op (fun x y ->
+      match y with
+      | Int (T 0L) -> Fail.divide_by_zero ~loc (Mod (x, y))
+      | _ -> Mod (x, y))
+  | Eq -> bool_op (fun x y -> Eq (x, y))
+  | Neq -> bool_op (fun x y -> Neq (x, y))
+  | Lt -> bool_op (fun x y -> Lt (x, y))
+  | Lte -> bool_op (fun x y -> Lte (x, y))
+  | Gt -> bool_op (fun x y -> Gt (x, y))
+  | Gte -> bool_op (fun x y -> Gte (x, y))
+  | And -> bool_op (fun x y -> And (x, y))
+  | Or -> bool_op (fun x y -> Or (x, y))
 ;;
 
 let require_mode ~loc src dst = if not (Modes.leq src dst) then Fail.mode_mismatch ~loc src dst
 
-let require_dynamic_arrow ~loc var (ty : Value.t) =
+let require_dynamic_arrow ~loc var sym (ty : Value.t) =
   match ty with
   | Type (Arrow { arg_mode; ret_mode; _ } | Pi { arg_mode; ret_mode; _ }) ->
-    if Modes.is_static arg_mode || Modes.is_static ret_mode then Fail.static_external ~loc var
-  | _ -> Fail.static_external ~loc var
+    if Modes.is_static arg_mode || Modes.is_static ret_mode then Fail.static_external ~loc var sym
+  | _ -> Fail.static_external ~loc var sym
 ;;
 
 let require_static ~loc (desc : Desc.t) =
@@ -191,6 +173,32 @@ let require_var ~loc env id =
   match Env.find env id with
   | Some value -> value
   | None -> Fail.unbound_ident ~loc id
+;;
+
+let inline ~loc ~(env : Env.t) ~arg_id ~arg ~arg_mode body =
+  let ty = Expr.ty body in
+  let mode = Expr.mode body in
+  let fvs = Set.remove (Expr.free_vars body) arg_id in
+  let body =
+    if Modes.is_erased arg_mode
+    then body
+    else Expr.Let { var = arg_id; bind = arg; rest = body; ty; mode; loc }
+  in
+  Set.fold fvs ~init:body ~f:(fun acc id ->
+    match Map.find env id with
+    | Some (desc : Desc.t) when not (Modes.is_erased desc.mode) ->
+      require_static ~loc desc;
+      let value = Lazy.force desc.static in
+      let bind = Expr.Literal { value; ty = desc.ty; mode = desc.mode; loc } in
+      Expr.Let { var = id; bind; rest = acc; ty; mode; loc }
+    | _ -> acc)
+;;
+
+let rebind_if_var env (expr : Expr.t) value =
+  (* TODO do something more expressive here *)
+  match expr with
+  | Var { id; ty; mode; _ } -> Env.bind env id { Desc.ty; mode; static = Lazy.from_val value }
+  | _ -> env
 ;;
 
 let rec require_leq state ~loc src dst =
@@ -348,6 +356,7 @@ and geq_binder _ _ = false
 and join_binder _ _ = None
 and meet_binder _ _ = None
 
+(* Compares structurally. Could use a fancier solver. *)
 and leq_bool state a b =
   match a, b with
   | T a, T b -> Core.Bool.equal a b
@@ -364,6 +373,7 @@ and leq_bool state a b =
 
 and geq_bool state a b = leq_bool state a b
 
+(* Compares structurally. Could use a fancier solver. *)
 and join_bool state a b =
   match a, b with
   | T a, T b -> if Core.Bool.equal a b then Some (T a) else None
@@ -392,6 +402,7 @@ and join_bool state a b =
 
 and meet_bool state a b = join_bool state a b
 
+(* Compares structurally. Could use a fancier solver. *)
 and leq_int state a b =
   match a, b with
   | T a, T b -> Int64.equal a b
@@ -405,6 +416,7 @@ and leq_int state a b =
 
 and geq_int state a b = leq_int state a b
 
+(* Compares structurally. Could use a fancier solver. *)
 and join_int state a b =
   match a, b with
   | T a, T b -> if Int64.equal a b then Some (T a) else None
@@ -598,6 +610,33 @@ and reduce state env (expr : Cst.Expr.t) : Desc.t =
 and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
   let open Lazy.Let_syntax in
   match expr with
+  | Assert { cond; static; loc } ->
+    let cond, cond_desc = typecheck state env cond in
+    require_exists ~loc cond_desc.mode;
+    require_leq state ~loc cond_desc.ty (Type Bool);
+    (match static with
+     | Static ->
+       require_static ~loc cond_desc;
+       (match Lazy.force cond_desc.static with
+        | Bool (T true) -> typecheck state env (Literal { value = Unit; loc })
+        | Bool (T false) -> Fail.static_assert ~loc `Failed
+        | expr -> Fail.static_assert ~loc (`Ambiguous expr))
+     | Dynamic ->
+       if Modes.is_static cond_desc.mode && Value.is_true (Lazy.force cond_desc.static)
+       then typecheck state env (Literal { value = Unit; loc })
+       else (
+         let desc = Builtin.desc Assert in
+         let fn =
+           Expr.Literal { value = Lazy.force desc.static; ty = desc.ty; mode = desc.mode; loc }
+         in
+         ( Apply
+             { fn
+             ; arg = cond
+             ; ty = Type Unit
+             ; mode = Modes.create ~staticity:Static ~erasure:Unerased
+             ; loc
+             }
+         , desc )))
   | Paren { expr; _ } -> typecheck state env expr
   | Literal { value; loc } ->
     let ty = Value.Type (Ty.of_literal value) in
@@ -612,6 +651,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
      | Dynamic, Erased -> Erased { ty = desc.ty; mode = desc.mode; loc }, desc
      | _ -> Var { id; ty = desc.ty; mode = desc.mode; loc }, desc)
   | Unop { op; arg; loc } ->
+    (* TODO replace with apply *)
     let arg, desc = typecheck state env arg in
     require_exists ~loc desc.mode;
     let mode = { desc.mode with erasure = Unerased } in
@@ -627,6 +667,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
     let static = bind_unop ~op desc.static in
     Unop { op; arg; ty; mode; loc }, { ty; mode; static }
   | Binop { op; lhs; rhs; loc } ->
+    (* TODO replace with apply *)
     let lhs, lhs_desc = typecheck state env lhs in
     let rhs, rhs_desc = typecheck state env rhs in
     require_exists ~loc lhs_desc.mode;
@@ -647,7 +688,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
         require_leq state ~loc rhs_desc.ty (Type Bool);
         Type Bool
     in
-    let static = bind_binop ~op lhs_desc.static rhs_desc.static in
+    let static = bind_binop ~loc ~op lhs_desc.static rhs_desc.static in
     Binop { op; lhs; rhs; ty; mode; loc }, { ty; mode; static }
   | If { cond; then_; else_; static; loc } ->
     let cond, cond_desc = typecheck state env cond in
@@ -666,8 +707,14 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
         let _then_desc = reduce state env then_ in
         typecheck state env else_
       | value ->
-        let then_, then_desc = typecheck state env then_ in
-        let else_, else_desc = typecheck state env else_ in
+        let then_, then_desc =
+          let env = rebind_if_var env cond (Value.Bool (T true)) in
+          typecheck state env then_
+        in
+        let else_, else_desc =
+          let env = rebind_if_var env cond (Value.Bool (T false)) in
+          typecheck state env else_
+        in
         let mode = Modes.cond ~cond:cond_desc.mode then_desc.mode else_desc.mode in
         let static =
           if Modes.is_static mode
@@ -871,7 +918,7 @@ and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode :
     let ret_ty = require_static_type state ~loc ret_desc in
     Value.Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
   | Static ->
-    let arg = Option.value arg_id ~default:(Ident.of_string "_") in
+    let arg = Option.value arg_id ~default:(Ident.id "_") in
     let env =
       Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val (State.fresh state) }
     in
@@ -951,21 +998,34 @@ let typecheck_top_level state env (cst : Cst.Top_level.t) : Top_level.t * Env.t 
   | External { var; ty; symbol; loc } ->
     let ty_desc = reduce state env ty in
     let ty = require_static_type ~loc state ty_desc in
-    require_dynamic_arrow ~loc var ty;
+    require_dynamic_arrow ~loc var symbol ty;
     let mode = Modes.bottom () in
     let static = Lazy.from_val (Value.External { symbol; ty }) in
     External { var; symbol; ty; loc }, Env.bind env var { Desc.ty; mode; static }
+  | Builtin { var; name; loc } ->
+    let builtin =
+      match Builtin.find name with
+      | Some builtin -> builtin
+      | None -> Fail.unknown_builtin ~loc var name
+    in
+    let desc = Builtin.desc builtin in
+    Builtin { var; builtin; ty = desc.ty; loc }, Env.bind env var desc
 ;;
+
+let fold_top_levels state env cst tls =
+  List.fold cst ~init:(tls, env) ~f:(fun (acc, env) top_level ->
+    let tl, env = typecheck_top_level state env top_level in
+    tl :: acc, env)
+;;
+
+let stdlib = Parse.parse_exn Syl_stdlib.source
 
 let typecheck_exn (cst : Cst.Program.t) =
   let state = State.create () in
   let env = Env.initial in
-  let bindings, _ =
-    List.fold cst ~init:([], env) ~f:(fun (acc, env) top_level ->
-      let tl, env = typecheck_top_level state env top_level in
-      tl :: acc, env)
-  in
-  List.rev bindings
+  let program, env = fold_top_levels state env stdlib [] in
+  let program, _ = fold_top_levels state env cst program in
+  List.rev program
 ;;
 
 let typecheck tst =

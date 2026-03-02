@@ -3,6 +3,7 @@ open Lst
 
 let prelude =
   {|
+#include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -46,11 +47,8 @@ static syl_env syl_capture(Env... captures) {
   return env;
 }
 
-syl_unit syl_print_bool(syl_bool b) {
-  printf("%s\n", b ? "true" : "false");
-}
-syl_unit syl_print_int(syl_int i) {
-  printf("%ld\n", i);
+static syl_unit syl_assert(syl_bool cond) {
+  assert(cond);
 }
 
 //SYL_PRELUDE_END
@@ -117,7 +115,7 @@ let rec print_key (key : Tst.Value.Concrete.t) =
 
 let print_path (path : Path.t) =
   List.concat_map path ~f:(function
-    | Id id -> [ Ident.to_string id; "·" ]
+    | Id id -> [ Ident.print () id; "·" ]
     | Shadow n -> [ Int.to_string n; "ˢ" ]
     | Key k -> [ print_key k; "ₒ" ])
   |> List.rev
@@ -137,13 +135,13 @@ let rec print_ty (ty : Ty.t) =
   | Pack _ -> raise_s [%message "Unexpected type" (ty : Ty.t)]
 ;;
 
-let print_unop (op : Cst.Unop.t) =
+let print_unop (op : Ident.Unop.t) =
   match op with
   | Not -> "!"
   | Neg -> "-"
 ;;
 
-let print_binop (op : Cst.Binop.t) =
+let print_binop (op : Ident.Binop.t) =
   match op with
   | Add -> "+"
   | Sub -> "-"
@@ -162,6 +160,7 @@ let print_binop (op : Cst.Binop.t) =
 
 let print_expr_nonzero (expr : Expr.t) =
   match expr with
+  | Builtin _ -> assert false (* TODO *)
   | Scalar { value = Unit; _ } -> assert false
   | Scalar { value = Bool true; _ } -> "true"
   | Scalar { value = Bool false; _ } -> "false"
@@ -193,6 +192,7 @@ let print_expr_nonzero (expr : Expr.t) =
 
 let print_expr_zero (expr : Expr.t) =
   match expr with
+  | Builtin _ -> assert false (* TODO *)
   | Scalar { value = Unit; _ } | Ident _ -> ""
   | Apply_closure { fn; arg; arg_ty; _ } ->
     if Ty.is_zero_size arg_ty
@@ -237,9 +237,11 @@ let rec emit_decl state (decl : Decl.t) =
     if Ty.is_zero_size arg_ty
     then State.line state "static %s %s(syl_env 𝒰)" ret (print_path path)
     else State.line state "static %s %s(%s _, syl_env 𝒰)" ret (print_path path) arg;
-    if Ty.is_zero_size ret_ty
-    then State.scope state ~f:(fun () -> State.line state "%s(_);" symbol)
-    else State.scope state ~f:(fun () -> State.line state "return %s(_);" symbol)
+    (match Ty.is_zero_size arg_ty, Ty.is_zero_size ret_ty with
+     | true, true -> State.scope state ~f:(fun () -> State.line state "%s();" symbol)
+     | false, true -> State.scope state ~f:(fun () -> State.line state "%s(_);" symbol)
+     | true, false -> State.scope state ~f:(fun () -> State.line state "return %s();" symbol)
+     | false, false -> State.scope state ~f:(fun () -> State.line state "return %s(_);" symbol))
 
 and emit_decls state decls = Array.iter decls ~f:(emit_decl state)
 
@@ -353,6 +355,7 @@ let emit_main state (lst : Program.t) =
 let c (lst : Program.t) : string =
   let state = State.create () in
   Buffer.add_string state.buf prelude;
+  Buffer.add_string state.buf Syl_stdlib.runtime;
   emit_decls state lst;
   emit_procs_and_thunks state lst;
   emit_main state lst;

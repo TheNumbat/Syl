@@ -282,6 +282,12 @@ let simplify_top_level env (tst : Tst.Top_level.t) : Env.t * Top_level.t Option.
   | External { var; symbol; ty; loc } ->
     let ty = simplify_ty ~loc ty in
     Env.bind env var ty, Some (External { var; symbol; ty; loc })
+  | Builtin { var; builtin; ty; loc } ->
+    if Builtin.is_erased builtin
+    then env, None
+    else (
+      let ty = simplify_ty ~loc ty in
+      Env.bind env var ty, Some (Builtin { var; builtin; ty; loc }))
 ;;
 
 let simplify (tst : Tst.Program.t) =

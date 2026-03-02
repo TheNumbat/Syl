@@ -107,12 +107,9 @@ module Modes = struct
     let is_none { staticity; erasure } = Option.is_none staticity && Option.is_none erasure
 
     let print () { staticity; erasure } =
-      let axes =
-        List.filter_opt
-          [ Option.map staticity ~f:Staticity.print; Option.map erasure ~f:Erasure.print ]
-        |> String.concat ~sep:" "
-      in
-      if String.equal axes "" then axes else axes ^ " "
+      List.filter_opt
+        [ Option.map staticity ~f:Staticity.print; Option.map erasure ~f:Erasure.print ]
+      |> String.concat ~sep:" "
     ;;
   end
 

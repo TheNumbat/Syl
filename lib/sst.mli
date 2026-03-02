@@ -80,13 +80,13 @@ module Expr : sig
         ; loc : Lex.Location.t
         }
     | Unop of
-        { op : Cst.Unop.t
+        { op : Ident.Unop.t
         ; arg : t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Binop of
-        { op : Cst.Binop.t
+        { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
         ; ty : Ty.t
@@ -121,6 +121,11 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Builtin of
+        { builtin : Builtin.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   val ty : t -> Ty.t
@@ -144,6 +149,12 @@ module Top_level : sig
     | External of
         { var : Ident.t
         ; symbol : string
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Builtin of
+        { var : Ident.t
+        ; builtin : Builtin.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

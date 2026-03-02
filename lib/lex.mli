@@ -2,6 +2,8 @@ open! Core
 
 module Op : sig
   type t =
+    | Tilde
+    | Tilde_minus
     | Minus
     | Plus
     | Star
@@ -44,6 +46,8 @@ module Kind : sig
     | Semicolon : unit t
     | Double_semicolon : unit t
     | External : unit t
+    | Builtin : unit t
+    | Assert : unit t
     | Op : Op.t t
     | Unit : unit t
     | Bool : bool t
@@ -75,6 +79,8 @@ module Token : sig
     | Semicolon
     | Double_semicolon
     | External
+    | Builtin
+    | Assert
     | Op of Op.t
     | Unit
     | Bool of bool

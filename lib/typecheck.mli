@@ -17,9 +17,11 @@ module Error : sig
         ; rhs : Value.t
         }
     | Inline_self of Ident.t Nonempty_list.t
-    | Inline_dynamic of Ident.t
-    | Static_external of Ident.t
+    | Static_external of Ident.t * string
+    | Unknown_builtin of Ident.t * string
     | Recursion_limit of int
+    | Static_assert of [ `Failed | `Ambiguous of Value.t ]
+    | Divide_by_zero of Int.t
     | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
   [@@deriving sexp]
 end

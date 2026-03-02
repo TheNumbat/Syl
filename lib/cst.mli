@@ -11,35 +11,6 @@ module Literal : sig
   val print : unit -> t -> string
 end
 
-module Unop : sig
-  type t =
-    | Not
-    | Neg
-  [@@deriving sexp]
-
-  val print : unit -> t -> string
-end
-
-module Binop : sig
-  type t =
-    | Add
-    | Sub
-    | Mul
-    | Div
-    | Mod
-    | And
-    | Or
-    | Eq
-    | Neq
-    | Lt
-    | Lte
-    | Gt
-    | Gte
-  [@@deriving sexp]
-
-  val print : unit -> t -> string
-end
-
 module Expr : sig
   type fun_ =
     { var : Ident.t
@@ -98,12 +69,12 @@ module Expr : sig
         ; loc : Lex.Location.t
         }
     | Unop of
-        { op : Unop.t
+        { op : Ident.Unop.t
         ; arg : t
         ; loc : Lex.Location.t
         }
     | Binop of
-        { op : Binop.t
+        { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
         ; loc : Lex.Location.t
@@ -114,6 +85,11 @@ module Expr : sig
         ; arg_mode : Modes.Maybe.t
         ; ret : t
         ; ret_mode : Modes.Maybe.t
+        ; loc : Lex.Location.t
+        }
+    | Assert of
+        { cond : t
+        ; static : Staticity.t
         ; loc : Lex.Location.t
         }
     | Type_annotation of
@@ -148,6 +124,11 @@ module Top_level : sig
         { var : Ident.t
         ; ty : Expr.t
         ; symbol : string
+        ; loc : Lex.Location.t
+        }
+    | Builtin of
+        { var : Ident.t
+        ; name : string
         ; loc : Lex.Location.t
         }
   [@@deriving sexp]

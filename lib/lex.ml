@@ -26,6 +26,8 @@ end
 
 module Op = struct
   type t =
+    | Tilde
+    | Tilde_minus
     | Minus
     | Plus
     | Star
@@ -68,6 +70,8 @@ module Kind = struct
     | Semicolon : unit t
     | Double_semicolon : unit t
     | External : unit t
+    | Builtin : unit t
+    | Assert : unit t
     | Op : Op.t t
     | Unit : unit t
     | Bool : bool t
@@ -99,6 +103,8 @@ module Token = struct
     | Semicolon
     | Double_semicolon
     | External
+    | Builtin
+    | Assert
     | Op of Op.t
     | Unit
     | Bool of bool
@@ -129,6 +135,8 @@ module Token = struct
     | Semicolon, Semicolon -> Some ()
     | Double_semicolon, Double_semicolon -> Some ()
     | External, External -> Some ()
+    | Builtin, Builtin -> Some ()
+    | Assert, Assert -> Some ()
     | Op op, Op -> Some op
     | Unit, Unit -> Some ()
     | Bool const, Bool -> Some const
@@ -156,6 +164,8 @@ module Token = struct
         | Semicolon
         | Double_semicolon
         | External
+        | Builtin
+        | Assert
         | Op _
         | Unit
         | Bool _
@@ -187,8 +197,12 @@ module Token = struct
     | Semicolon -> ";"
     | Double_semicolon -> ";;"
     | External -> "external"
+    | Builtin -> "builtin"
+    | Assert -> "assert"
     | Op Arrow -> "->"
     | Op Minus -> "-"
+    | Op Tilde -> "~"
+    | Op Tilde_minus -> "~-"
     | Op Plus -> "+"
     | Op Star -> "*"
     | Op Slash -> "/"
@@ -231,6 +245,8 @@ module Token = struct
     | Semicolon, _
     | Double_semicolon, _
     | External, _
+    | Builtin, _
+    | Assert, _
     | Op _, _
     | Unit, _
     | Bool _, _
@@ -326,6 +342,8 @@ module Tokenizer = struct
     | "erased" -> Erased
     | "unerased" -> Unerased
     | "external" -> External
+    | "builtin" -> Builtin
+    | "assert" -> Assert
     | "true" -> Bool true
     | "false" -> Bool false
     | _ -> Ident tok
@@ -412,6 +430,13 @@ module Tokenizer = struct
     | None -> Eof
   ;;
 
+  let op_tilde t =
+    match current t with
+    | Some '-' -> single t (Op Tilde_minus)
+    | Some _ -> Op Tilde
+    | None -> Eof
+  ;;
+
   let rec next' t =
     match current t with
     | Some '(' ->
@@ -436,6 +461,9 @@ module Tokenizer = struct
     | Some '/' -> single t (Op Slash)
     | Some '\\' -> single t (Op Backslash)
     | Some '%' -> single t (Op Percent)
+    | Some '~' ->
+      advance t;
+      op_tilde t
     | Some '&' ->
       advance t;
       op_amp t

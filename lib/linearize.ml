@@ -3,10 +3,10 @@ open Lst
 module Key = Tst.Value.Concrete
 
 module Id = struct
-  let if_ = Ident.of_string "if"
-  let temp = Ident.of_string "$"
-  let lambda = Ident.of_string "λ"
-  let env = Ident.of_string "env"
+  let if_ = Ident.id "if"
+  let temp = Ident.id "$"
+  let lambda = Ident.id "λ"
+  let env = Ident.id "env"
 end
 
 module State = struct
@@ -104,6 +104,7 @@ let expand_pack path (expr : Expr.t) =
       Hashtbl.iteri pack ~f:(fun ~key ~data ->
         let path = Path.with_key path key in
         aux (Path.with_key dst key) (Expr.Ident { path; ty = data; loc }) ~f:(thunk ~f))
+    | Builtin { ty; _ } (* TODO poly builtins? *)
     | Make_env { ty; _ }
     | Make_closure { ty; _ }
     | Apply_closure { ty; _ }
@@ -190,7 +191,7 @@ let bind_env state env (fvs : Sst.Ty.t Ident.Map.t) path_to_bind =
 ;;
 
 let linearize_external state symbol ty loc : Expr.t =
-  let path = Path.with_id (State.global state (Ident.of_string symbol)) Id.lambda in
+  let path = Path.with_id (State.global state (Ident.id symbol)) Id.lambda in
   let arg_ty, ret_ty = linearize_arrow ~loc ty in
   let decl = Decl.External { path; arg_ty; ret_ty; symbol; loc } in
   State.decl state decl;
@@ -199,6 +200,7 @@ let linearize_external state symbol ty loc : Expr.t =
 
 let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
   match sst with
+  | Builtin { builtin; ty; loc } -> Builtin { builtin; ty = linearize_ty ty; loc }
   | External { symbol; ty; loc } -> linearize_external state symbol ty loc
   | Scalar { value; ty; loc } -> Scalar { value; ty = linearize_ty ty; loc }
   | Var { id; ty; loc } -> Ident { path = Env.find env id; ty = linearize_ty ty; loc }
@@ -350,6 +352,11 @@ let linearize_top_level state env (sst : Sst.Top_level.t) : Env.t =
   | External { var; symbol; ty; loc } ->
     let path = State.global state var in
     let expr = linearize_external state symbol ty loc in
+    unarize_values state path [||] expr loc;
+    Env.bind env var path
+  | Builtin { var; builtin; ty; loc } ->
+    let path = State.global state var in
+    let expr = Expr.Builtin { builtin; ty = linearize_ty ty; loc } in
     unarize_values state path [||] expr loc;
     Env.bind env var path
 ;;

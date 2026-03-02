@@ -92,13 +92,13 @@ module Expr = struct
         ; loc : Lex.Location.t
         }
     | Unop of
-        { op : Cst.Unop.t
+        { op : Ident.Unop.t
         ; arg : t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Binop of
-        { op : Cst.Binop.t
+        { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
         ; ty : Ty.t
@@ -133,6 +133,11 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Builtin of
+        { builtin : Builtin.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   let ty : t -> Ty.t = function
@@ -147,7 +152,8 @@ module Expr = struct
     | Var { ty; _ }
     | Pack { ty; _ }
     | Symbol { ty; _ }
-    | External { ty; _ } -> ty
+    | External { ty; _ }
+    | Builtin { ty; _ } -> ty
   ;;
 
   let with_ty t ty =
@@ -164,6 +170,7 @@ module Expr = struct
     | Pack expr -> Pack { expr with ty }
     | Symbol expr -> Symbol { expr with ty }
     | External expr -> External { expr with ty }
+    | Builtin expr -> Builtin { expr with ty }
   ;;
 
   let loc : t -> Lex.Location.t = function
@@ -178,11 +185,12 @@ module Expr = struct
     | Var { loc; _ }
     | Pack { loc; _ }
     | Symbol { loc; _ }
-    | External { loc; _ } -> loc
+    | External { loc; _ }
+    | Builtin { loc; _ } -> loc
   ;;
 
   let rec free_keys : t -> Tst.Value.Concrete.Set.t Ident.Map.t = function
-    | Scalar _ | External _ -> Ident.Map.empty
+    | Scalar _ | External _ | Builtin _ -> Ident.Map.empty
     | Var { id; _ } -> Ident.Map.singleton id Tst.Value.Concrete.Set.empty
     | Symbol { fn; arg; _ } -> Ident.Map.map (free_keys fn) ~f:(fun keys -> Set.add keys arg)
     | Unop { arg; _ } -> free_keys arg
@@ -246,6 +254,12 @@ module Top_level = struct
     | External of
         { var : Ident.t
         ; symbol : string
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Builtin of
+        { var : Ident.t
+        ; builtin : Builtin.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

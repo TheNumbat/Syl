@@ -1,12 +1,42 @@
 open! Core
 
-type t [@@deriving sexp, equal]
+module Unop : sig
+  type t =
+    | Not
+    | Neg
+  [@@deriving sexp, compare, equal, hash]
+
+  val print : unit -> t -> string
+end
+
+module Binop : sig
+  type t =
+    | Add
+    | Sub
+    | Mul
+    | Div
+    | Mod
+    | And
+    | Or
+    | Eq
+    | Neq
+    | Lt
+    | Lte
+    | Gt
+    | Gte
+  [@@deriving sexp, compare, equal, hash]
+
+  val print : unit -> t -> string
+end
+
+type t [@@deriving sexp, compare, equal, hash]
 
 val anon : t
+val id : string -> t
+val unop : Unop.t -> t
+val binop : Binop.t -> t
 val is_anon : t -> bool
-val append : t -> t -> t
 val print : unit -> t -> string
 
-include Stringable.S with type t := t
 include Hashable.S with type t := t
 include Comparable.S with type t := t

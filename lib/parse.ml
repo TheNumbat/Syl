@@ -44,12 +44,52 @@ let expect_op t ~op =
   if Lex.Op.equal (expect t ~kind:Op) op then () else Fail.unexpected ~loc tok
 ;;
 
+let expect_ident t =
+  let loc = Tokenizer.loc t.tokens in
+  match Tokenizer.next t.tokens with
+  | Ident id -> Ident.id id
+  | Lparen ->
+    (match Tokenizer.next t.tokens with
+     | Op op ->
+       let id =
+         match op with
+         | Tilde_minus -> Ident.(unop Unop.Neg)
+         | Not -> Ident.(unop Unop.Not)
+         | Minus -> Ident.(binop Binop.Sub)
+         | Plus -> Ident.(binop Binop.Add)
+         | Star -> Ident.(binop Binop.Mul)
+         | Slash -> Ident.(binop Binop.Div)
+         | Percent -> Ident.(binop Binop.Mod)
+         | And -> Ident.(binop Binop.And)
+         | Or -> Ident.(binop Binop.Or)
+         | Eq -> Ident.(binop Binop.Eq)
+         | Neq -> Ident.(binop Binop.Neq)
+         | Lt -> Ident.(binop Binop.Lt)
+         | Lte -> Ident.(binop Binop.Lte)
+         | Gt -> Ident.(binop Binop.Gt)
+         | Gte -> Ident.(binop Binop.Gte)
+         | op -> Fail.unexpected ~loc (Op op)
+       in
+       expect t ~kind:Rparen;
+       id
+     | tok -> Fail.unexpected ~loc tok)
+  | tok -> Fail.unexpected ~loc tok
+;;
+
 let maybe_erased t : Modes.Erasure.t =
   match Tokenizer.peek t.tokens with
   | Erased ->
     expect t ~kind:Erased;
     Erased
   | _ -> Unerased
+;;
+
+let maybe_static t : Modes.Staticity.t =
+  match Tokenizer.peek t.tokens with
+  | Static ->
+    expect t ~kind:Static;
+    Static
+  | _ -> Dynamic
 ;;
 
 let maybe_modes ~required t : Modes.Modes.Maybe.t =
@@ -109,7 +149,7 @@ and expr_arrow t : Expr.t =
     match Tokenizer.peek t.tokens with
     | Op Backslash ->
       Tokenizer.skip t.tokens;
-      Some (expect t ~kind:Ident |> Ident.of_string)
+      Some (expect_ident t)
     | _ -> None
   in
   match Tokenizer.peek t.tokens with
@@ -241,15 +281,25 @@ and expr_neg t : Expr.t =
   | _ -> expr_app t
 
 and expr_app t : Expr.t =
-  let first = expr_lnot t in
+  let first = expr_assert t in
   let rec aux acc =
-    match Fail.backtrack t ~f:(fun () -> expr_lnot t) with
+    match Fail.backtrack t ~f:(fun () -> expr_assert t) with
     | Some exp -> aux (exp :: acc)
     | None -> acc
   in
   let args = aux [] in
   List.fold_right args ~init:first ~f:(fun exp acc ->
     Expr.Apply { fn = acc; arg = exp; loc = Expr.loc acc })
+
+and expr_assert t : Expr.t =
+  let loc = Tokenizer.loc t.tokens in
+  match Tokenizer.peek t.tokens with
+  | Assert ->
+    Tokenizer.skip t.tokens;
+    let static = maybe_static t in
+    let cond = expr_lnot t in
+    Assert { cond; static; loc }
+  | _ -> expr_lnot t
 
 and expr_lnot t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
@@ -285,7 +335,7 @@ and expr_primary t : Expr.t =
     let erased = maybe_erased t in
     expect t ~kind:Lparen;
     let arg_mode = maybe_modes ~required:false t in
-    let arg = expect t ~kind:Ident |> Ident.of_string in
+    let arg = expect_ident t in
     expect t ~kind:Colon;
     let arg_ty = expr t in
     expect t ~kind:Rparen;
@@ -293,7 +343,7 @@ and expr_primary t : Expr.t =
     let body = expr t in
     Lambda { arg; erased; arg_mode; arg_ty; body; loc }
   | Let ->
-    let var = expect t ~kind:Ident |> Ident.of_string in
+    let var = expect_ident t in
     expect t ~kind:Asn;
     let bind = expr t in
     expect t ~kind:In;
@@ -306,7 +356,7 @@ and expr_primary t : Expr.t =
   | Unit -> Literal { value = Unit; loc }
   | Bool value -> Literal { value = Bool value; loc }
   | Int value -> Literal { value = Int value; loc }
-  | Ident id -> Var { id = Ident.of_string id; loc }
+  | Ident id -> Var { id = Ident.id id; loc }
   | tok -> Fail.unexpected ~loc tok
 
 and expr_fun t : Expr.fun_ =
@@ -314,11 +364,11 @@ and expr_fun t : Expr.fun_ =
   let erased = maybe_erased t in
   let var =
     let name = expect t ~kind:Ident in
-    if String.equal name "_" then Fail.fun_underscore ~loc else Ident.of_string name
+    if String.equal name "_" then Fail.fun_underscore ~loc else Ident.id name
   in
   expect t ~kind:Lparen;
   let arg_mode = maybe_modes ~required:false t in
-  let arg = expect t ~kind:Ident |> Ident.of_string in
+  let arg = expect_ident t in
   expect t ~kind:Colon;
   let arg_ty = expr t in
   expect t ~kind:Rparen;
@@ -350,19 +400,25 @@ let top_level t : Top_level.t =
   match Tokenizer.next t.tokens with
   | Fun -> top_level_funs ~loc t []
   | Let ->
-    let var = expect t ~kind:Ident |> Ident.of_string in
+    let var = expect_ident t in
     expect t ~kind:Asn;
     let bind = expr t in
     expect t ~kind:Double_semicolon;
     Let { var; bind; loc }
   | External ->
-    let var = expect t ~kind:Ident |> Ident.of_string in
+    let var = expect_ident t in
     expect t ~kind:Colon;
     let ty = expr t in
     expect t ~kind:Asn;
     let symbol = expect t ~kind:Ident in
     expect t ~kind:Double_semicolon;
     External { var; symbol; ty; loc }
+  | Builtin ->
+    let var = expect_ident t in
+    expect t ~kind:Asn;
+    let name = expect t ~kind:Ident in
+    expect t ~kind:Double_semicolon;
+    Builtin { var; name; loc }
   | tok -> Fail.unexpected ~loc tok
 ;;
 

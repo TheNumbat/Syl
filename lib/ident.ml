@@ -1,7 +1,77 @@
 open! Core
-include String
 
-let anon = "_"
-let append = ( ^ )
-let is_anon t = String.equal t anon
-let print () t = t
+module Unop = struct
+  type t =
+    | Not
+    | Neg
+  [@@deriving sexp, compare, equal, hash]
+
+  let print () = function
+    | Not -> "!"
+    | Neg -> "-"
+  ;;
+end
+
+module Binop = struct
+  type t =
+    | Add
+    | Sub
+    | Mul
+    | Div
+    | Mod
+    | And
+    | Or
+    | Eq
+    | Neq
+    | Lt
+    | Lte
+    | Gt
+    | Gte
+  [@@deriving sexp, compare, equal, hash]
+
+  let print () = function
+    | Add -> "+"
+    | Sub -> "-"
+    | Mul -> "*"
+    | Div -> "/"
+    | Mod -> "%"
+    | And -> "&&"
+    | Or -> "||"
+    | Eq -> "=="
+    | Neq -> "!="
+    | Lt -> "<"
+    | Lte -> "<="
+    | Gt -> ">"
+    | Gte -> ">="
+  ;;
+end
+
+module T = struct
+  type t =
+    | Anon
+    | Unop of Unop.t
+    | Binop of Binop.t
+    | Id of string
+  [@@deriving sexp, compare, equal, hash]
+end
+
+include T
+include Hashable.Make (T)
+include Comparable.Make (T)
+
+let anon = Anon
+let id id = Id id
+let unop op = Unop op
+let binop op = Binop op
+
+let is_anon = function
+  | Anon -> true
+  | _ -> false
+;;
+
+let print () = function
+  | Anon -> "_"
+  | Unop op -> sprintf "(%a)" Unop.print op
+  | Binop op -> sprintf "(%a)" Binop.print op
+  | Id id -> id
+;;

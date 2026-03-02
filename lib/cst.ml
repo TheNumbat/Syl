@@ -15,52 +15,6 @@ module Literal = struct
   ;;
 end
 
-module Unop = struct
-  type t =
-    | Not
-    | Neg
-  [@@deriving sexp]
-
-  let print () = function
-    | Not -> "!"
-    | Neg -> "-"
-  ;;
-end
-
-module Binop = struct
-  type t =
-    | Add
-    | Sub
-    | Mul
-    | Div
-    | Mod
-    | And
-    | Or
-    | Eq
-    | Neq
-    | Lt
-    | Lte
-    | Gt
-    | Gte
-  [@@deriving sexp]
-
-  let print () = function
-    | Add -> "+"
-    | Sub -> "-"
-    | Mul -> "*"
-    | Div -> "/"
-    | Mod -> "%"
-    | And -> "&&"
-    | Or -> "||"
-    | Eq -> "=="
-    | Neq -> "!="
-    | Lt -> "<"
-    | Lte -> "<="
-    | Gt -> ">"
-    | Gte -> ">="
-  ;;
-end
-
 module Expr = struct
   type fun_ =
     { var : Ident.t
@@ -119,12 +73,12 @@ module Expr = struct
         ; loc : Lex.Location.t
         }
     | Unop of
-        { op : Unop.t
+        { op : Ident.Unop.t
         ; arg : t
         ; loc : Lex.Location.t
         }
     | Binop of
-        { op : Binop.t
+        { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
         ; loc : Lex.Location.t
@@ -135,6 +89,11 @@ module Expr = struct
         ; arg_mode : Modes.Maybe.t
         ; ret : t
         ; ret_mode : Modes.Maybe.t
+        ; loc : Lex.Location.t
+        }
+    | Assert of
+        { cond : t
+        ; static : Staticity.t
         ; loc : Lex.Location.t
         }
     | Type_annotation of
@@ -152,6 +111,7 @@ module Expr = struct
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
     | Paren { expr; _ } -> free_vars expr
+    | Assert { cond; _ } -> free_vars cond
     | Arrow { arg; ret; _ } -> Set.union (free_vars arg) (free_vars ret)
     | Var { id; _ } -> Ident.Set.singleton id
     | Mode_annotation { expr; _ } -> free_vars expr
@@ -197,6 +157,7 @@ module Expr = struct
     | Unop { loc; _ }
     | Binop { loc; _ }
     | Arrow { loc; _ }
+    | Assert { loc; _ }
     | Type_annotation { loc; _ }
     | Mode_annotation { loc; _ } -> loc
   ;;
@@ -204,6 +165,11 @@ module Expr = struct
   let maybe_erased () : Erasure.t -> _ = function
     | Erased -> " erased"
     | Unerased -> ""
+  ;;
+
+  let maybe_static () : Staticity.t -> _ = function
+    | Static -> " static"
+    | Dynamic -> ""
   ;;
 
   let rec print_fun is_and = function
@@ -254,12 +220,13 @@ module Expr = struct
     | Paren { expr; _ } -> sprintf "(%a)" print expr
     | Var { id; _ } -> Ident.print () id
     | Literal { value; _ } -> sprintf "%a" Literal.print value
-    | Unop { op; arg; _ } -> sprintf "%a%a" Unop.print op print arg
-    | Binop { op; lhs; rhs; _ } -> sprintf "%a %a %a" print lhs Binop.print op print rhs
+    | Assert { cond; static; _ } -> sprintf "assert%a %a" maybe_static static print cond
+    | Unop { op; arg; _ } -> sprintf "%a%a" Ident.Unop.print op print arg
+    | Binop { op; lhs; rhs; _ } -> sprintf "%a %a %a" print lhs Ident.Binop.print op print rhs
     | Arrow { arg; arg_id; arg_mode; ret; ret_mode; _ } ->
       let arg_id =
         match arg_id with
-        | Some id -> " \\ " ^ Ident.to_string id
+        | Some id -> " \\ " ^ Ident.print () id
         | None -> ""
       in
       sprintf
@@ -295,10 +262,15 @@ module Top_level = struct
         ; symbol : string
         ; loc : Lex.Location.t
         }
+    | Builtin of
+        { var : Ident.t
+        ; name : string
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   let loc = function
-    | Fun { loc; _ } | Let { loc; _ } | External { loc; _ } -> loc
+    | Fun { loc; _ } | Let { loc; _ } | External { loc; _ } | Builtin { loc; _ } -> loc
   ;;
 
   let print_fun is_and = function
@@ -329,6 +301,7 @@ module Top_level = struct
     | Let { var; bind; _ } -> sprintf "let %a = %a;;" Ident.print var Expr.print bind
     | External { var; ty; symbol; _ } ->
       sprintf "external %a : %a = %s;;" Ident.print var Expr.print ty symbol
+    | Builtin { var; name; _ } -> sprintf "builtin %a = %s;;" Ident.print var name
   ;;
 end
 

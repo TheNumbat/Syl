@@ -32,7 +32,7 @@ let compile_and_run c =
 ;;
 
 let strip_prelude c =
-  let c_preamble_end = "//SYL_PRELUDE_END" in
+  let c_preamble_end = "//SYL_STDLIB_END" in
   match String.substr_index c ~pattern:c_preamble_end with
   | None -> c
   | Some i ->
@@ -42,13 +42,13 @@ let strip_prelude c =
      | None -> c)
 ;;
 
-let go input =
+let go ?print input =
   let cst = Parse.parse_exn input in
   let tst = Typecheck.typecheck_exn cst in
   let sst = Simplify.simplify tst in
   let lst = Linearize.linearize sst in
   let c = Codegen.c lst in
-  print_string (strip_prelude c);
+  if Option.is_some print then print_string (strip_prelude c);
   match check with
   | `Compile -> compile c
   | `Run -> compile_and_run c
@@ -62,14 +62,7 @@ let x = ();;
 let x = ();;
 |};
   [%expect
-    {|
-    int main()
-    {
-      ;
-      ;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "literals" =
@@ -85,22 +78,7 @@ let _ = () @ dynamic;;
 let _ = true @ dynamic;;
 let _ = 123 @ dynamic;;|};
   [%expect
-    {|
-    static syl_bool __ˢ1;
-    static syl_int __ˢ2;
-    static syl_bool __ˢ4;
-    static syl_int __ˢ5;
-    int main()
-    {
-      ;
-      __ˢ1 = true;
-      __ˢ2 = 123ll;
-      ;
-      __ˢ4 = true;
-      __ˢ5 = 123ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Mode annotation valid static" =
@@ -110,14 +88,7 @@ let _ =
   1 @ static
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Mode annotation valid dynamic" =
@@ -127,14 +98,7 @@ let _ =
   1 @ dynamic
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -145,14 +109,7 @@ let _ =
   dyn @ dynamic erased
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    int main()
-    {
-      _dyn = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -163,12 +120,7 @@ let _ =
   dyn @ dynamic erased
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -179,16 +131,7 @@ let _ =
   dyn @ dynamic
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      __ = _dyn;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -199,14 +142,7 @@ let _ =
   dyn @ dynamic erased
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    int main()
-    {
-      _dyn = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop static" =
@@ -216,14 +152,7 @@ let _ =
   !true
 ;;|};
   [%expect
-    {|
-    static syl_bool __;
-    int main()
-    {
-      __ = false;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop dynamic" =
@@ -233,14 +162,7 @@ let _ =
   !(true @ dynamic)
 ;;|};
   [%expect
-    {|
-    static syl_bool __;
-    int main()
-    {
-      __ = false;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dynamic static erased" =
@@ -250,12 +172,7 @@ let _ =
   (true @ static erased)
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dynamic erased" =
@@ -265,12 +182,7 @@ let _ =
   (true @ dynamic erased)
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased dynamic" =
@@ -280,12 +192,7 @@ let _ =
   ((true @ erased) @ dynamic)
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop var static" =
@@ -296,16 +203,7 @@ let _ =
   !dyn
 ;;|};
   [%expect
-    {|
-    static syl_bool _dyn;
-    static syl_bool __;
-    int main()
-    {
-      _dyn = true;
-      __ = !_dyn;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop var erased" =
@@ -316,14 +214,7 @@ let _ =
   !dyn
 ;;|};
   [%expect
-    {|
-    static syl_bool __;
-    int main()
-    {
-      __ = false;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop var erased" =
@@ -334,14 +225,7 @@ let _ =
   !(!dyn @ erased)
 ;;|};
   [%expect
-    {|
-    static syl_bool __;
-    int main()
-    {
-      __ = true;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop var erased" =
@@ -352,14 +236,7 @@ let _ =
   !(!dyn)
 ;;|};
   [%expect
-    {|
-    static syl_bool __;
-    int main()
-    {
-      __ = true;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop var dynamic" =
@@ -370,16 +247,7 @@ let _ =
   !dyn
 ;;|};
   [%expect
-    {|
-    static syl_bool _dyn;
-    static syl_bool __;
-    int main()
-    {
-      _dyn = true;
-      __ = !_dyn;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Unop var dynamic" =
@@ -388,14 +256,7 @@ let%expect_test "Unop var dynamic" =
 let dyn = true @ dynamic;;
 let x = !dyn @ erased;;|};
   [%expect
-    {|
-    static syl_bool _dyn;
-    int main()
-    {
-      _dyn = true;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop static + static" =
@@ -405,14 +266,7 @@ let _ =
   1 + 2
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 3ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop static + static erased" =
@@ -422,14 +276,7 @@ let _ =
   1 + (2 @ erased)
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 3ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop erased dynamic" =
@@ -439,14 +286,7 @@ let _ =
   1 + (2 @ dynamic)
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 3ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop erased dynamic" =
@@ -456,14 +296,7 @@ let _ =
   1 + (2 @ dynamic) + (3 @ erased)
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 6ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop erased static" =
@@ -473,14 +306,7 @@ let _ =
   1 + ((2 + 3) @ erased)
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 6ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop static + dynamic" =
@@ -491,19 +317,7 @@ let _ =
   1 + dyn
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 2ll;
-      {
-        syl_int _$ = 1ll;
-        __ = _$ + _dyn;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop dynamic + static" =
@@ -514,19 +328,7 @@ let _ =
   dyn + 2
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      {
-        syl_int _$ = 2ll;
-        __ = _dyn + _$;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop dynamic + dynamic" =
@@ -538,18 +340,7 @@ let _ =
   dyn1 + dyn2
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn1;
-    static syl_int _dyn2;
-    static syl_int __;
-    int main()
-    {
-      _dyn1 = 1ll;
-      _dyn2 = 2ll;
-      __ = _dyn1 + _dyn2;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop erased + dynamic" =
@@ -561,19 +352,7 @@ let _ =
   dyn1 + dyn2
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn2;
-    static syl_int __;
-    int main()
-    {
-      _dyn2 = 2ll;
-      {
-        syl_int _$ = 1ll;
-        __ = _$ + _dyn2;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Binop erased + erased" =
@@ -585,14 +364,7 @@ let _ =
   dyn1 + dyn2
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 3ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "If static cond static branches" =
@@ -602,14 +374,7 @@ let _ =
   if true then 1 else 2
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "If erased" =
@@ -619,12 +384,7 @@ let _ =
   (if true then int else int) @ erased
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "If erased" =
@@ -634,14 +394,7 @@ let _ =
   if true @ erased then 1 else 2
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "If erased cond" =
@@ -652,14 +405,7 @@ let _ =
   if x then 1 else 2
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "If static cond dynamic branches" =
@@ -670,16 +416,7 @@ let _ =
   if true then dyn else 2
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      __ = _dyn;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "If dynamic cond" =
@@ -690,27 +427,7 @@ let _ =
   if dyn then 1 else 2
 ;;|};
   [%expect
-    {|
-    static syl_bool _dyn;
-    static syl_int __;
-    int main()
-    {
-      _dyn = true;
-      {
-        syl_int __·if;
-        if(_dyn)
-        {
-          __·if = 1ll;
-        }
-        else
-        {
-          __·if = 2ll;
-        }
-        __ = __·if;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased if expr" =
@@ -721,16 +438,7 @@ let _ =
   0 + ((if x then 1 else 2) @ erased)
 ;;|};
   [%expect
-    {|
-    static syl_bool _x;
-    static syl_int __;
-    int main()
-    {
-      _x = true;
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if erased branch" =
@@ -738,12 +446,7 @@ let%expect_test "if erased branch" =
     {|
 let _ = if 1==2 then unit else int;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if erased branch" =
@@ -752,14 +455,7 @@ let%expect_test "if erased branch" =
 let cond = true @ dynamic;;
 let t = if cond then unit else int;;|};
   [%expect
-    {|
-    static syl_bool _cond;
-    int main()
-    {
-      _cond = true;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if erased branch" =
@@ -768,14 +464,7 @@ let%expect_test "if erased branch" =
 let cond = true @ dynamic;;
 let t = (if cond then false else cond) @ erased;;|};
   [%expect
-    {|
-    static syl_bool _cond;
-    int main()
-    {
-      _cond = true;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let static" =
@@ -786,17 +475,7 @@ let _ =
   x
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 1ll;
-        __ = __·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let dynamic" =
@@ -808,19 +487,7 @@ let _ =
   x
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      {
-        syl_int __·x = _dyn;
-        __ = __·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let dynamic" =
@@ -832,17 +499,7 @@ let _ =
   x
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 2ll;
-        __ = __·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -854,12 +511,7 @@ let _ =
   x
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -870,14 +522,7 @@ let _ =
   x + 1
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 2ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -889,18 +534,7 @@ let _ =
   x + y
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·y = 1ll;
-        syl_int _$ = 1ll;
-        __ = _$ + __·y;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -912,14 +546,7 @@ let _ =
   0 + (x + y)
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 2ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -931,18 +558,7 @@ let _ =
   0 + ((x + y) @ erased)
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 1ll;
-        syl_int __·y = 1ll;
-        __ = 2ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static closure" =
@@ -952,22 +568,7 @@ let _ =
   (fn (x : int) -> x)
 ;;|};
   [%expect
-    {|
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure" =
@@ -977,12 +578,7 @@ let _ =
   (fn (x : int) -> x) @ erased
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure return type" =
@@ -992,12 +588,7 @@ let _ =
   (fn (x : int) -> int)
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dynamic closure" =
@@ -1008,25 +599,7 @@ let _ =
   (fn (x : int) -> x + y)
 ;;|};
   [%expect
-    {|
-    static syl_int _y;
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _y = *(syl_int*)(𝒰 + 0);
-      return _x + _y;
-    }
-    int main()
-    {
-      _y = 1ll;
-      {
-        syl_env __·env = syl_capture<syl_int>(_y);
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1036,12 +609,7 @@ let f = fn (erased x : int) -> x;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1051,27 +619,7 @@ let f = fn (erased x : int) -> 1;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1081,14 +629,7 @@ let f = (fn (erased x : int) -> 1) @ erased;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1098,27 +639,7 @@ let f = (fn (erased x : int) -> 1) ;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1128,27 +649,7 @@ let f = (fn (erased x : int) -> 1) ;;
 let _ = f (0 @ erased);;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1158,27 +659,7 @@ let f = fn (erased x : int) -> 1;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1187,17 +668,7 @@ let%expect_test "erased closure arg" =
 let _ = (fn (erased x : int) -> 1) 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        __ = 1ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1206,17 +677,7 @@ let%expect_test "erased closure arg" =
 let _ = (fn (erased x : int) -> 1) (0 @ erased);;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        __ = 1ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1225,17 +686,7 @@ let%expect_test "erased closure arg" =
 let _ = (fn (static x : int) -> 1) 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        __ = 1ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1244,14 +695,7 @@ let%expect_test "erased closure arg" =
 let _ = (fn (static erased x : int) -> 1) 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1260,14 +704,7 @@ let%expect_test "erased closure arg" =
 let _ = (fn (static erased x : int) -> 1) (0 @ erased);;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1277,24 +714,7 @@ let f = fn (static erased g : int -> erased int) -> let _ = g 1 in 2;;
 let _ = f (fn (x : int) -> 0 @ erased);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _fₒλ1;
-    static syl_int __;
-    static syl_int _f·λₒλ1(syl_env 𝒰)
-    {
-      return 2ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ1 = syl_thunk<syl_int>{_f·λₒλ1, _f·env};
-      }
-      __ = _fₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1304,34 +724,7 @@ let f = fn (erased x : int -> int) -> 1;;
 let _ = f ((fn (x : int) -> x + 1) @ erased);;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_closure<syl_int,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _f;
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_int __;
-    static syl_int _f·λ(syl_closure<syl_int,syl_int> _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env __·env = NULL;
-        syl_closure<syl_int,syl_int> _$ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -1341,14 +734,7 @@ let f = (fn (erased x : int -> int) -> 1) @ erased;;
 let _ = f ((fn (x : int) -> x + 1) @ erased);;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static erased closure arg" =
@@ -1358,12 +744,7 @@ let _ =
   (fn (static erased x : int) -> x)
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent closure arg" =
@@ -1373,22 +754,7 @@ let _ =
   (fn (x : type) -> x)
 ;;|};
   [%expect
-    {|
-    static syl_unit __·λ(syl_env);
-    static syl_closure<syl_unit,syl_unit> __;
-    static syl_unit __·λ(syl_env 𝒰)
-    {
-      ;
-    }
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-        __ = syl_closure<syl_unit,syl_unit>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent closure arg" =
@@ -1396,22 +762,7 @@ let%expect_test "dependent closure arg" =
     {|
 fun f (x : type) : type = x;;|};
   [%expect
-    {|
-    static syl_unit _f·λ(syl_env);
-    static syl_closure<syl_unit,syl_unit> _f;
-    static syl_unit _f·λ(syl_env 𝒰)
-    {
-      ;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _f = syl_closure<syl_unit,syl_unit>{_f·λ, 𝒰};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent closure arg" =
@@ -1419,12 +770,7 @@ let%expect_test "dependent closure arg" =
     {|
 fun f (static x : int) : static erased type = int;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent closure arg" =
@@ -1434,15 +780,7 @@ let _ =
   (fn (static x : type) -> x)
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent closure arg" =
@@ -1452,12 +790,7 @@ let _ =
   (fn (erased x : type) -> x)
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -1466,12 +799,7 @@ let%expect_test "closure erased" =
 let x = (fn (x : int) -> x) @ erased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -1480,12 +808,7 @@ let%expect_test "closure erased" =
 let x = (fn (erased x : int) -> x) 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -1494,17 +817,7 @@ let%expect_test "closure erased" =
 let x = (fn (erased x : int) -> 1) 0;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    int main()
-    {
-      {
-        syl_int _x·x = 0ll;
-        _x = 1ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -1513,14 +826,7 @@ let%expect_test "closure erased" =
 let x = ((fn (erased x : int) -> 1) @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    int main()
-    {
-      _x = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure branches" =
@@ -1531,27 +837,7 @@ let g = (fn (static x : int) -> 2);;
 let _ = if true then f else g;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-      }
-      __ = _f;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static erased arg" =
@@ -1562,33 +848,7 @@ let _ = f 0;;
 let _ = f 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ1;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int __ˢ1;
-    static syl_int _f·λₒ1(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      __ˢ1 = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure branches" =
@@ -1600,30 +860,7 @@ let h = if true then f else g;;
 let _ = h 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_thunk<syl_int> _hₒ0;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-      }
-      _hₒ0 = _fₒ0;
-      __ = _hₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure branches" =
@@ -1634,18 +871,7 @@ let g = (fn (static erased x : int) -> 2);;
 let _ = if true then f else g;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      {
-        syl_env _g·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -1657,57 +883,7 @@ let g = (fn (erased x : int) -> 2);;
 let _ = (if c () then f else g) 0;;
 |};
   [%expect
-    {|
-    static syl_bool _c·λ(syl_env);
-    static syl_closure<syl_unit,syl_bool> _c;
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_bool _c·λ(syl_env 𝒰)
-    {
-      return true;
-    }
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 2ll;
-    }
-    int main()
-    {
-      {
-        syl_env _c·env = NULL;
-        _c = syl_closure<syl_unit,syl_bool>{_c·λ, _c·env};
-      }
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
-      }
-      {
-        ;
-        syl_closure<syl_int,syl_int> __·if;
-        if(_c())
-        {
-          __·if = _f;
-        }
-        else
-        {
-          __·if = _g;
-        }
-        syl_int _$ˢ1 = 0ll;
-        __ = __·if(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -1718,35 +894,7 @@ let g = fn (f : int -> int) -> f 0;;
 let _ = g f;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _g·λ(syl_closure<syl_int,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λ(syl_closure<syl_int,syl_int> _f, syl_env 𝒰)
-    {
-      syl_int _$ = 0ll;
-      return _f(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_g·λ, _g·env};
-      }
-      __ = _g(_f);
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -1757,45 +905,7 @@ let g = fn (static f : int -> int) -> f 0;;
 let _ = g f;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _g·λₒλ1·f·λ(syl_int, syl_env);
-    static syl_int _g·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _gₒλ1;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λₒλ1·f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λₒλ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g·λₒλ1·f;
-      {
-        syl_env _g·λₒλ1·f·env = NULL;
-        _g·λₒλ1·f = syl_closure<syl_int,syl_int>{_g·λₒλ1·f·λ, _g·λₒλ1·f·env};
-      }
-      syl_int _$ = 0ll;
-      return _g·λₒλ1·f(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
-      }
-      __ = _gₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -1806,44 +916,7 @@ let g = fn (static f : erased int -> int) -> (f @ erased) 0;;
 let _ = g f;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _g·λₒλ1·f·λ(syl_int, syl_env);
-    static syl_int _g·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _gₒλ1;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λₒλ1·f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λₒλ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g·λₒλ1·f;
-      {
-        syl_env _g·λₒλ1·f·env = NULL;
-        _g·λₒλ1·f = syl_closure<syl_int,syl_int>{_g·λₒλ1·f·λ, _g·λₒλ1·f·env};
-      }
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
-      }
-      __ = _gₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -1854,25 +927,7 @@ let g = fn (static erased f2 : int -> int) -> f2 0;;
 let _ = g f1;;
 |};
   [%expect
-    {|
-    static syl_int _g·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _gₒλ1;
-    static syl_int __;
-    static syl_int _g·λₒλ1(syl_env 𝒰)
-    {
-      syl_int _g·λₒλ1·x = 0ll;
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _g·env = NULL;
-        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
-      }
-      __ = _gₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -1883,35 +938,7 @@ let g = fn (f2 : int -> int) -> f2 0;;
 let _ = g f1;;
 |};
   [%expect
-    {|
-    static syl_int _f1·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f1;
-    static syl_int _g·λ(syl_closure<syl_int,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _g;
-    static syl_int __;
-    static syl_int _f1·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λ(syl_closure<syl_int,syl_int> _f2, syl_env 𝒰)
-    {
-      syl_int _$ = 0ll;
-      return _f2(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f1·env = NULL;
-        _f1 = syl_closure<syl_int,syl_int>{_f1·λ, _f1·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_g·λ, _g·env};
-      }
-      __ = _g(_f1);
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -1922,45 +949,7 @@ let g = fn (static f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
   [%expect
-    {|
-    static syl_int _f1·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f1;
-    static syl_int _g·λₒλ1·f2·λ(syl_int, syl_env);
-    static syl_int _g·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _gₒλ1;
-    static syl_int __;
-    static syl_int _f1·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λₒλ1·f2·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λₒλ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g·λₒλ1·f2;
-      {
-        syl_env _g·λₒλ1·f2·env = NULL;
-        _g·λₒλ1·f2 = syl_closure<syl_int,syl_int>{_g·λₒλ1·f2·λ, _g·λₒλ1·f2·env};
-      }
-      syl_int _$ = 0ll;
-      return _g·λₒλ1·f2(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f1·env = NULL;
-        _f1 = syl_closure<syl_int,syl_int>{_f1·λ, _f1·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
-      }
-      __ = _gₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -1971,24 +960,7 @@ let g = fn (static erased f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
   [%expect
-    {|
-    static syl_int _g·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _gₒλ1;
-    static syl_int __;
-    static syl_int _g·λₒλ1(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _g·env = NULL;
-        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
-      }
-      __ = _gₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -1999,34 +971,7 @@ let g = fn (static erased f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
   [%expect
-    {|
-    static syl_int _f1·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f1;
-    static syl_int _g·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _gₒλ1;
-    static syl_int __;
-    static syl_int _f1·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_int _g·λₒλ1(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f1·env = NULL;
-        _f1 = syl_closure<syl_int,syl_int>{_f1·λ, _f1·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _gₒλ1 = syl_thunk<syl_int>{_g·λₒλ1, _g·env};
-      }
-      __ = _gₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure static" =
@@ -2035,17 +980,7 @@ let%expect_test "closure static" =
 let x = (fn (static x : int) -> x) 0;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    int main()
-    {
-      {
-        syl_int _x·x = 0ll;
-        _x = _x·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure static erased" =
@@ -2054,14 +989,7 @@ let%expect_test "closure static erased" =
 let x = (fn (static erased x : int) -> 1) 0;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    int main()
-    {
-      _x = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure return static type" =
@@ -2071,14 +999,7 @@ let t = (fn (static x : int) -> int) 0;;
 let _ = 0 : t;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 0ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure return static type" =
@@ -2088,14 +1009,7 @@ let t = (fn (static erased x : int) -> int) 0;;
 let _ = 0 : t;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 0ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply fn static arg" =
@@ -2105,17 +1019,7 @@ let _ =
   (fn (x : int) -> x) 1
 ;;|};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 1ll;
-        __ = __·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply static erased fn static arg" =
@@ -2125,12 +1029,7 @@ let _ =
   (fn (static erased x : int) -> x) 1
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply fn dynamic arg" =
@@ -2141,19 +1040,7 @@ let _ =
   (fn (x : int) -> x) dyn
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      {
-        syl_int __·x = _dyn;
-        __ = __·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply erased fn dynamic arg" =
@@ -2165,25 +1052,7 @@ let y =
 ;;
 let _ = y @ unerased;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int _y;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      {
-        syl_int _y·x;
-        {
-          syl_int _$ = 1ll;
-          _y·x = _dyn - _$;
-        }
-        _y = 5ll;
-      }
-      __ = _y;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply erased fn dynamic arg" =
@@ -2195,23 +1064,7 @@ let y =
 ;;
 let _ = y @ unerased;;|};
   [%expect
-    {|
-    static syl_int _y;
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int _y·x;
-        {
-          syl_int _y·x·x = 1ll;
-          _y·x = 1ll;
-        }
-        _y = 5ll;
-      }
-      __ = _y;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply erased fn stat arg" =
@@ -2223,25 +1076,7 @@ let y =
 ;;
 let _ = y @ unerased;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int _y;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      {
-        syl_int _y·x;
-        {
-          syl_int _$ = 1ll;
-          _y·x = _dyn - _$;
-        }
-        _y = 5ll;
-      }
-      __ = _y;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply erased fn stat arg" =
@@ -2253,21 +1088,7 @@ let y =
 ;;
 let _ = y @ unerased;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int _y;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      {
-        syl_int _y·x = 0ll;
-        _y = 5ll;
-      }
-      __ = _y;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply erased fn stat arg" =
@@ -2279,18 +1100,7 @@ let y =
 ;;
 let _ = y @ unerased;;|};
   [%expect
-    {|
-    static syl_int _dyn;
-    static syl_int _y;
-    static syl_int __;
-    int main()
-    {
-      _dyn = 1ll;
-      _y = 5ll;
-      __ = _y;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply dynamic fn static arg" =
@@ -2301,27 +1111,7 @@ let _ =
   dyn_fn 1
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn_fn·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _dyn_fn;
-    static syl_int __;
-    static syl_int _dyn_fn·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _dyn_fn·env = NULL;
-        _dyn_fn = syl_closure<syl_int,syl_int>{_dyn_fn·λ, _dyn_fn·env};
-      }
-      {
-        syl_int _$ = 1ll;
-        __ = _dyn_fn(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Apply dynamic fn dynamic arg" =
@@ -2333,26 +1123,7 @@ let _ =
   dyn_fn dyn_arg
 ;;|};
   [%expect
-    {|
-    static syl_int _dyn_fn·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _dyn_fn;
-    static syl_int _dyn_arg;
-    static syl_int __;
-    static syl_int _dyn_fn·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _dyn_fn·env = NULL;
-        _dyn_fn = syl_closure<syl_int,syl_int>{_dyn_fn·λ, _dyn_fn·env};
-      }
-      _dyn_arg = 1ll;
-      __ = _dyn_fn(_dyn_arg);
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda dynamic arg" =
@@ -2362,22 +1133,7 @@ let _ =
   fn (x : int) -> x
 ;;|};
   [%expect
-    {|
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda static arg" =
@@ -2387,15 +1143,7 @@ let _ =
   fn (static x : int) -> 1
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda erased arg" =
@@ -2405,12 +1153,7 @@ let _ =
   fn (erased x : int) -> x
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda capturing dynamic var" =
@@ -2421,25 +1164,7 @@ let _ =
   fn (y : int) -> x
 ;;|};
   [%expect
-    {|
-    static syl_int _x;
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _y, syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      return _x;
-    }
-    int main()
-    {
-      _x = 1ll;
-      {
-        syl_env __·env = syl_capture<syl_int>(_x);
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda capturing static var" =
@@ -2450,25 +1175,7 @@ let _ =
   fn (y : int) -> x
 ;;|};
   [%expect
-    {|
-    static syl_int _x;
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _y, syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      return _x;
-    }
-    int main()
-    {
-      _x = 1ll;
-      {
-        syl_env __·env = syl_capture<syl_int>(_x);
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda capturing erased var" =
@@ -2479,12 +1186,7 @@ let _ =
   fn (y : int) -> x
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda capturing erased var" =
@@ -2495,12 +1197,7 @@ let _ =
   (fn (y : int) -> x) 0
 ;;|};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda capturing type" =
@@ -2509,23 +1206,7 @@ let%expect_test "Lambda capturing type" =
 let f = fn (static _ : unit) -> int;;
 let g = fn (x : f ()) -> x + 1;;|};
   [%expect
-    {|
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    int main()
-    {
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda take type" =
@@ -2535,12 +1216,7 @@ let f = fn (erased ty : type) -> ty;;
 let _ = f int;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Lambda take type" =
@@ -2550,14 +1226,7 @@ let f = fn (static erased ty : type) -> ty;;
 let _ = 0 : f int;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 0ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -2567,12 +1236,7 @@ let x = fn (static erased x : type) -> x;;
 let y = x int;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -2582,15 +1246,7 @@ let x = fn (static x : type) -> x;;
 let y = x @ dynamic;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _x·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -2600,12 +1256,7 @@ let x = fn (erased x : type) -> x;;
 let y = x @ dynamic;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -2615,15 +1266,7 @@ let x = fn (static x : type) -> x;;
 let y = x @ unerased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _x·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -2633,12 +1276,7 @@ let x = fn (static erased x : type) -> x;;
 let y = (x int) @ dynamic;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -2647,15 +1285,7 @@ let%expect_test "Dependent lambda" =
 let f = fn (static erased ty : type) -> fn (x : ty) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static erased lambda" =
@@ -2665,36 +1295,7 @@ let f = fn (static x : int) -> fn (_ : unit) -> x;;
 let g = (f 1 ()) @ unerased;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1·λ(syl_env);
-    static syl_closure<syl_unit,syl_int> _f·λₒ1(syl_env);
-    static syl_thunk<syl_closure<syl_unit,syl_int>> _fₒ1;
-    static syl_int _g;
-    static syl_int _f·λₒ1·λ(syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      return _x;
-    }
-    static syl_closure<syl_unit,syl_int> _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
-      return syl_closure<syl_unit,syl_int>{_f·λₒ1·λ, _f·λₒ1·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_closure<syl_unit,syl_int>>{_f·λₒ1, _f·env};
-      }
-      {
-        syl_closure<syl_unit,syl_int> _$ = _fₒ1();
-        ;
-        _g = _$();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "lift universal type" =
@@ -2703,12 +1304,7 @@ let%expect_test "lift universal type" =
 let f = fn (static ty : type) -> ty @ erased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "lift universal int" =
@@ -2718,12 +1314,7 @@ let f = fn (static x : int) -> x @ erased;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -2736,55 +1327,7 @@ let g = f bool;;
 let _ = g true;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env);
-    static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_closure<syl_bool,syl_bool> _gˢ1;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝔹·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_f·λₒ𝔹·λ, _f·λₒ𝔹·env};
-    }
-    static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_f·λₒ𝔹, _f·env};
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, _f·env};
-      }
-      _g = _fₒ𝕀();
-      {
-        syl_int _$ = 0ll;
-        __ = _g(_$);
-      }
-      _gˢ1 = _fₒ𝔹();
-      {
-        syl_bool _$ = true;
-        __ˢ1 = _gˢ1(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -2794,36 +1337,7 @@ let f = fn (static g : int -> int) -> g 0;;
 let _ = f (fn (x : int) -> x + 1);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ1·g·λ(syl_int, syl_env);
-    static syl_int _f·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _fₒλ1;
-    static syl_int __;
-    static syl_int _f·λₒλ1·g·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    static syl_int _f·λₒλ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f·λₒλ1·g;
-      {
-        syl_env _f·λₒλ1·g·env = NULL;
-        _f·λₒλ1·g = syl_closure<syl_int,syl_int>{_f·λₒλ1·g·λ, _f·λₒλ1·g·env};
-      }
-      syl_int _$ = 0ll;
-      return _f·λₒλ1·g(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ1 = syl_thunk<syl_int>{_f·λₒλ1, _f·env};
-      }
-      __ = _fₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent unit" =
@@ -2833,25 +1347,7 @@ let f = fn (static x : unit) -> let x = 0 in ();;
 let _ = f ();;
 |};
   [%expect
-    {|
-    static syl_unit _f·λₒø(syl_env);
-    static syl_thunk<syl_unit> _fₒø;
-    static syl_unit _f·λₒø(syl_env 𝒰)
-    {
-      ;
-      syl_int _f·λₒø·xˢ1 = 0ll;
-      ;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒø = syl_thunk<syl_unit>{_f·λₒø, _f·env};
-      }
-      _fₒø();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent bool" =
@@ -2861,25 +1357,7 @@ let f = fn (static x : bool) -> !x;;
 let _ = f true;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒT(syl_env);
-    static syl_thunk<syl_bool> _fₒT;
-    static syl_bool __;
-    static syl_bool _f·λₒT(syl_env 𝒰)
-    {
-      syl_bool _f·λₒT·x = true;
-      return !_f·λₒT·x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒT = syl_thunk<syl_bool>{_f·λₒT, _f·env};
-      }
-      __ = _fₒT();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent int" =
@@ -2889,25 +1367,7 @@ let f = fn (static x : int) -> -x;;
 let _ = f 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1(syl_env);
-    static syl_thunk<syl_int> _fₒ1;
-    static syl_int __;
-    static syl_int _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      return -_f·λₒ1·x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
-      }
-      __ = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent type" =
@@ -2916,15 +1376,7 @@ let%expect_test "dependent type" =
 let f = fn (static erased t : type) -> fn (x : t) -> if true then x else x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -2934,34 +1386,7 @@ let f = fn (g : int -> int) -> g 0;;
 let _ = f (fn (x : int) -> 0);;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_closure<syl_int,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _f;
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_int __;
-    static syl_int _f·λ(syl_closure<syl_int,syl_int> _g, syl_env 𝒰)
-    {
-      syl_int _$ = 0ll;
-      return _g(_$);
-    }
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env __·env = NULL;
-        syl_closure<syl_int,syl_int> _$ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -2971,35 +1396,7 @@ let f = fn (static g : static int -> int) -> g 0;;
 let _ = f (fn (static x : int) -> 0);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ4·g·λₒ0(syl_env);
-    static syl_int _f·λₒλ4(syl_env);
-    static syl_thunk<syl_int> _fₒλ4;
-    static syl_int __;
-    static syl_int _f·λₒλ4·g·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒλ4·g·λₒ0·x = 0ll;
-      return 0ll;
-    }
-    static syl_int _f·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _f·λₒλ4·gₒ0;
-      {
-        syl_env _f·λₒλ4·g·env = NULL;
-        _f·λₒλ4·gₒ0 = syl_thunk<syl_int>{_f·λₒλ4·g·λₒ0, _f·λₒλ4·g·env};
-      }
-      return _f·λₒλ4·gₒ0();
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ4 = syl_thunk<syl_int>{_f·λₒλ4, _f·env};
-      }
-      __ = _fₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -3009,35 +1406,7 @@ let f = fn (static g : static int -> int) -> g 0;;
 let _ = f (fn (x : int) -> 0);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ3·g·λ(syl_int, syl_env);
-    static syl_int _f·λₒλ3(syl_env);
-    static syl_thunk<syl_int> _fₒλ3;
-    static syl_int __;
-    static syl_int _f·λₒλ3·g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    static syl_int _f·λₒλ3(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f·λₒλ3·g;
-      {
-        syl_env _f·λₒλ3·g·env = NULL;
-        _f·λₒλ3·g = syl_closure<syl_int,syl_int>{_f·λₒλ3·g·λ, _f·λₒλ3·g·env};
-      }
-      syl_int _$ = 0ll;
-      return _f·λₒλ3·g(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ3 = syl_thunk<syl_int>{_f·λₒλ3, _f·env};
-      }
-      __ = _fₒλ3();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3046,15 +1415,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (static x : int) -> x else fn (x : int) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3063,12 +1424,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (static x : int) -> x else fn (erased x : int) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3077,12 +1433,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (static erased x : int) -> x else fn (x : int) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3091,12 +1442,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (erased x : int) -> x else fn (x : int) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3105,22 +1451,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (x : int) -> x else fn (static x : int) -> x;;
 |};
   [%expect
-    {|
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3129,12 +1460,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (x : int) -> x else fn (erased x : int) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3143,12 +1469,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (erased x : int) -> x else fn (static x : int) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -3157,12 +1478,7 @@ let%expect_test "arrow-pi join" =
 let _ = if true then fn (x : int) -> x else fn (static erased x : int) -> x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "return erased" =
@@ -3172,12 +1488,7 @@ let f = fn (x : int) -> 0 @ erased;;
 let _ = f 1;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "pi typechecking" =
@@ -3187,35 +1498,7 @@ let%expect_test "pi typechecking" =
   let _ = f (fn (erased x : int) -> 0);;
   |};
   [%expect
-    {|
-    static syl_int _f·λₒλ1·g·λ(syl_int, syl_env);
-    static syl_int _f·λₒλ1(syl_env);
-    static syl_thunk<syl_int> _fₒλ1;
-    static syl_int __;
-    static syl_int _f·λₒλ1·g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    static syl_int _f·λₒλ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f·λₒλ1·g;
-      {
-        syl_env _f·λₒλ1·g·env = NULL;
-        _f·λₒλ1·g = syl_closure<syl_int,syl_int>{_f·λₒλ1·g·λ, _f·λₒλ1·g·env};
-      }
-      syl_int _$ = 0ll;
-      return _f·λₒλ1·g(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ1 = syl_thunk<syl_int>{_f·λₒλ1, _f·env};
-      }
-      __ = _fₒλ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow-pi typechecking" =
@@ -3225,35 +1508,7 @@ let f = fn (static g : static int -> int) -> g 1;;
 let _ = f (fn (x : int) -> 0);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ3·g·λ(syl_int, syl_env);
-    static syl_int _f·λₒλ3(syl_env);
-    static syl_thunk<syl_int> _fₒλ3;
-    static syl_int __;
-    static syl_int _f·λₒλ3·g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    static syl_int _f·λₒλ3(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f·λₒλ3·g;
-      {
-        syl_env _f·λₒλ3·g·env = NULL;
-        _f·λₒλ3·g = syl_closure<syl_int,syl_int>{_f·λₒλ3·g·λ, _f·λₒλ3·g·env};
-      }
-      syl_int _$ = 1ll;
-      return _f·λₒλ3·g(_$);
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ3 = syl_thunk<syl_int>{_f·λₒλ3, _f·env};
-      }
-      __ = _fₒλ3();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Pi typechecking" =
@@ -3263,26 +1518,7 @@ let f = fn (static erased g : static int -> int) -> g 0;;
 let _ = f (fn (static x : int) -> x + 1);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ4(syl_env);
-    static syl_thunk<syl_int> _fₒλ4;
-    static syl_int __;
-    static syl_int _f·λₒλ4(syl_env 𝒰)
-    {
-      syl_int _f·λₒλ4·x = 0ll;
-      syl_int _$ = 1ll;
-      return _f·λₒλ4·x + _$;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ4 = syl_thunk<syl_int>{_f·λₒλ4, _f·env};
-      }
-      __ = _fₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent lambda" =
@@ -3292,40 +1528,7 @@ let f = fn (static g : static erased type -> int -> int) -> g int;;
 let _ = f (fn (static erased t : type) -> fn (x : int) -> x);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ4·g·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒλ4·g·λₒ𝕀(syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒλ4(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒλ4;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _f·λₒλ4·g·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒλ4·g·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒλ4·g·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒλ4·g·λₒ𝕀·λ, _f·λₒλ4·g·λₒ𝕀·env};
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _f·λₒλ4·gₒ𝕀;
-      {
-        syl_env _f·λₒλ4·g·env = NULL;
-        _f·λₒλ4·gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒλ4·g·λₒ𝕀, _f·λₒλ4·g·env};
-      }
-      return _f·λₒλ4·gₒ𝕀();
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ4 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒλ4, _f·env};
-      }
-      __ = _fₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent fn" =
@@ -3336,53 +1539,7 @@ let x = (id int) (0 @ dynamic);;
 let y = (id bool) (true @ dynamic);;
 |};
   [%expect
-    {|
-    static syl_bool _id·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env);
-    static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _idₒ𝔹;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
-    static syl_int _x;
-    static syl_bool _y;
-    static syl_bool _id·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝔹·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_id·λₒ𝔹·λ, _id·λₒ𝔹·env};
-    }
-    static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env _id·env = NULL;
-        _idₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_id·λₒ𝔹, _id·env};
-        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, _id·env};
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _idₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        _x = _$(_$ˢ1);
-      }
-      {
-        syl_closure<syl_bool,syl_bool> _$ = _idₒ𝔹();
-        syl_bool _$ˢ1 = true;
-        _y = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent fn" =
@@ -3393,22 +1550,7 @@ let x = (id int) (0 @ dynamic);;
 let y = (id bool) (true @ dynamic);;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    static syl_bool _y;
-    int main()
-    {
-      {
-        syl_int _x·x = 0ll;
-        _x = _x·x;
-      }
-      {
-        syl_bool _y·x = true;
-        _y = _y·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -3418,15 +1560,7 @@ let mk_int = fn (static x : int) -> int;;
 let apply_int = fn (static f : static int \ x -> mk_int x) -> 2;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _apply_int·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -3436,15 +1570,7 @@ let mk_int = fn (static x : int) -> int;;
 let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _apply_int·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -3454,40 +1580,7 @@ let apply_int = fn (static f : static erased type \ t -> t -> t) -> f int;;
 let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
 |};
   [%expect
-    {|
-    static syl_int _apply_int·λₒλ4·f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4·f·λₒ𝕀(syl_env);
-    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _apply_intₒλ4;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _apply_int·λₒλ4·f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4·f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _apply_int·λₒλ4·f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_apply_int·λₒλ4·f·λₒ𝕀·λ, _apply_int·λₒλ4·f·λₒ𝕀·env};
-    }
-    static syl_closure<syl_int,syl_int> _apply_int·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _apply_int·λₒλ4·fₒ𝕀;
-      {
-        syl_env _apply_int·λₒλ4·f·env = NULL;
-        _apply_int·λₒλ4·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_int·λₒλ4·f·λₒ𝕀, _apply_int·λₒλ4·f·env};
-      }
-      return _apply_int·λₒλ4·fₒ𝕀();
-    }
-    int main()
-    {
-      {
-        syl_env _apply_int·env = NULL;
-        _apply_intₒλ4 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_int·λₒλ4, _apply_int·env};
-      }
-      __ = _apply_intₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -3499,87 +1592,7 @@ let g = f int;;
 let h = f bool;;
 |};
   [%expect
-    {|
-    static syl_bool _apply·λₒλ7·f·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·f·λₒ𝔹(syl_env);
-    static syl_int _apply·λₒλ7·f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _apply·λₒλ7·f·λₒ𝕀(syl_env);
-    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·λₒ𝔹(syl_env);
-    static syl_closure<syl_int,syl_int> _apply·λₒλ7·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7ₒ𝔹(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7ₒ𝕀(syl_env);
-    static syl_thunk<syl_thunk<syl_closure<syl_bool,syl_bool>>> _applyₒλ7ₒ𝔹;
-    static syl_thunk<syl_thunk<syl_closure<syl_int,syl_int>>> _applyₒλ7ₒ𝕀;
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_closure<syl_bool,syl_bool> _h;
-    static syl_bool _apply·λₒλ7·f·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·f·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _apply·λₒλ7·f·λₒ𝔹·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_apply·λₒλ7·f·λₒ𝔹·λ, _apply·λₒλ7·f·λₒ𝔹·env};
-    }
-    static syl_int _apply·λₒλ7·f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _apply·λₒλ7·f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _apply·λₒλ7·f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_apply·λₒλ7·f·λₒ𝕀·λ, _apply·λₒλ7·f·λₒ𝕀·env};
-    }
-    static syl_closure<syl_bool,syl_bool> _apply·λₒλ7·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹 = *(syl_thunk<syl_closure<syl_bool,syl_bool>>*)(𝒰 + 16);
-      return _fₒ𝔹();
-    }
-    static syl_closure<syl_int,syl_int> _apply·λₒλ7·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      return _fₒ𝕀();
-    }
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7ₒ𝔹(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7·fₒ𝔹;
-      syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7·fₒ𝕀;
-      {
-        syl_env _apply·λₒλ7·f·env = NULL;
-        _apply·λₒλ7·fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_apply·λₒλ7·f·λₒ𝔹, _apply·λₒλ7·f·env};
-        _apply·λₒλ7·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply·λₒλ7·f·λₒ𝕀, _apply·λₒλ7·f·env};
-      }
-      syl_env _apply·λₒλ7·env = syl_capture<syl_thunk<syl_closure<syl_int,syl_int>>, syl_thunk<syl_closure<syl_bool,syl_bool>>>(_apply·λₒλ7·fₒ𝕀, _apply·λₒλ7·fₒ𝔹);
-      return syl_thunk<syl_closure<syl_bool,syl_bool>>{_apply·λₒλ7·λₒ𝔹, _apply·λₒλ7·env};
-    }
-    static syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7ₒ𝕀(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_bool,syl_bool>> _apply·λₒλ7·fₒ𝔹;
-      syl_thunk<syl_closure<syl_int,syl_int>> _apply·λₒλ7·fₒ𝕀;
-      {
-        syl_env _apply·λₒλ7·f·env = NULL;
-        _apply·λₒλ7·fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_apply·λₒλ7·f·λₒ𝔹, _apply·λₒλ7·f·env};
-        _apply·λₒλ7·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply·λₒλ7·f·λₒ𝕀, _apply·λₒλ7·f·env};
-      }
-      syl_env _apply·λₒλ7·env = syl_capture<syl_thunk<syl_closure<syl_int,syl_int>>, syl_thunk<syl_closure<syl_bool,syl_bool>>>(_apply·λₒλ7·fₒ𝕀, _apply·λₒλ7·fₒ𝔹);
-      return syl_thunk<syl_closure<syl_int,syl_int>>{_apply·λₒλ7·λₒ𝕀, _apply·λₒλ7·env};
-    }
-    int main()
-    {
-      {
-        syl_env _apply·env = NULL;
-        _applyₒλ7ₒ𝔹 = syl_thunk<syl_thunk<syl_closure<syl_bool,syl_bool>>>{_apply·λₒλ7ₒ𝔹, _apply·env};
-        _applyₒλ7ₒ𝕀 = syl_thunk<syl_thunk<syl_closure<syl_int,syl_int>>>{_apply·λₒλ7ₒ𝕀, _apply·env};
-      }
-      _fₒ𝔹 = _applyₒλ7ₒ𝔹();
-      _fₒ𝕀 = _applyₒλ7ₒ𝕀();
-      _g = _fₒ𝕀();
-      _h = _fₒ𝔹();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -3590,35 +1603,7 @@ let _ = f 0;;
 let _ = f 1;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _fₒ1;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      return true;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      __ˢ1 = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if unify" =
@@ -3629,36 +1614,7 @@ let g = fn (static x : int) -> if static x == 0 then true else 2;;
 let _ = if true then f 0 else g 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int _g·λₒ1(syl_env);
-    static syl_thunk<syl_int> _gₒ1;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return 1ll;
-    }
-    static syl_int _g·λₒ1(syl_env 𝒰)
-    {
-      syl_int _g·λₒ1·x = 1ll;
-      return 2ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _gₒ1 = syl_thunk<syl_int>{_g·λₒ1, _g·env};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Fun recursive dynamic arg" =
@@ -3667,24 +1623,7 @@ let%expect_test "Fun recursive dynamic arg" =
 fun f (x : int) : int = f x;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      return _f(_x);
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Fun erased arg" =
@@ -3693,12 +1632,7 @@ let%expect_test "Fun erased arg" =
 fun f (erased x : int) : erased int = x;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Fun return static" =
@@ -3707,22 +1641,7 @@ let%expect_test "Fun return static" =
 fun f (x : int) : int = 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "Fun return erased" =
@@ -3731,12 +1650,7 @@ let%expect_test "Fun return erased" =
 fun f (x : int) : erased int = 1 @ erased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mono fun" =
@@ -3746,25 +1660,7 @@ fun x (static x : int) : int = x;;
 let y = x 0;;
 |};
   [%expect
-    {|
-    static syl_int _x·λₒ0(syl_env);
-    static syl_thunk<syl_int> _xₒ0;
-    static syl_int _y;
-    static syl_int _x·λₒ0(syl_env 𝒰)
-    {
-      syl_int _x·λₒ0·x = 0ll;
-      return _x·λₒ0·x;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _xₒ0 = syl_thunk<syl_int>{_x·λₒ0, 𝒰};
-      }
-      _y = _xₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static type" =
@@ -3774,14 +1670,7 @@ fun f (static _ : unit) : static erased type = int;;
 let y = 0 : f ();;
 |};
   [%expect
-    {|
-    static syl_int _y;
-    int main()
-    {
-      _y = 0ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "types are erased" =
@@ -3791,12 +1680,7 @@ fun f (static _ : unit) : static erased type = int;;
 let y = (f () @ dynamic);;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "types are erased" =
@@ -3806,14 +1690,7 @@ fun f (static _ : unit) : static erased type = int;;
 let y = 5 : f ();;
 |};
   [%expect
-    {|
-    static syl_int _y;
-    int main()
-    {
-      _y = 5ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent fun " =
@@ -3823,30 +1700,7 @@ fun id (static erased t : type) : t -> t = fn (x : t) -> x;;
 let i = id int;;
 |};
   [%expect
-    {|
-    static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
-    static syl_closure<syl_int,syl_int> _i;
-    static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, 𝒰};
-      }
-      _i = _idₒ𝕀();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased fun " =
@@ -3856,12 +1710,7 @@ fun id (erased x : int) : erased int = x;;
 let _ = id 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent fun erased" =
@@ -3871,34 +1720,7 @@ fun id (static erased t : type) : t -> t = fn (x : t) -> x;;
 let x = (id int) (0 @ dynamic);;
 |};
   [%expect
-    {|
-    static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
-    static syl_int _x;
-    static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, 𝒰};
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _idₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        _x = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent fun" =
@@ -3909,35 +1731,7 @@ fun id (_ : unit) : ty () = fn (x : int) -> x;;
 let x = id () 0;;
 |};
   [%expect
-    {|
-    static syl_int _id·λ·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id·λ(syl_env);
-    static syl_closure<syl_unit,syl_closure<syl_int,syl_int>> _id;
-    static syl_int _x;
-    static syl_int _id·λ·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id·λ(syl_env 𝒰)
-    {
-      syl_env _id·λ·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id·λ·λ, _id·λ·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _id = syl_closure<syl_unit,syl_closure<syl_int,syl_int>>{_id·λ, 𝒰};
-      }
-      {
-        ;
-        syl_closure<syl_int,syl_int> _$ˢ1 = _id();
-        syl_int _$ˢ2 = 0ll;
-        _x = _$ˢ1(_$ˢ2);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent fun" =
@@ -3948,46 +1742,7 @@ fun id2 (static erased t : type) : t -> t = id1 t;;
 let x = id2 int (0 @ dynamic);;
 |};
   [%expect
-    {|
-    static syl_int _id1·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀;
-    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _id2ₒ𝕀;
-    static syl_int _x;
-    static syl_int _id1·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _id1·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id1·λₒ𝕀·λ, _id1·λₒ𝕀·env};
-    }
-    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      return _id1ₒ𝕀();
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _id1ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id1·λₒ𝕀, 𝒰};
-      }
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _id2ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id2·λₒ𝕀, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _id1ₒ𝕀;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _id2ₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        _x = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "join" =
@@ -3999,46 +1754,7 @@ let x = if static false then a else b;;
 let _ = x () ();;
 |};
   [%expect
-    {|
-    static syl_unit _a·λ(syl_env);
-    static syl_closure<syl_unit,syl_unit> _a;
-    static syl_unit _b·λ·λ(syl_env);
-    static syl_closure<syl_unit,syl_unit> _b·λ(syl_env);
-    static syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>> _b;
-    static syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>> _x;
-    static syl_unit _a·λ(syl_env 𝒰)
-    {
-      ;
-    }
-    static syl_unit _b·λ·λ(syl_env 𝒰)
-    {
-      ;
-    }
-    static syl_closure<syl_unit,syl_unit> _b·λ(syl_env 𝒰)
-    {
-      syl_env _b·λ·env = NULL;
-      return syl_closure<syl_unit,syl_unit>{_b·λ·λ, _b·λ·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _a = syl_closure<syl_unit,syl_unit>{_a·λ, 𝒰};
-      }
-      {
-        syl_env 𝒰 = NULL;
-        _b = syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>>{_b·λ, 𝒰};
-      }
-      _x = _b;
-      {
-        ;
-        syl_closure<syl_unit,syl_unit> _$ˢ1 = _x();
-        ;
-        _$ˢ1();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "return fn" =
@@ -4048,34 +1764,7 @@ fun x (_ : unit) : unit -> unit = fn (_ : unit) -> ();;
 let _ = x () ();;
 |};
   [%expect
-    {|
-    static syl_unit _x·λ·λ(syl_env);
-    static syl_closure<syl_unit,syl_unit> _x·λ(syl_env);
-    static syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>> _x;
-    static syl_unit _x·λ·λ(syl_env 𝒰)
-    {
-      ;
-    }
-    static syl_closure<syl_unit,syl_unit> _x·λ(syl_env 𝒰)
-    {
-      syl_env _x·λ·env = NULL;
-      return syl_closure<syl_unit,syl_unit>{_x·λ·λ, _x·λ·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _x = syl_closure<syl_unit,syl_closure<syl_unit,syl_unit>>{_x·λ, 𝒰};
-      }
-      {
-        ;
-        syl_closure<syl_unit,syl_unit> _$ˢ1 = _x();
-        ;
-        _$ˢ1();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arg fn" =
@@ -4085,34 +1774,7 @@ fun x (f : unit -> int) : int = f ();;
 let _ = x (fn (_ : unit) -> 1);;
 |};
   [%expect
-    {|
-    static syl_int _x·λ(syl_closure<syl_unit,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_unit,syl_int>,syl_int> _x;
-    static syl_int __·λ(syl_env);
-    static syl_int __;
-    static syl_int _x·λ(syl_closure<syl_unit,syl_int> _f, syl_env 𝒰)
-    {
-      ;
-      return _f();
-    }
-    static syl_int __·λ(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _x = syl_closure<syl_closure<syl_unit,syl_int>,syl_int>{_x·λ, 𝒰};
-      }
-      {
-        syl_env __·env = NULL;
-        syl_closure<syl_unit,syl_int> _$ = syl_closure<syl_unit,syl_int>{__·λ, __·env};
-        __ = _x(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if unify" =
@@ -4125,40 +1787,7 @@ let _ = h 0;;
 let _ = h 1;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _fₒ1;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_thunk<syl_bool> _hₒ1;
-    static syl_thunk<syl_int> _hₒ0;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒ1(syl_env 𝒰)
-    {
-      return true;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-      }
-      _hₒ1 = _fₒ1;
-      _hₒ0 = _fₒ0;
-      __ = _hₒ0();
-      __ˢ1 = _hₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -4169,33 +1798,7 @@ let _ = f 0;;
 let _ = f 1;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _fₒ1;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒ1(syl_env 𝒰)
-    {
-      return true;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      __ˢ1 = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -4206,33 +1809,7 @@ let _ = f 1;;
 let _ = f 2;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ1(syl_env);
-    static syl_int _f·λₒ2(syl_env);
-    static syl_thunk<syl_bool> _fₒ1;
-    static syl_thunk<syl_int> _fₒ2;
-    static syl_bool __;
-    static syl_int __ˢ1;
-    static syl_bool _f·λₒ1(syl_env 𝒰)
-    {
-      return true;
-    }
-    static syl_int _f·λₒ2(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
-        _fₒ2 = syl_thunk<syl_int>{_f·λₒ2, _f·env};
-      }
-      __ = _fₒ1();
-      __ˢ1 = _fₒ2();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -4242,24 +1819,7 @@ let f = fn (static erased x : int) -> (if static x == (if true then x else 0) th
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -4269,24 +1829,7 @@ let f = fn (static erased x : int) -> (if static x == x + 1 then 1 else true) : 
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _fₒ0;
-    static syl_bool __;
-    static syl_bool _f·λₒ0(syl_env 𝒰)
-    {
-      return true;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ0 = syl_thunk<syl_bool>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -4298,42 +1841,7 @@ let _ = f 1;;
 let _ = f 2;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1(syl_env);
-    static syl_bool _f·λₒ2(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ1;
-    static syl_thunk<syl_bool> _fₒ2;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int __ˢ1;
-    static syl_bool __ˢ2;
-    static syl_int _f·λₒ1(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    static syl_bool _f·λₒ2(syl_env 𝒰)
-    {
-      return true;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
-        _fₒ2 = syl_thunk<syl_bool>{_f·λₒ2, _f·env};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      __ˢ1 = _fₒ1();
-      __ˢ2 = _fₒ2();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent abstraction" =
@@ -4343,35 +1851,7 @@ let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f
 let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
 |};
   [%expect
-    {|
-    static syl_int _choose·λₒλ4·f·λₒ0(syl_env);
-    static syl_int _choose·λₒλ4(syl_env);
-    static syl_thunk<syl_int> _chooseₒλ4;
-    static syl_int __;
-    static syl_int _choose·λₒλ4·f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _choose·λₒλ4·f·λₒ0·x = 0ll;
-      return 0ll;
-    }
-    static syl_int _choose·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _choose·λₒλ4·fₒ0;
-      {
-        syl_env _choose·λₒλ4·f·env = NULL;
-        _choose·λₒλ4·fₒ0 = syl_thunk<syl_int>{_choose·λₒλ4·f·λₒ0, _choose·λₒλ4·f·env};
-      }
-      return _choose·λₒλ4·fₒ0();
-    }
-    int main()
-    {
-      {
-        syl_env _choose·env = NULL;
-        _chooseₒλ4 = syl_thunk<syl_int>{_choose·λₒλ4, _choose·env};
-      }
-      __ = _chooseₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken mode: static unerased -> static erased (literal substitution)" =
@@ -4380,12 +1860,7 @@ let%expect_test "weaken mode: static unerased -> static erased (literal substitu
 let _ = 1 @ erased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken mode: dynamic unerased -> dynamic erased (erased marker)" =
@@ -4395,14 +1870,7 @@ let x = 1 @ dynamic;;
 let _ = x @ erased;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    int main()
-    {
-      _x = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken mode: static -> dynamic (staticity only)" =
@@ -4411,22 +1879,7 @@ let%expect_test "weaken mode: static -> dynamic (staticity only)" =
 let _ = (fn (x : int) -> x) @ dynamic;;
 |};
   [%expect
-    {|
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken type: arrow ret_mode covariant" =
@@ -4436,24 +1889,7 @@ let f = fn (x : int) -> x;;
 let _ = f : int -> erased int;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      __ = _f;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken type: arrow arg_mode contravariant" =
@@ -4463,24 +1899,7 @@ let f = fn (erased x : int) -> 1;;
 let _ = f : int -> int;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      __ = _f;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken if non-split: mode erasure on branch" =
@@ -4489,12 +1908,7 @@ let%expect_test "weaken if non-split: mode erasure on branch" =
 let _ = if true then 1 else 1 @ erased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken if non-split: arrow type join" =
@@ -4503,22 +1917,7 @@ let%expect_test "weaken if non-split: arrow type join" =
 let _ = if true then fn (erased x : int) -> 1 else fn (x : int) -> 1;;
 |};
   [%expect
-    {|
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env __·env = NULL;
-        __ = syl_closure<syl_int,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken if split: mode only" =
@@ -4527,12 +1926,7 @@ let%expect_test "weaken if split: mode only" =
 let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken binder apply: body weakened to ret_mode" =
@@ -4542,25 +1936,7 @@ let f = fn (static x : int) -> x;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return _f·λₒ0·x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken arrow closure apply erased: body weakened" =
@@ -4570,27 +1946,7 @@ let f = fn (x : int) -> x;;
 let _ = (f @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_int __·x = 0ll;
-        __ = __·x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken pi closure apply erased: both axes" =
@@ -4601,22 +1957,7 @@ let g = fn (static erased x : int) -> x;;
 let _ = ((if true then f else g) @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken mode: both axes (static unerased -> dynamic erased)" =
@@ -4625,12 +1966,7 @@ let%expect_test "weaken mode: both axes (static unerased -> dynamic erased)" =
 let _ = 1 @ dynamic erased;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken if non-split: staticity on branch" =
@@ -4640,16 +1976,7 @@ let x = 1 @ dynamic;;
 let _ = if true then 1 else x;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    static syl_int __;
-    int main()
-    {
-      _x = 1ll;
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken if non-split: both axes on branch" =
@@ -4659,14 +1986,7 @@ let x = 1 @ dynamic;;
 let _ = if true then 1 else x @ erased;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    int main()
-    {
-      _x = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken if split: staticity on branch" =
@@ -4676,25 +1996,7 @@ let f = fn (static b : bool) -> if static b then 1 @ dynamic else 1;;
 let _ = f false;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒF(syl_env);
-    static syl_thunk<syl_int> _fₒF;
-    static syl_int __;
-    static syl_int _f·λₒF(syl_env 𝒰)
-    {
-      syl_bool _f·λₒF·b = false;
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒF = syl_thunk<syl_int>{_f·λₒF, _f·env};
-      }
-      __ = _fₒF();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken if split: both axes on branch" =
@@ -4704,12 +2006,7 @@ let f = fn (static b : bool) -> if static b then 1 @ dynamic erased else 1;;
 let _ = f false;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken binder apply: erasure on body" =
@@ -4719,12 +2016,7 @@ let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken arrow closure apply erased: staticity on body" =
@@ -4734,27 +2026,7 @@ let f = fn (x : int) -> 1;;
 let _ = (f @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_int __·x = 0ll;
-        __ = 1ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken pi closure apply erased: erasure only" =
@@ -4765,22 +2037,7 @@ let g = fn (static erased x : int) -> x;;
 let _ = ((if true then f else g) @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "weaken pi closure apply erased: staticity only" =
@@ -4791,30 +2048,7 @@ let g = fn (static x : int) -> x;;
 let _ = ((if true then f else g) @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-      }
-      {
-        syl_int __·x = 0ll;
-        __ = 1ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure to closure: arg erasure contravariant" =
@@ -4825,35 +2059,7 @@ let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
   [%expect
-    {|
-    static syl_int _apply·λ(syl_closure<syl_int,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _apply;
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _apply·λ(syl_closure<syl_int,syl_int> _f, syl_env 𝒰)
-    {
-      syl_int _$ = 0ll;
-      return _f(_$);
-    }
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _apply·env = NULL;
-        _apply = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_apply·λ, _apply·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
-      }
-      __ = _apply(_g);
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure to closure: ret erasure covariant" =
@@ -4864,22 +2070,7 @@ let g = fn (x : int) -> x;;
 let _ = apply g;;
 |};
   [%expect
-    {|
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure to closure: both arg and ret subtyping" =
@@ -4890,22 +2081,7 @@ let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
   [%expect
-    {|
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "closure where binder expected: Arrow leq Pi" =
@@ -4916,45 +2092,7 @@ let g = fn (x : int) -> x;;
 let _ = apply g;;
 |};
   [%expect
-    {|
-    static syl_int _apply·λₒλ3·f·λ(syl_int, syl_env);
-    static syl_int _apply·λₒλ3(syl_env);
-    static syl_thunk<syl_int> _applyₒλ3;
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _apply·λₒλ3·f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_int _apply·λₒλ3(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _apply·λₒλ3·f;
-      {
-        syl_env _apply·λₒλ3·f·env = NULL;
-        _apply·λₒλ3·f = syl_closure<syl_int,syl_int>{_apply·λₒλ3·f·λ, _apply·λₒλ3·f·env};
-      }
-      syl_int _$ = 0ll;
-      return _apply·λₒλ3·f(_$);
-    }
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _apply·env = NULL;
-        _applyₒλ3 = syl_thunk<syl_int>{_apply·λₒλ3, _apply·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
-      }
-      __ = _applyₒλ3();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "binder to binder: arg erasure contravariant" =
@@ -4965,46 +2103,7 @@ let g = fn (static erased x : int) -> 1;;
 let _ = apply g;;
 |};
   [%expect
-    {|
-    static syl_int _apply·λₒλ4·f·λₒ0(syl_env);
-    static syl_int _apply·λₒλ4(syl_env);
-    static syl_thunk<syl_int> _applyₒλ4;
-    static syl_int _g·λₒ0(syl_env);
-    static syl_thunk<syl_int> _gₒ0;
-    static syl_int __;
-    static syl_int _apply·λₒλ4·f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _apply·λₒλ4·f·λₒ0·x = 0ll;
-      return 1ll;
-    }
-    static syl_int _apply·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _apply·λₒλ4·fₒ0;
-      {
-        syl_env _apply·λₒλ4·f·env = NULL;
-        _apply·λₒλ4·fₒ0 = syl_thunk<syl_int>{_apply·λₒλ4·f·λₒ0, _apply·λₒλ4·f·env};
-      }
-      return _apply·λₒλ4·fₒ0();
-    }
-    static syl_int _g·λₒ0(syl_env 𝒰)
-    {
-      syl_int _g·λₒ0·x = 0ll;
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _apply·env = NULL;
-        _applyₒλ4 = syl_thunk<syl_int>{_apply·λₒλ4, _apply·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _gₒ0 = syl_thunk<syl_int>{_g·λₒ0, _g·env};
-      }
-      __ = _applyₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased closure taking closure arg" =
@@ -5014,38 +2113,7 @@ let apply = fn (f : int -> int) -> f 0;;
 let _ = (apply @ erased) (fn (x : int) -> x);;
 |};
   [%expect
-    {|
-    static syl_int _apply·λ(syl_closure<syl_int,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_int> _apply;
-    static syl_int __·f·λ(syl_int, syl_env);
-    static syl_int __;
-    static syl_int _apply·λ(syl_closure<syl_int,syl_int> _f, syl_env 𝒰)
-    {
-      syl_int _$ = 0ll;
-      return _f(_$);
-    }
-    static syl_int __·f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    int main()
-    {
-      {
-        syl_env _apply·env = NULL;
-        _apply = syl_closure<syl_closure<syl_int,syl_int>,syl_int>{_apply·λ, _apply·env};
-      }
-      {
-        syl_closure<syl_int,syl_int> __·f;
-        {
-          syl_env __·f·env = NULL;
-          __·f = syl_closure<syl_int,syl_int>{__·f·λ, __·f·env};
-        }
-        syl_int _$ = 0ll;
-        __ = __·f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "binder taking closure, applied erased inside" =
@@ -5056,22 +2124,7 @@ let g = fn (x : int) -> 1;;
 let _ = apply g;;
 |};
   [%expect
-    {|
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _g·env = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, _g·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda identity returns dependent type" =
@@ -5082,35 +2135,7 @@ let _ = f 42;;
 let _ = f 69;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ69(syl_env);
-    static syl_int _f·λₒ42(syl_env);
-    static syl_thunk<syl_int> _fₒ69;
-    static syl_thunk<syl_int> _fₒ42;
-    static syl_int __;
-    static syl_int __ˢ1;
-    static syl_int _f·λₒ69(syl_env 𝒰)
-    {
-      syl_int _f·λₒ69·x = 69ll;
-      return _f·λₒ69·x;
-    }
-    static syl_int _f·λₒ42(syl_env 𝒰)
-    {
-      syl_int _f·λₒ42·x = 42ll;
-      return _f·λₒ42·x;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _fₒ69 = syl_thunk<syl_int>{_f·λₒ69, 𝒰};
-        _fₒ42 = syl_thunk<syl_int>{_f·λₒ42, 𝒰};
-      }
-      __ = _fₒ42();
-      __ˢ1 = _fₒ69();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda identity returns dependent type" =
@@ -5121,35 +2146,7 @@ let _ = f 42;;
 let _ = f 69;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ69(syl_env);
-    static syl_int _f·λₒ42(syl_env);
-    static syl_thunk<syl_int> _fₒ69;
-    static syl_thunk<syl_int> _fₒ42;
-    static syl_int __;
-    static syl_int __ˢ1;
-    static syl_int _f·λₒ69(syl_env 𝒰)
-    {
-      syl_int _f·λₒ69·x = 69ll;
-      return _f·λₒ69·x;
-    }
-    static syl_int _f·λₒ42(syl_env 𝒰)
-    {
-      syl_int _f·λₒ42·x = 42ll;
-      return _f·λₒ42·x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ69 = syl_thunk<syl_int>{_f·λₒ69, _f·env};
-        _fₒ42 = syl_thunk<syl_int>{_f·λₒ42, _f·env};
-      }
-      __ = _fₒ42();
-      __ˢ1 = _fₒ69();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda with arithmetic on static arg" =
@@ -5159,26 +2156,7 @@ let f = fn (static x : int) -> x + 1;;
 let _ = f 10;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ10(syl_env);
-    static syl_thunk<syl_int> _fₒ10;
-    static syl_int __;
-    static syl_int _f·λₒ10(syl_env 𝒰)
-    {
-      syl_int _f·λₒ10·x = 10ll;
-      syl_int _$ = 1ll;
-      return _f·λₒ10·x + _$;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ10 = syl_thunk<syl_int>{_f·λₒ10, _f·env};
-      }
-      __ = _fₒ10();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda with capture" =
@@ -5189,28 +2167,7 @@ let f = fn (static x : int) -> x + y;;
 let _ = f 10;;
 |};
   [%expect
-    {|
-    static syl_int _y;
-    static syl_int _f·λₒ10(syl_env);
-    static syl_thunk<syl_int> _fₒ10;
-    static syl_int __;
-    static syl_int _f·λₒ10(syl_env 𝒰)
-    {
-      syl_int _y = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ10·x = 10ll;
-      return _f·λₒ10·x + _y;
-    }
-    int main()
-    {
-      _y = 1ll;
-      {
-        syl_env _f·env = syl_capture<syl_int>(_y);
-        _fₒ10 = syl_thunk<syl_int>{_f·λₒ10, _f·env};
-      }
-      __ = _fₒ10();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda with dynamic capture" =
@@ -5221,28 +2178,7 @@ let f = fn (static x : int) -> x + y;;
 let _ = f 10;;
 |};
   [%expect
-    {|
-    static syl_int _y;
-    static syl_int _f·λₒ10(syl_env);
-    static syl_thunk<syl_int> _fₒ10;
-    static syl_int __;
-    static syl_int _f·λₒ10(syl_env 𝒰)
-    {
-      syl_int _y = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ10·x = 10ll;
-      return _f·λₒ10·x + _y;
-    }
-    int main()
-    {
-      _y = 1ll;
-      {
-        syl_env _f·env = syl_capture<syl_int>(_y);
-        _fₒ10 = syl_thunk<syl_int>{_f·λₒ10, _f·env};
-      }
-      __ = _fₒ10();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda with capture" =
@@ -5254,29 +2190,7 @@ let f = fn (static x : int) -> x + y in
 f 10;;
 |};
   [%expect
-    {|
-    static syl_int __·f·λₒ10(syl_env);
-    static syl_int __;
-    static syl_int __·f·λₒ10(syl_env 𝒰)
-    {
-      syl_int _y = *(syl_int*)(𝒰 + 0);
-      syl_int __·f·λₒ10·x = 10ll;
-      return __·f·λₒ10·x + _y;
-    }
-    int main()
-    {
-      {
-        syl_int __·y = 1ll;
-        syl_thunk<syl_int> __·fₒ10;
-        {
-          syl_env __·f·env = syl_capture<syl_int>(__·y);
-          __·fₒ10 = syl_thunk<syl_int>{__·f·λₒ10, __·f·env};
-        }
-        __ = __·fₒ10();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda with boolean op on static arg" =
@@ -5286,26 +2200,7 @@ let f = fn (static x : bool) -> x && true;;
 let _ = f false;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒF(syl_env);
-    static syl_thunk<syl_bool> _fₒF;
-    static syl_bool __;
-    static syl_bool _f·λₒF(syl_env 𝒰)
-    {
-      syl_bool _f·λₒF·x = false;
-      syl_bool _$ = true;
-      return _f·λₒF·x && _$;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒF = syl_thunk<syl_bool>{_f·λₒF, _f·env};
-      }
-      __ = _fₒF();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "nested static lambdas" =
@@ -5316,57 +2211,7 @@ let _ = f 1 2;;
 let _ = f 1 3;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1·λₒ2(syl_env);
-    static syl_int _f·λₒ1·λₒ3(syl_env);
-    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env);
-    static syl_thunk<syl_int> _f·λₒ1ₒ3(syl_env);
-    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ2;
-    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ3;
-    static syl_int __;
-    static syl_int __ˢ1;
-    static syl_int _f·λₒ1·λₒ2(syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ1·λₒ2·y = 2ll;
-      return _x + _f·λₒ1·λₒ2·y;
-    }
-    static syl_int _f·λₒ1·λₒ3(syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ1·λₒ3·y = 3ll;
-      return _x + _f·λₒ1·λₒ3·y;
-    }
-    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
-      return syl_thunk<syl_int>{_f·λₒ1·λₒ2, _f·λₒ1·env};
-    }
-    static syl_thunk<syl_int> _f·λₒ1ₒ3(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
-      return syl_thunk<syl_int>{_f·λₒ1·λₒ3, _f·λₒ1·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1ₒ2 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ2, _f·env};
-        _fₒ1ₒ3 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ3, _f·env};
-      }
-      {
-        syl_thunk<syl_int> _$ₒ2 = _fₒ1ₒ2();
-        __ = _$ₒ2();
-      }
-      {
-        syl_thunk<syl_int> _$ₒ3 = _fₒ1ₒ3();
-        __ˢ1 = _$ₒ3();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda returning static lambda" =
@@ -5377,35 +2222,7 @@ let g = f 1;;
 let _ = g 2;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1·λₒ2(syl_env);
-    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env);
-    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ2;
-    static syl_thunk<syl_int> _gₒ2;
-    static syl_int __;
-    static syl_int _f·λₒ1·λₒ2(syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ1·λₒ2·y = 2ll;
-      return _x;
-    }
-    static syl_thunk<syl_int> _f·λₒ1ₒ2(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = syl_capture<syl_int>(_f·λₒ1·x);
-      return syl_thunk<syl_int>{_f·λₒ1·λₒ2, _f·λₒ1·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1ₒ2 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ2, _f·env};
-      }
-      _gₒ2 = _fₒ1ₒ2();
-      __ = _gₒ2();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda mixed with dynamic lambda" =
@@ -5416,36 +2233,7 @@ let g = f 1;;
 let _ = g 2;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ1(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ1;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λₒ1·λ(syl_int _y, syl_env 𝒰)
-    {
-      return _y;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ1·λ, _f·λₒ1·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ1, _f·env};
-      }
-      _g = _fₒ1();
-      {
-        syl_int _$ = 2ll;
-        __ = _g(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dynamic lambda inside static lambda uses static arg as type" =
@@ -5458,55 +2246,7 @@ let h = f bool;;
 let _ = h true;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env);
-    static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ𝔹;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_closure<syl_bool,syl_bool> _h;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _f·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝔹·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_f·λₒ𝔹·λ, _f·λₒ𝔹·env};
-    }
-    static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_f·λₒ𝔹, _f·env};
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, _f·env};
-      }
-      _g = _fₒ𝕀();
-      {
-        syl_int _$ = 42ll;
-        __ = _g(_$);
-      }
-      _h = _fₒ𝔹();
-      {
-        syl_bool _$ = true;
-        __ˢ1 = _h(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static with literal condition true" =
@@ -5515,14 +2255,7 @@ let%expect_test "if static with literal condition true" =
 let _ = if static true then 1 else true;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static with literal condition false" =
@@ -5531,14 +2264,7 @@ let%expect_test "if static with literal condition false" =
 let _ = if static false then 1 else true;;
 |};
   [%expect
-    {|
-    static syl_bool __;
-    int main()
-    {
-      __ = true;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static with static variable condition" =
@@ -5549,35 +2275,7 @@ let a = f 0;;
 let b = f 1;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _fₒ1;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int _a;
-    static syl_bool _b;
-    static syl_bool _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      return true;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      _a = _fₒ0();
-      _b = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static with mismatched branch types without annotation" =
@@ -5586,15 +2284,7 @@ let%expect_test "if static with mismatched branch types without annotation" =
 let f = fn (static x : int) -> if static x == 0 then 1 else true;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static with correct type annotation using non-static if" =
@@ -5603,15 +2293,7 @@ let%expect_test "if static with correct type annotation using non-static if" =
 let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 then int else bool);;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static with nested dependent types in branches" =
@@ -5624,57 +2306,7 @@ let h = f 1;;
 let _ = h true;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ1·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ0(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _fₒ1;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ0;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_closure<syl_bool,syl_bool> _h;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒ1·λ(syl_bool _y, syl_env 𝒰)
-    {
-      return _y;
-    }
-    static syl_closure<syl_bool,syl_bool> _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_f·λₒ1·λ, _f·λₒ1·env};
-    }
-    static syl_int _f·λₒ0·λ(syl_int _y, syl_env 𝒰)
-    {
-      return _y;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_env _f·λₒ0·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ0·λ, _f·λₒ0·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_f·λₒ1, _f·env};
-        _fₒ0 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ0, _f·env};
-      }
-      _g = _fₒ0();
-      {
-        syl_int _$ = 42ll;
-        __ = _g(_$);
-      }
-      _h = _fₒ1();
-      {
-        syl_bool _$ = true;
-        __ˢ1 = _h(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static true selects then branch type" =
@@ -5683,14 +2315,7 @@ let%expect_test "if static true selects then branch type" =
 let _ = (if static true then 1 else true) : (if true then int else bool);;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 1ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static false selects else branch type" =
@@ -5699,14 +2324,7 @@ let%expect_test "if static false selects else branch type" =
 let _ = (if static false then 1 else true) : (if false then int else bool);;
 |};
   [%expect
-    {|
-    static syl_bool __;
-    int main()
-    {
-      __ = true;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent arrow type with backslash binder" =
@@ -5715,15 +2333,7 @@ let%expect_test "dependent arrow type with backslash binder" =
 let f = fn (static g : static int \ x -> int) -> g 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent arrow applied to matching function" =
@@ -5733,40 +2343,7 @@ let apply_type = fn (static f : static erased type \ t -> t -> t) -> f int;;
 let _ = apply_type (fn (static erased t : type) -> fn (x : t) -> x);;
 |};
   [%expect
-    {|
-    static syl_int _apply_type·λₒλ4·f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4·f·λₒ𝕀(syl_env);
-    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _apply_typeₒλ4;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _apply_type·λₒλ4·f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4·f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _apply_type·λₒλ4·f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_apply_type·λₒλ4·f·λₒ𝕀·λ, _apply_type·λₒλ4·f·λₒ𝕀·env};
-    }
-    static syl_closure<syl_int,syl_int> _apply_type·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _apply_type·λₒλ4·fₒ𝕀;
-      {
-        syl_env _apply_type·λₒλ4·f·env = NULL;
-        _apply_type·λₒλ4·fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_type·λₒλ4·f·λₒ𝕀, _apply_type·λₒλ4·f·env};
-      }
-      return _apply_type·λₒλ4·fₒ𝕀();
-    }
-    int main()
-    {
-      {
-        syl_env _apply_type·env = NULL;
-        _apply_typeₒλ4 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_type·λₒλ4, _apply_type·env};
-      }
-      __ = _apply_typeₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent arrow with return type depending on arg" =
@@ -5776,15 +2353,7 @@ let mk_int = fn (static x : int) -> int;;
 let f = fn (static g : static int \ x -> mk_int x) -> g 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun with static arg creates Pi type" =
@@ -5794,25 +2363,7 @@ fun f (static x : int) : int = x;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return _f·λₒ0·x;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun with static arg creates Pi type" =
@@ -5822,24 +2373,7 @@ fun f (static erased x : int) : int = x+0;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun with static arg creates Pi type" =
@@ -5851,27 +2385,7 @@ let _ =
 in ();;
 |};
   [%expect
-    {|
-    static syl_int __·f·λₒ0(syl_env);
-    static syl_int __·f·λₒ0(syl_env 𝒰)
-    {
-      syl_int __·f·λₒ0·x = 0ll;
-      return __·f·λₒ0·x;
-    }
-    int main()
-    {
-      {
-        syl_thunk<syl_int> __·fₒ0;
-        {
-          syl_env 𝒰 = NULL;
-          __·fₒ0 = syl_thunk<syl_int>{__·f·λₒ0, 𝒰};
-        }
-        syl_int __·_ = __·fₒ0();
-        ;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun with static erased type arg — polymorphic identity" =
@@ -5882,53 +2396,7 @@ let _ = id int 0;;
 let _ = id bool true;;
 |};
   [%expect
-    {|
-    static syl_bool _id·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env);
-    static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _idₒ𝔹;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _id·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝔹·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_id·λₒ𝔹·λ, _id·λₒ𝔹·env};
-    }
-    static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _idₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_id·λₒ𝔹, 𝒰};
-        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, 𝒰};
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _idₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        __ = _$(_$ˢ1);
-      }
-      {
-        syl_closure<syl_bool,syl_bool> _$ = _idₒ𝔹();
-        syl_bool _$ˢ1 = true;
-        __ˢ1 = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun dynamic recursion is allowed" =
@@ -5937,24 +2405,7 @@ let%expect_test "fun dynamic recursion is allowed" =
 fun f (x : int) : int = f x;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      return _f(_x);
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun with static erased type arg, two sequential funs" =
@@ -5965,46 +2416,7 @@ fun id2 (static erased t : type) : t -> t = id1 t;;
 let _ = id2 int 0;;
 |};
   [%expect
-    {|
-    static syl_int _id1·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀;
-    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _id2ₒ𝕀;
-    static syl_int __;
-    static syl_int _id1·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id1·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _id1·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id1·λₒ𝕀·λ, _id1·λₒ𝕀·env};
-    }
-    static syl_closure<syl_int,syl_int> _id2·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _id1ₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      return _id1ₒ𝕀();
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _id1ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id1·λₒ𝕀, 𝒰};
-      }
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _id2ₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id2·λₒ𝕀, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _id1ₒ𝕀;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _id2ₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static erased lambda captures no runtime value" =
@@ -6014,24 +2426,7 @@ let f = fn (static erased x : int) -> 0;;
 let _ = f 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1(syl_env);
-    static syl_thunk<syl_int> _fₒ1;
-    static syl_int __;
-    static syl_int _f·λₒ1(syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
-      }
-      __ = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "lift static value through Pi" =
@@ -6041,12 +2436,7 @@ let f = fn (static x : int) -> x @ erased;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun returning static erased type" =
@@ -6056,14 +2446,7 @@ fun f (static _ : unit) : static erased type = int;;
 let _ = 5 : f ();;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 5ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "pi and arrow join — if choosing between Pi and Arrow" =
@@ -6074,18 +2457,7 @@ let g = fn (static x : int) -> if static x == 0 then 1 else true;;
 let _ = if true then f else g;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-      }
-      {
-        syl_env _g·env = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "joining f 0 and g 1 resolves dependent types" =
@@ -6096,36 +2468,7 @@ let g = fn (static x : int) -> if static x == 0 then true else 2;;
 let _ = if true then f 0 else g 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int _g·λₒ1(syl_env);
-    static syl_thunk<syl_int> _gₒ1;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return 1ll;
-    }
-    static syl_int _g·λₒ1(syl_env 𝒰)
-    {
-      syl_int _g·λₒ1·x = 1ll;
-      return 2ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-        _gₒ1 = syl_thunk<syl_int>{_g·λₒ1, _g·env};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "nested if static with different types per level" =
@@ -6142,94 +2485,7 @@ let _ = f 1 0;;
 let _ = f 1 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1·λₒ1(syl_env);
-    static syl_unit _f·λₒ1·λₒ0(syl_env);
-    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env);
-    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env);
-    static syl_bool _f·λₒ0·λₒ1(syl_env);
-    static syl_int _f·λₒ0·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env);
-    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env);
-    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ1;
-    static syl_thunk<syl_thunk<syl_unit>> _fₒ1ₒ0;
-    static syl_thunk<syl_thunk<syl_bool>> _fₒ0ₒ1;
-    static syl_thunk<syl_thunk<syl_int>> _fₒ0ₒ0;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_int __ˢ3;
-    static syl_int _f·λₒ1·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·λₒ1·y = 1ll;
-      return 2ll;
-    }
-    static syl_unit _f·λₒ1·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·λₒ0·y = 0ll;
-      ;
-    }
-    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = NULL;
-      return syl_thunk<syl_int>{_f·λₒ1·λₒ1, _f·λₒ1·env};
-    }
-    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_env _f·λₒ1·env = NULL;
-      return syl_thunk<syl_unit>{_f·λₒ1·λₒ0, _f·λₒ1·env};
-    }
-    static syl_bool _f·λₒ0·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·λₒ1·y = 1ll;
-      return true;
-    }
-    static syl_int _f·λₒ0·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·λₒ0·y = 0ll;
-      return 1ll;
-    }
-    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_env _f·λₒ0·env = NULL;
-      return syl_thunk<syl_bool>{_f·λₒ0·λₒ1, _f·λₒ0·env};
-    }
-    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_env _f·λₒ0·env = NULL;
-      return syl_thunk<syl_int>{_f·λₒ0·λₒ0, _f·λₒ0·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1ₒ1 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ1, _f·env};
-        _fₒ1ₒ0 = syl_thunk<syl_thunk<syl_unit>>{_f·λₒ1ₒ0, _f·env};
-        _fₒ0ₒ1 = syl_thunk<syl_thunk<syl_bool>>{_f·λₒ0ₒ1, _f·env};
-        _fₒ0ₒ0 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ0ₒ0, _f·env};
-      }
-      {
-        syl_thunk<syl_int> _$ₒ0 = _fₒ0ₒ0();
-        __ = _$ₒ0();
-      }
-      {
-        syl_thunk<syl_bool> _$ₒ1 = _fₒ0ₒ1();
-        __ˢ1 = _$ₒ1();
-      }
-      {
-        syl_thunk<syl_unit> _$ₒ0 = _fₒ1ₒ0();
-        _$ₒ0();
-      }
-      {
-        syl_thunk<syl_int> _$ₒ1 = _fₒ1ₒ1();
-        __ˢ3 = _$ₒ1();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "nested if static with different types per level" =
@@ -6258,118 +2514,7 @@ let _ = f 1 0;;
 let _ = f 1 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1·g·λₒ1(syl_env);
-    static syl_unit _f·λₒ1·g·λₒ0(syl_env);
-    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env);
-    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env);
-    static syl_bool _f·λₒ0·g·λₒ1(syl_env);
-    static syl_int _f·λₒ0·g·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env);
-    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env);
-    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ1;
-    static syl_thunk<syl_thunk<syl_unit>> _fₒ1ₒ0;
-    static syl_thunk<syl_thunk<syl_bool>> _fₒ0ₒ1;
-    static syl_thunk<syl_thunk<syl_int>> _fₒ0ₒ0;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_int __ˢ3;
-    static syl_int _f·λₒ1·g·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·g·λₒ1·y = 1ll;
-      return 2ll;
-    }
-    static syl_unit _f·λₒ1·g·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·g·λₒ0·y = 0ll;
-      ;
-    }
-    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_thunk<syl_int> _f·λₒ1·gₒ1;
-      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
-      {
-        syl_env 𝒰 = NULL;
-        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
-        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
-      }
-      return _f·λₒ1·gₒ1;
-    }
-    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_thunk<syl_int> _f·λₒ1·gₒ1;
-      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
-      {
-        syl_env 𝒰 = NULL;
-        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
-        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
-      }
-      return _f·λₒ1·gₒ0;
-    }
-    static syl_bool _f·λₒ0·g·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·g·λₒ1·y = 1ll;
-      return true;
-    }
-    static syl_int _f·λₒ0·g·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·g·λₒ0·y = 0ll;
-      return 1ll;
-    }
-    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
-      syl_thunk<syl_int> _f·λₒ0·gₒ0;
-      {
-        syl_env 𝒰 = NULL;
-        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
-        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
-      }
-      return _f·λₒ0·gₒ1;
-    }
-    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
-      syl_thunk<syl_int> _f·λₒ0·gₒ0;
-      {
-        syl_env 𝒰 = NULL;
-        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
-        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
-      }
-      return _f·λₒ0·gₒ0;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _fₒ1ₒ1 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ1, 𝒰};
-        _fₒ1ₒ0 = syl_thunk<syl_thunk<syl_unit>>{_f·λₒ1ₒ0, 𝒰};
-        _fₒ0ₒ1 = syl_thunk<syl_thunk<syl_bool>>{_f·λₒ0ₒ1, 𝒰};
-        _fₒ0ₒ0 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ0ₒ0, 𝒰};
-      }
-      {
-        syl_thunk<syl_int> _$ₒ0 = _fₒ0ₒ0();
-        __ = _$ₒ0();
-      }
-      {
-        syl_thunk<syl_bool> _$ₒ1 = _fₒ0ₒ1();
-        __ˢ1 = _$ₒ1();
-      }
-      {
-        syl_thunk<syl_unit> _$ₒ0 = _fₒ1ₒ0();
-        _$ₒ0();
-      }
-      {
-        syl_thunk<syl_int> _$ₒ1 = _fₒ1ₒ1();
-        __ˢ3 = _$ₒ1();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "nested if static with different types per level" =
@@ -6398,124 +2543,7 @@ let _ = f 1 0;;
 let _ = f 1 1;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1·g·λₒ1(syl_env);
-    static syl_unit _f·λₒ1·g·λₒ0(syl_env);
-    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env);
-    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env);
-    static syl_bool _f·λₒ0·g·λₒ1(syl_env);
-    static syl_int _f·λₒ0·g·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env);
-    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env);
-    static syl_thunk<syl_thunk<syl_int>> _fₒ1ₒ1;
-    static syl_thunk<syl_thunk<syl_unit>> _fₒ1ₒ0;
-    static syl_thunk<syl_thunk<syl_bool>> _fₒ0ₒ1;
-    static syl_thunk<syl_thunk<syl_int>> _fₒ0ₒ0;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_int __ˢ3;
-    static syl_int _f·λₒ1·g·λₒ1(syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ1·g·λₒ1·y = 1ll;
-      return _x - _f·λₒ1·g·λₒ1·y;
-    }
-    static syl_unit _f·λₒ1·g·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·g·λₒ0·y = 0ll;
-      ;
-    }
-    static syl_thunk<syl_int> _f·λₒ1ₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_thunk<syl_int> _f·λₒ1·gₒ1;
-      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
-      {
-        syl_env 𝒰 = syl_env_rec(8);
-        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
-        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _f·λₒ1·x;
-      }
-      return _f·λₒ1·gₒ1;
-    }
-    static syl_thunk<syl_unit> _f·λₒ1ₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_thunk<syl_int> _f·λₒ1·gₒ1;
-      syl_thunk<syl_unit> _f·λₒ1·gₒ0;
-      {
-        syl_env 𝒰 = syl_env_rec(8);
-        _f·λₒ1·gₒ1 = syl_thunk<syl_int>{_f·λₒ1·g·λₒ1, 𝒰};
-        _f·λₒ1·gₒ0 = syl_thunk<syl_unit>{_f·λₒ1·g·λₒ0, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _f·λₒ1·x;
-      }
-      return _f·λₒ1·gₒ0;
-    }
-    static syl_bool _f·λₒ0·g·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·g·λₒ1·y = 1ll;
-      return true;
-    }
-    static syl_int _f·λₒ0·g·λₒ0(syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ0·g·λₒ0·y = 0ll;
-      return _x + _f·λₒ0·g·λₒ0·y;
-    }
-    static syl_thunk<syl_bool> _f·λₒ0ₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
-      syl_thunk<syl_int> _f·λₒ0·gₒ0;
-      {
-        syl_env 𝒰 = syl_env_rec(8);
-        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
-        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _f·λₒ0·x;
-      }
-      return _f·λₒ0·gₒ1;
-    }
-    static syl_thunk<syl_int> _f·λₒ0ₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_thunk<syl_bool> _f·λₒ0·gₒ1;
-      syl_thunk<syl_int> _f·λₒ0·gₒ0;
-      {
-        syl_env 𝒰 = syl_env_rec(8);
-        _f·λₒ0·gₒ1 = syl_thunk<syl_bool>{_f·λₒ0·g·λₒ1, 𝒰};
-        _f·λₒ0·gₒ0 = syl_thunk<syl_int>{_f·λₒ0·g·λₒ0, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _f·λₒ0·x;
-      }
-      return _f·λₒ0·gₒ0;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _fₒ1ₒ1 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ1ₒ1, 𝒰};
-        _fₒ1ₒ0 = syl_thunk<syl_thunk<syl_unit>>{_f·λₒ1ₒ0, 𝒰};
-        _fₒ0ₒ1 = syl_thunk<syl_thunk<syl_bool>>{_f·λₒ0ₒ1, 𝒰};
-        _fₒ0ₒ0 = syl_thunk<syl_thunk<syl_int>>{_f·λₒ0ₒ0, 𝒰};
-      }
-      {
-        syl_thunk<syl_int> _$ₒ0 = _fₒ0ₒ0();
-        __ = _$ₒ0();
-      }
-      {
-        syl_thunk<syl_bool> _$ₒ1 = _fₒ0ₒ1();
-        __ˢ1 = _$ₒ1();
-      }
-      {
-        syl_thunk<syl_unit> _$ₒ0 = _fₒ1ₒ0();
-        _$ₒ0();
-      }
-      {
-        syl_thunk<syl_int> _$ₒ1 = _fₒ1ₒ1();
-        __ˢ3 = _$ₒ1();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda unused arg" =
@@ -6525,25 +2553,7 @@ let f = fn (static _ : int) -> 42;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·_ = 0ll;
-      return 42ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -6556,43 +2566,7 @@ let _ = print 0;;
 let _ = print 1;;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _print_int;
-    static syl_unit _print·λₒ1(syl_env);
-    static syl_unit _print·λₒ0(syl_env);
-    static syl_thunk<syl_unit> _printₒ1;
-    static syl_thunk<syl_unit> _printₒ0;
-    static syl_unit _print·λₒ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ1·x = 1ll;
-      _print_int(_print·λₒ1·x);
-    }
-    static syl_unit _print·λₒ0(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ0·x = 0ll;
-      _print_int(_print·λₒ0·x);
-    }
-    int main()
-    {
-      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_env _print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-        _printₒ1 = syl_thunk<syl_unit>{_print·λₒ1, _print·env};
-        _printₒ0 = syl_thunk<syl_unit>{_print·λₒ0, _print·env};
-      }
-      _printₒ0();
-      _printₒ0();
-      _printₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -6607,46 +2581,7 @@ let _ = print 1 in
 ();;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _print_int;
-    static syl_unit __·print·λₒ1(syl_env);
-    static syl_unit __·print·λₒ0(syl_env);
-    static syl_unit __·print·λₒ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int __·print·λₒ1·x = 1ll;
-      _print_int(__·print·λₒ1·x);
-    }
-    static syl_unit __·print·λₒ0(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int __·print·λₒ0·x = 0ll;
-      _print_int(__·print·λₒ0·x);
-    }
-    int main()
-    {
-      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_thunk<syl_unit> __·printₒ1;
-        syl_thunk<syl_unit> __·printₒ0;
-        {
-          syl_env __·print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-          __·printₒ1 = syl_thunk<syl_unit>{__·print·λₒ1, __·print·env};
-          __·printₒ0 = syl_thunk<syl_unit>{__·print·λₒ0, __·print·env};
-        }
-        __·printₒ0();
-        __·printₒ0();
-        __·printₒ1();
-        ;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -6661,88 +2596,7 @@ let _ = print 1 2;;
 let _ = print 1 3;;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _print_int;
-    static syl_unit _print·λₒ1·λₒ2(syl_env);
-    static syl_unit _print·λₒ1·λₒ3(syl_env);
-    static syl_thunk<syl_unit> _print·λₒ1ₒ2(syl_env);
-    static syl_thunk<syl_unit> _print·λₒ1ₒ3(syl_env);
-    static syl_unit _print·λₒ0·λₒ1(syl_env);
-    static syl_thunk<syl_unit> _print·λₒ0ₒ1(syl_env);
-    static syl_thunk<syl_thunk<syl_unit>> _printₒ1ₒ2;
-    static syl_thunk<syl_thunk<syl_unit>> _printₒ1ₒ3;
-    static syl_thunk<syl_thunk<syl_unit>> _printₒ0ₒ1;
-    static syl_unit _print·λₒ1·λₒ2(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ1·λₒ2·y = 2ll;
-      _print_int(_print·λₒ1·λₒ2·y);
-    }
-    static syl_unit _print·λₒ1·λₒ3(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ1·λₒ3·y = 3ll;
-      _print_int(_print·λₒ1·λₒ3·y);
-    }
-    static syl_thunk<syl_unit> _print·λₒ1ₒ2(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ1·x = 1ll;
-      _print_int(_print·λₒ1·x);
-      syl_env _print·λₒ1·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-      return syl_thunk<syl_unit>{_print·λₒ1·λₒ2, _print·λₒ1·env};
-    }
-    static syl_thunk<syl_unit> _print·λₒ1ₒ3(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ1·x = 1ll;
-      _print_int(_print·λₒ1·x);
-      syl_env _print·λₒ1·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-      return syl_thunk<syl_unit>{_print·λₒ1·λₒ3, _print·λₒ1·env};
-    }
-    static syl_unit _print·λₒ0·λₒ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ0·λₒ1·y = 1ll;
-      _print_int(_print·λₒ0·λₒ1·y);
-    }
-    static syl_thunk<syl_unit> _print·λₒ0ₒ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ0·x = 0ll;
-      _print_int(_print·λₒ0·x);
-      syl_env _print·λₒ0·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-      return syl_thunk<syl_unit>{_print·λₒ0·λₒ1, _print·λₒ0·env};
-    }
-    int main()
-    {
-      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_env _print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-        _printₒ1ₒ2 = syl_thunk<syl_thunk<syl_unit>>{_print·λₒ1ₒ2, _print·env};
-        _printₒ1ₒ3 = syl_thunk<syl_thunk<syl_unit>>{_print·λₒ1ₒ3, _print·env};
-        _printₒ0ₒ1 = syl_thunk<syl_thunk<syl_unit>>{_print·λₒ0ₒ1, _print·env};
-      }
-      {
-        syl_thunk<syl_unit> _$ₒ1 = _printₒ0ₒ1();
-        _$ₒ1();
-      }
-      {
-        syl_thunk<syl_unit> _$ₒ2 = _printₒ1ₒ2();
-        _$ₒ2();
-      }
-      {
-        syl_thunk<syl_unit> _$ₒ3 = _printₒ1ₒ3();
-        _$ₒ3();
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "dependent type: apply polymorphic id to itself" =
@@ -6752,43 +2606,7 @@ let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = (id (int -> int)) (fn (x : int) -> x + 1) 5;;
 |};
   [%expect
-    {|
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀ᐳ𝕀·λ(syl_closure<syl_int,syl_int>, syl_env);
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>> _id·λₒ𝕀ᐳ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>>> _idₒ𝕀ᐳ𝕀;
-    static syl_int __·λ(syl_int, syl_env);
-    static syl_int __;
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀ᐳ𝕀·λ(syl_closure<syl_int,syl_int> _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>> _id·λₒ𝕀ᐳ𝕀(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝕀ᐳ𝕀·env = NULL;
-      return syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>>{_id·λₒ𝕀ᐳ𝕀·λ, _id·λₒ𝕀ᐳ𝕀·env};
-    }
-    static syl_int __·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    int main()
-    {
-      {
-        syl_env _id·env = NULL;
-        _idₒ𝕀ᐳ𝕀 = syl_thunk<syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>>>{_id·λₒ𝕀ᐳ𝕀, _id·env};
-      }
-      {
-        syl_closure<syl_closure<syl_int,syl_int>,syl_closure<syl_int,syl_int>> _$ = _idₒ𝕀ᐳ𝕀();
-        syl_env __·env = NULL;
-        syl_closure<syl_int,syl_int> _$ˢ1 = syl_closure<syl_int,syl_int>{__·λ, __·env};
-        syl_closure<syl_int,syl_int> _$ˢ2 = _$(_$ˢ1);
-        syl_int _$ˢ3 = 5ll;
-        __ = _$ˢ2(_$ˢ3);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static with bool static arg" =
@@ -6799,35 +2617,7 @@ let _ = f true;;
 let _ = f false;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒF(syl_env);
-    static syl_int _f·λₒT(syl_env);
-    static syl_thunk<syl_bool> _fₒF;
-    static syl_thunk<syl_int> _fₒT;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒF(syl_env 𝒰)
-    {
-      syl_bool _f·λₒF·b = false;
-      return true;
-    }
-    static syl_int _f·λₒT(syl_env 𝒰)
-    {
-      syl_bool _f·λₒT·b = true;
-      return 1ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒF = syl_thunk<syl_bool>{_f·λₒF, _f·env};
-        _fₒT = syl_thunk<syl_int>{_f·λₒT, _f·env};
-      }
-      __ = _fₒT();
-      __ˢ1 = _fₒF();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static arg used in arithmetic, result applied" =
@@ -6837,25 +2627,7 @@ let double = fn (static x : int) -> x + x;;
 let _ = double 5;;
 |};
   [%expect
-    {|
-    static syl_int _double·λₒ5(syl_env);
-    static syl_thunk<syl_int> _doubleₒ5;
-    static syl_int __;
-    static syl_int _double·λₒ5(syl_env 𝒰)
-    {
-      syl_int _double·λₒ5·x = 5ll;
-      return _double·λₒ5·x + _double·λₒ5·x;
-    }
-    int main()
-    {
-      {
-        syl_env _double·env = NULL;
-        _doubleₒ5 = syl_thunk<syl_int>{_double·λₒ5, _double·env};
-      }
-      __ = _doubleₒ5();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "chaining dependent applications" =
@@ -6868,55 +2640,7 @@ let _ = f 0;;
 let _ = g true;;
 |};
   [%expect
-    {|
-    static syl_bool _id·λₒ𝔹·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env);
-    static syl_int _id·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _idₒ𝔹;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _idₒ𝕀;
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_bool,syl_bool> _g;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _id·λₒ𝔹·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _id·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝔹·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_id·λₒ𝔹·λ, _id·λₒ𝔹·env};
-    }
-    static syl_int _id·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _id·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _id·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_id·λₒ𝕀·λ, _id·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env _id·env = NULL;
-        _idₒ𝔹 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_id·λₒ𝔹, _id·env};
-        _idₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_id·λₒ𝕀, _id·env};
-      }
-      _f = _idₒ𝕀();
-      _g = _idₒ𝔹();
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      {
-        syl_bool _$ = true;
-        __ˢ1 = _g(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "symbolic arrow type as static arg" =
@@ -6926,35 +2650,7 @@ let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f
 let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
 |};
   [%expect
-    {|
-    static syl_int _choose·λₒλ4·f·λₒ0(syl_env);
-    static syl_int _choose·λₒλ4(syl_env);
-    static syl_thunk<syl_int> _chooseₒλ4;
-    static syl_int __;
-    static syl_int _choose·λₒλ4·f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _choose·λₒλ4·f·λₒ0·x = 0ll;
-      return 0ll;
-    }
-    static syl_int _choose·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _choose·λₒλ4·fₒ0;
-      {
-        syl_env _choose·λₒλ4·f·env = NULL;
-        _choose·λₒλ4·fₒ0 = syl_thunk<syl_int>{_choose·λₒλ4·f·λₒ0, _choose·λₒλ4·f·env};
-      }
-      return _choose·λₒλ4·fₒ0();
-    }
-    int main()
-    {
-      {
-        syl_env _choose·env = NULL;
-        _chooseₒλ4 = syl_thunk<syl_int>{_choose·λₒλ4, _choose·env};
-      }
-      __ = _chooseₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda body references outer let binding" =
@@ -6965,28 +2661,7 @@ let f = fn (static x : int) -> x + n;;
 let _ = f 5;;
 |};
   [%expect
-    {|
-    static syl_int _n;
-    static syl_int _f·λₒ5(syl_env);
-    static syl_thunk<syl_int> _fₒ5;
-    static syl_int __;
-    static syl_int _f·λₒ5(syl_env 𝒰)
-    {
-      syl_int _n = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λₒ5·x = 5ll;
-      return _f·λₒ5·x + _n;
-    }
-    int main()
-    {
-      _n = 10ll;
-      {
-        syl_env _f·env = syl_capture<syl_int>(_n);
-        _fₒ5 = syl_thunk<syl_int>{_f·λₒ5, _f·env};
-      }
-      __ = _fₒ5();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda with type annotation on body" =
@@ -6996,25 +2671,7 @@ let f = fn (static x : int) -> (x : int);;
 let _ = f 42;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ42(syl_env);
-    static syl_thunk<syl_int> _fₒ42;
-    static syl_int __;
-    static syl_int _f·λₒ42(syl_env 𝒰)
-    {
-      syl_int _f·λₒ42·x = 42ll;
-      return _f·λₒ42·x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ42 = syl_thunk<syl_int>{_f·λₒ42, _f·env};
-      }
-      __ = _fₒ42();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static in type annotation position" =
@@ -7025,35 +2682,7 @@ let _ = f true;;
 let _ = f false;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒF(syl_env);
-    static syl_int _f·λₒT(syl_env);
-    static syl_thunk<syl_bool> _fₒF;
-    static syl_thunk<syl_int> _fₒT;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒF(syl_env 𝒰)
-    {
-      syl_bool _f·λₒF·b = false;
-      return true;
-    }
-    static syl_int _f·λₒT(syl_env 𝒰)
-    {
-      syl_bool _f·λₒT·b = true;
-      return 0ll;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒF = syl_thunk<syl_bool>{_f·λₒF, _f·env};
-        _fₒT = syl_thunk<syl_int>{_f·λₒT, _f·env};
-      }
-      __ = _fₒT();
-      __ˢ1 = _fₒF();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "higher-order static: take a static function and apply it" =
@@ -7063,36 +2692,7 @@ let apply = fn (static f : static int -> int) -> f 5;;
 let _ = apply (fn (static x : int) -> x + 1);;
 |};
   [%expect
-    {|
-    static syl_int _apply·λₒλ4·f·λₒ5(syl_env);
-    static syl_int _apply·λₒλ4(syl_env);
-    static syl_thunk<syl_int> _applyₒλ4;
-    static syl_int __;
-    static syl_int _apply·λₒλ4·f·λₒ5(syl_env 𝒰)
-    {
-      syl_int _apply·λₒλ4·f·λₒ5·x = 5ll;
-      syl_int _$ = 1ll;
-      return _apply·λₒλ4·f·λₒ5·x + _$;
-    }
-    static syl_int _apply·λₒλ4(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _apply·λₒλ4·fₒ5;
-      {
-        syl_env _apply·λₒλ4·f·env = NULL;
-        _apply·λₒλ4·fₒ5 = syl_thunk<syl_int>{_apply·λₒλ4·f·λₒ5, _apply·λₒλ4·f·env};
-      }
-      return _apply·λₒλ4·fₒ5();
-    }
-    int main()
-    {
-      {
-        syl_env _apply·env = NULL;
-        _applyₒλ4 = syl_thunk<syl_int>{_apply·λₒλ4, _apply·env};
-      }
-      __ = _applyₒλ4();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "multiple static erased type args" =
@@ -7102,50 +2702,7 @@ let f = fn (static erased t1 : type) -> fn (static erased t2 : type) -> fn (x : 
 let _ = f int bool 0 true;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ𝕀·λₒ𝔹·λ·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_int> _f·λₒ𝕀·λₒ𝔹·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_closure<syl_bool,syl_int>> _f·λₒ𝕀·λₒ𝔹(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>> _f·λₒ𝕀ₒ𝔹(syl_env);
-    static syl_thunk<syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>>> _fₒ𝕀ₒ𝔹;
-    static syl_int __;
-    static syl_int _f·λₒ𝕀·λₒ𝔹·λ·λ(syl_bool _y, syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_int> _f·λₒ𝕀·λₒ𝔹·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·λₒ𝔹·λ·env = syl_capture<syl_int>(_x);
-      return syl_closure<syl_bool,syl_int>{_f·λₒ𝕀·λₒ𝔹·λ·λ, _f·λₒ𝕀·λₒ𝔹·λ·env};
-    }
-    static syl_closure<syl_int,syl_closure<syl_bool,syl_int>> _f·λₒ𝕀·λₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·λₒ𝔹·env = NULL;
-      return syl_closure<syl_int,syl_closure<syl_bool,syl_int>>{_f·λₒ𝕀·λₒ𝔹·λ, _f·λₒ𝕀·λₒ𝔹·env};
-    }
-    static syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>> _f·λₒ𝕀ₒ𝔹(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>>{_f·λₒ𝕀·λₒ𝔹, _f·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ𝕀ₒ𝔹 = syl_thunk<syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>>>{_f·λₒ𝕀ₒ𝔹, _f·env};
-      }
-      {
-        syl_thunk<syl_closure<syl_int,syl_closure<syl_bool,syl_int>>> _$ₒ𝔹 = _fₒ𝕀ₒ𝔹();
-        syl_closure<syl_int,syl_closure<syl_bool,syl_int>> _$ˢ1 = _$ₒ𝔹();
-        syl_int _$ˢ2 = 0ll;
-        syl_closure<syl_bool,syl_int> _$ˢ3 = _$ˢ1(_$ˢ2);
-        syl_bool _$ˢ4 = true;
-        __ = _$ˢ3(_$ˢ4);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "if static nested in let expression" =
@@ -7158,37 +2715,7 @@ let _ = f 0;;
 let _ = f 1;;
 |};
   [%expect
-    {|
-    static syl_bool _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_bool> _fₒ1;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_bool __ˢ1;
-    static syl_bool _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      syl_bool _f·λₒ1·y = true;
-      return _f·λₒ1·y;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      syl_int _f·λₒ0·y = 1ll;
-      return _f·λₒ0·y;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_bool>{_f·λₒ1, _f·env};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, _f·env};
-      }
-      __ = _fₒ0();
-      __ˢ1 = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "join Pi/Pi function-type arg returning type: fresh var issue" =
@@ -7200,35 +2727,7 @@ let x = if true then f else h;;
 let _ = x (fn (static x : int) -> int);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ10·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒλ10(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒλ10;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _xₒλ10;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _f·λₒλ10·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒλ10(syl_env 𝒰)
-    {
-      syl_env _f·λₒλ10·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒλ10·λ, _f·λₒλ10·env};
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ10 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒλ10, _f·env};
-      }
-      {
-        syl_env _h·env = NULL;
-      }
-      _xₒλ10 = _fₒλ10;
-      __ = _xₒλ10();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi function-type arg returning type" =
@@ -7239,32 +2738,7 @@ let wrap2 = wrap : static erased (static int -> static erased type) \ f -> f 0 -
 let _ = wrap2 (fn (static x : int) -> int);;
 |};
   [%expect
-    {|
-    static syl_int _wrap·λₒλ9·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _wrap·λₒλ9(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _wrapₒλ9;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _wrap2ₒλ9;
-    static syl_closure<syl_int,syl_int> __;
-    static syl_int _wrap·λₒλ9·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _wrap·λₒλ9(syl_env 𝒰)
-    {
-      syl_env _wrap·λₒλ9·env = NULL;
-      return syl_closure<syl_int,syl_int>{_wrap·λₒλ9·λ, _wrap·λₒλ9·env};
-    }
-    int main()
-    {
-      {
-        syl_env _wrap·env = NULL;
-        _wrapₒλ9 = syl_thunk<syl_closure<syl_int,syl_int>>{_wrap·λₒλ9, _wrap·env};
-      }
-      _wrap2ₒλ9 = _wrapₒλ9;
-      __ = _wrap2ₒλ9();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "meet Pi/Pi function-type arg: via arg contravariance in join" =
@@ -7276,50 +2750,7 @@ let x = if true then f else g;;
 let _ = x (fn (static f : static int -> int) -> f 0);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒλ17·apply·λₒλ20·f·λₒ0(syl_env);
-    static syl_int _f·λₒλ17·apply·λₒλ20(syl_env);
-    static syl_int _f·λₒλ17(syl_env);
-    static syl_thunk<syl_int> _fₒλ17;
-    static syl_thunk<syl_int> _xₒλ17;
-    static syl_int __;
-    static syl_int _f·λₒλ17·apply·λₒλ20·f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒλ17·apply·λₒλ20·f·λₒ0·x = 0ll;
-      return 0ll;
-    }
-    static syl_int _f·λₒλ17·apply·λₒλ20(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _f·λₒλ17·apply·λₒλ20·fₒ0;
-      {
-        syl_env _f·λₒλ17·apply·λₒλ20·f·env = NULL;
-        _f·λₒλ17·apply·λₒλ20·fₒ0 = syl_thunk<syl_int>{_f·λₒλ17·apply·λₒλ20·f·λₒ0, _f·λₒλ17·apply·λₒλ20·f·env};
-      }
-      return _f·λₒλ17·apply·λₒλ20·fₒ0();
-    }
-    static syl_int _f·λₒλ17(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _f·λₒλ17·applyₒλ20;
-      {
-        syl_env _f·λₒλ17·apply·env = NULL;
-        _f·λₒλ17·applyₒλ20 = syl_thunk<syl_int>{_f·λₒλ17·apply·λₒλ20, _f·λₒλ17·apply·env};
-      }
-      return _f·λₒλ17·applyₒλ20();
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒλ17 = syl_thunk<syl_int>{_f·λₒλ17, _f·env};
-      }
-      {
-        syl_env _g·env = NULL;
-      }
-      _xₒλ17 = _fₒλ17;
-      __ = _xₒλ17();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow function calling pi function in same group" =
@@ -7329,34 +2760,7 @@ fun f (static x : int) : int = x;;
 let _ = (fn (_ : unit) -> f 0);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __·λ(syl_env);
-    static syl_closure<syl_unit,syl_int> __;
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return _f·λₒ0·x;
-    }
-    static syl_int __·λ(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
-      return _fₒ0();
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
-      }
-      {
-        syl_env __·env = syl_capture<syl_thunk<syl_int>>(_fₒ0);
-        __ = syl_closure<syl_unit,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow function calling pi function in same group" =
@@ -7366,45 +2770,7 @@ fun f (static x : int) : int = x;;
 let _ = (fn (_ : unit) -> f 0 + f 1);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ1;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __·λ(syl_env);
-    static syl_closure<syl_unit,syl_int> __;
-    static syl_int _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      return _f·λₒ1·x;
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return _f·λₒ0·x;
-    }
-    static syl_int __·λ(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
-      syl_thunk<syl_int> _fₒ1 = *(syl_thunk<syl_int>*)(𝒰 + 16);
-      syl_int _$ = _fₒ0();
-      syl_int _$ˢ1 = _fₒ1();
-      return _$ + _$ˢ1;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, 𝒰};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
-      }
-      {
-        syl_env __·env = syl_capture<syl_thunk<syl_int>, syl_thunk<syl_int>>(_fₒ0, _fₒ1);
-        __ = syl_closure<syl_unit,syl_int>{__·λ, __·env};
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow function calling pi function in same group" =
@@ -7415,43 +2781,7 @@ and g (x : int) : int = f int x;;
 let _ = g 5;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
-    }
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
-      return _$(_x);
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
-      }
-      {
-        syl_int _$ = 5ll;
-        __ = _g(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "pi calling arrow from same group at application" =
@@ -7464,67 +2794,7 @@ let _ = choose true 5;;
 let _ = choose false 5;;
 |};
   [%expect
-    {|
-    static syl_int _inc·λ(syl_int, syl_env);
-    static syl_int _choose·λₒF·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env);
-    static syl_int _choose·λₒT·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env);
-    static syl_closure<syl_int,syl_int> _inc;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒF;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT;
-    static syl_int __;
-    static syl_int __ˢ1;
-    static syl_int _inc·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      syl_closure<syl_int,syl_int> _inc·λ·_ = _chooseₒT();
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    static syl_int _choose·λₒF·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env 𝒰)
-    {
-      syl_env _choose·λₒF·env = NULL;
-      return syl_closure<syl_int,syl_int>{_choose·λₒF·λ, _choose·λₒF·env};
-    }
-    static syl_int _choose·λₒT·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      return _inc(_x);
-    }
-    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
-      syl_env _choose·λₒT·env = syl_capture<syl_closure<syl_int,syl_int>>(_inc);
-      return syl_closure<syl_int,syl_int>{_choose·λₒT·λ, _choose·λₒT·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(32);
-        _inc = syl_closure<syl_int,syl_int>{_inc·λ, 𝒰};
-        _chooseₒF = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒF, 𝒰};
-        _chooseₒT = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒT, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _chooseₒT;
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = _inc;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _chooseₒT();
-        syl_int _$ˢ1 = 5ll;
-        __ = _$(_$ˢ1);
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _chooseₒF();
-        syl_int _$ˢ1 = 5ll;
-        __ˢ1 = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "pi calling arrow from same group at application" =
@@ -7539,70 +2809,7 @@ let _ = choose false 5 in
 ();;
 |};
   [%expect
-    {|
-    static syl_int __·inc·λ(syl_int, syl_env);
-    static syl_int __·choose·λₒF·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __·choose·λₒF(syl_env);
-    static syl_int __·choose·λₒT·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> __·choose·λₒT(syl_env);
-    static syl_int __·inc·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      syl_closure<syl_int,syl_int> __·inc·λ·_ = _chooseₒT();
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    static syl_int __·choose·λₒF·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> __·choose·λₒF(syl_env 𝒰)
-    {
-      syl_env __·choose·λₒF·env = NULL;
-      return syl_closure<syl_int,syl_int>{__·choose·λₒF·λ, __·choose·λₒF·env};
-    }
-    static syl_int __·choose·λₒT·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      return _inc(_x);
-    }
-    static syl_closure<syl_int,syl_int> __·choose·λₒT(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
-      syl_env __·choose·λₒT·env = syl_capture<syl_closure<syl_int,syl_int>>(_inc);
-      return syl_closure<syl_int,syl_int>{__·choose·λₒT·λ, __·choose·λₒT·env};
-    }
-    int main()
-    {
-      {
-        syl_closure<syl_int,syl_int> __·inc;
-        syl_thunk<syl_closure<syl_int,syl_int>> __·chooseₒF;
-        syl_thunk<syl_closure<syl_int,syl_int>> __·chooseₒT;
-        {
-          syl_env 𝒰 = syl_env_rec(32);
-          __·inc = syl_closure<syl_int,syl_int>{__·inc·λ, 𝒰};
-          __·chooseₒF = syl_thunk<syl_closure<syl_int,syl_int>>{__·choose·λₒF, 𝒰};
-          __·chooseₒT = syl_thunk<syl_closure<syl_int,syl_int>>{__·choose·λₒT, 𝒰};
-          *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = __·chooseₒT;
-          *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = __·inc;
-        }
-        syl_int __·_;
-        {
-          syl_closure<syl_int,syl_int> _$ = __·chooseₒT();
-          syl_int _$ˢ1 = 5ll;
-          __·_ = _$(_$ˢ1);
-        }
-        syl_int __·_ˢ1;
-        {
-          syl_closure<syl_int,syl_int> _$ = __·chooseₒF();
-          syl_int _$ˢ1 = 5ll;
-          __·_ˢ1 = _$(_$ˢ1);
-        }
-        ;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -7613,27 +2820,7 @@ and g (y : int) : int = let _ = f y in 0;;
 let _ = g 0;;
 |};
   [%expect
-    {|
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _g·λ(syl_int _y, syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _g(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun env" =
@@ -7643,27 +2830,7 @@ let a = 0 @ dynamic;;
 fun f (x : int) : int = let _ = a in x;;
 |};
   [%expect
-    {|
-    static syl_int _a;
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _a = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λ·_ = _a;
-      return _x;
-    }
-    int main()
-    {
-      _a = 0ll;
-      {
-        syl_env 𝒰 = syl_env_rec(8);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _a;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun recurse" =
@@ -7673,29 +2840,7 @@ let a = 0 @ dynamic;;
 fun f (x : int) : int = let _ = a in f x;;
 |};
   [%expect
-    {|
-    static syl_int _a;
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 8);
-      syl_int _a = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λ·_ = _a;
-      return _f(_x);
-    }
-    int main()
-    {
-      _a = 0ll;
-      {
-        syl_env 𝒰 = syl_env_rec(24);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _a;
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 8) = _f;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "fun recurse" =
@@ -7708,32 +2853,7 @@ fun f (x : int) : int = let _ = a in f x in
 ;;
 |};
   [%expect
-    {|
-    static syl_int _a;
-    static syl_int __·f·λ(syl_int, syl_env);
-    static syl_int __·f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 8);
-      syl_int _a = *(syl_int*)(𝒰 + 0);
-      syl_int __·f·λ·_ = _a;
-      return _f(_x);
-    }
-    int main()
-    {
-      _a = 0ll;
-      {
-        syl_closure<syl_int,syl_int> __·f;
-        {
-          syl_env 𝒰 = syl_env_rec(24);
-          __·f = syl_closure<syl_int,syl_int>{__·f·λ, 𝒰};
-          *(syl_int*)(𝒰 + 0) = _a;
-          *(syl_closure<syl_int,syl_int>*)(𝒰 + 8) = __·f;
-        }
-        ;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive env" =
@@ -7746,50 +2866,7 @@ fun f (x : int) : int = let _ = a in let _ = b in g x
 and g (y : int) : int = let _ = a in let _ = c in f y;;
 |};
   [%expect
-    {|
-    static syl_int _a;
-    static syl_int _b;
-    static syl_int _c;
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 40);
-      syl_int _b = *(syl_int*)(𝒰 + 8);
-      syl_int _a = *(syl_int*)(𝒰 + 0);
-      syl_int _f·λ·_ = _a;
-      syl_int _f·λ·_ˢ1 = _b;
-      return _g(_x);
-    }
-    static syl_int _g·λ(syl_int _y, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 24);
-      syl_int _c = *(syl_int*)(𝒰 + 16);
-      syl_int _a = *(syl_int*)(𝒰 + 0);
-      syl_int _g·λ·_ = _a;
-      syl_int _g·λ·_ˢ1 = _c;
-      return _f(_y);
-    }
-    int main()
-    {
-      _a = 0ll;
-      _b = 1ll;
-      _c = 2ll;
-      {
-        syl_env 𝒰 = syl_env_rec(56);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _a;
-        *(syl_int*)(𝒰 + 8) = _b;
-        *(syl_int*)(𝒰 + 16) = _c;
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 24) = _f;
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 40) = _g;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -7800,27 +2877,7 @@ and g (y : int) : erased int = f y;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -7830,17 +2887,7 @@ fun erased f (x : int) : int = 0;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        __ = 0ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -7850,17 +2897,7 @@ let f = fn erased (x : int) -> 0;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        __ = 0ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -7870,14 +2907,7 @@ fun erased f (erased x : int) : int = 0;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 0ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -7887,14 +2917,7 @@ let f = fn erased (erased x : int) -> 0;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      __ = 0ll;
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -7905,55 +2928,7 @@ and erased g (y : int) : int = if y == 0 then 0 else f (y-1);;
 let _ = (f @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_int _f·λ·y = _x;
-      syl_int _$ = 0ll;
-      syl_int _f·λ·if;
-      if(_f·λ·y == _$)
-      {
-        _f·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _$ = 1ll;
-        syl_int _$ˢ1 = _f·λ·y - _$;
-        _f·λ·if = _f(_$ˢ1);
-      }
-      return _f·λ·if;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
-      }
-      {
-        syl_int __·x = 0ll;
-        syl_int __·y = __·x;
-        syl_int _$ = 0ll;
-        syl_int __·if;
-        if(__·y == _$)
-        {
-          __·if = 0ll;
-        }
-        else
-        {
-          syl_int _$ = 1ll;
-          syl_int _$ˢ1 = __·y - _$;
-          __·if = _f(_$ˢ1);
-        }
-        __ = __·if;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda" =
@@ -7962,18 +2937,7 @@ let%expect_test "static lambda" =
 let _ = (fn (static x : int) -> x + 1) 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        syl_int _$ = 1ll;
-        __ = __·x + _$;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "pi function calling arrow function in same group" =
@@ -7984,42 +2948,7 @@ and f (static erased t : type) : t -> t = fn (x : t) -> x;;
 let _ = f int 0;;
 |};
   [%expect
-    {|
-    static syl_int _inc·λ(syl_int, syl_env);
-    static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_closure<syl_int,syl_int> _inc;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_int __;
-    static syl_int _inc·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _inc = syl_closure<syl_int,syl_int>{_inc·λ, 𝒰};
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow function calling pi function in same group" =
@@ -8030,43 +2959,7 @@ and g (x : int) : int = f int x;;
 let _ = g 5;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
-    }
-    static syl_int _g·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
-      return _$(_x);
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
-      }
-      {
-        syl_int _$ = 5ll;
-        __ = _g(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "pi calling arrow from same group at application" =
@@ -8079,64 +2972,7 @@ let _ = choose true 5;;
 let _ = choose false 5;;
 |};
   [%expect
-    {|
-    static syl_int _inc·λ(syl_int, syl_env);
-    static syl_int _choose·λₒF·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env);
-    static syl_int _choose·λₒT·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env);
-    static syl_closure<syl_int,syl_int> _inc;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒF;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _chooseₒT;
-    static syl_int __;
-    static syl_int __ˢ1;
-    static syl_int _inc·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _$ = 1ll;
-      return _x + _$;
-    }
-    static syl_int _choose·λₒF·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _choose·λₒF(syl_env 𝒰)
-    {
-      syl_env _choose·λₒF·env = NULL;
-      return syl_closure<syl_int,syl_int>{_choose·λₒF·λ, _choose·λₒF·env};
-    }
-    static syl_int _choose·λₒT·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      return _inc(_x);
-    }
-    static syl_closure<syl_int,syl_int> _choose·λₒT(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _inc = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_env _choose·λₒT·env = syl_capture<syl_closure<syl_int,syl_int>>(_inc);
-      return syl_closure<syl_int,syl_int>{_choose·λₒT·λ, _choose·λₒT·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _inc = syl_closure<syl_int,syl_int>{_inc·λ, 𝒰};
-        _chooseₒF = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒF, 𝒰};
-        _chooseₒT = syl_thunk<syl_closure<syl_int,syl_int>>{_choose·λₒT, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _inc;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _chooseₒT();
-        syl_int _$ˢ1 = 5ll;
-        __ = _$(_$ˢ1);
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _chooseₒF();
-        syl_int _$ˢ1 = 5ll;
-        __ˢ1 = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mutual pi recursion" =
@@ -8147,43 +2983,7 @@ and g (static erased t : type) : t -> t = f t;;
 let _ = g int 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀;
-    static syl_int __;
-    static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
-    }
-    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      return _fₒ𝕀();
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
-        _gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_g·λₒ𝕀, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _gₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static recursion with base case" =
@@ -8193,55 +2993,7 @@ fun f (static x : int) : int = if static x == 0 then x else f (x - 1);;
 let _ = f 3;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1(syl_env);
-    static syl_int _f·λₒ2(syl_env);
-    static syl_int _f·λₒ3(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_thunk<syl_int> _fₒ1;
-    static syl_thunk<syl_int> _fₒ2;
-    static syl_thunk<syl_int> _fₒ3;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_int __;
-    static syl_int _f·λₒ1(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
-      syl_int _f·λₒ1·x = 1ll;
-      return _fₒ0();
-    }
-    static syl_int _f·λₒ2(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _fₒ1 = *(syl_thunk<syl_int>*)(𝒰 + 32);
-      syl_int _f·λₒ2·x = 2ll;
-      return _fₒ1();
-    }
-    static syl_int _f·λₒ3(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _fₒ2 = *(syl_thunk<syl_int>*)(𝒰 + 16);
-      syl_int _f·λₒ3·x = 3ll;
-      return _fₒ2();
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return _f·λₒ0·x;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(48);
-        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, 𝒰};
-        _fₒ2 = syl_thunk<syl_int>{_f·λₒ2, 𝒰};
-        _fₒ3 = syl_thunk<syl_int>{_f·λₒ3, 𝒰};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
-        *(syl_thunk<syl_int>*)(𝒰 + 0) = _fₒ0;
-        *(syl_thunk<syl_int>*)(𝒰 + 16) = _fₒ2;
-        *(syl_thunk<syl_int>*)(𝒰 + 32) = _fₒ1;
-      }
-      __ = _fₒ3();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8251,12 +3003,7 @@ fun f (static x : int) : erased int = (if static x == 0 then 42 else f (x - 1)) 
 let _ = f 3;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "arrow and pi mutual recursion with application" =
@@ -8267,44 +3014,7 @@ and apply_double (static erased t : type) : int -> int = fn (x : int) -> double 
 let _ = apply_double int 5;;
 |};
   [%expect
-    {|
-    static syl_int _double·λ(syl_int, syl_env);
-    static syl_int _apply_double·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _apply_double·λₒ𝕀(syl_env);
-    static syl_closure<syl_int,syl_int> _double;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _apply_doubleₒ𝕀;
-    static syl_int __;
-    static syl_int _double·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x + _x;
-    }
-    static syl_int _apply_double·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _double = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      return _double(_x);
-    }
-    static syl_closure<syl_int,syl_int> _apply_double·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _double = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_env _apply_double·λₒ𝕀·env = syl_capture<syl_closure<syl_int,syl_int>>(_double);
-      return syl_closure<syl_int,syl_int>{_apply_double·λₒ𝕀·λ, _apply_double·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _double = syl_closure<syl_int,syl_int>{_double·λ, 𝒰};
-        _apply_doubleₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_apply_double·λₒ𝕀, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _double;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _apply_doubleₒ𝕀();
-        syl_int _$ˢ1 = 5ll;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mutually recursive fun with static arg" =
@@ -8314,15 +3024,7 @@ fun id1 (static erased t : type) : t -> t = fn (x : t) -> x
 and id2 (static erased t : type) : t -> t = id1 t;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8333,28 +3035,7 @@ and erased g (y : int) : int = y;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _f·λ·y = _x;
-      return _f·λ·y;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8365,35 +3046,7 @@ and g (y : int) : int = y;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_int _f·λ·y = _x;
-      return _f·λ·y;
-    }
-    static syl_int _g·λ(syl_int _y, syl_env 𝒰)
-    {
-      return _y;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8404,12 +3057,7 @@ and g (y : int) : erased int = y;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    int main()
-    {
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8420,28 +3068,7 @@ and g (y : int) : int = y;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _g·λ(syl_int _y, syl_env 𝒰)
-    {
-      return _y;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-      }
-      {
-        syl_int __·x = 0ll;
-        syl_int __·y = __·x;
-        __ = __·y;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8452,62 +3079,7 @@ and g (y : int) : int = if y == 0 then 0 else f (y - 1);;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
-      syl_int _$ = 0ll;
-      syl_int _f·λ·if;
-      if(_x == _$)
-      {
-        _f·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _$ = 1ll;
-        syl_int _$ˢ1 = _x - _$;
-        _f·λ·if = _g(_$ˢ1);
-      }
-      return _f·λ·if;
-    }
-    static syl_int _g·λ(syl_int _y, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_int _$ = 0ll;
-      syl_int _g·λ·if;
-      if(_y == _$)
-      {
-        _g·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _$ = 1ll;
-        syl_int _$ˢ1 = _y - _$;
-        _g·λ·if = _f(_$ˢ1);
-      }
-      return _g·λ·if;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(32);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = _g;
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8518,83 +3090,7 @@ and erased g (y : int) : int = if y == 0 then 0 else f (y - 1);;
 let _ = (f @ erased) 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_int _$ = 0ll;
-      syl_int _f·λ·if;
-      if(_x == _$)
-      {
-        _f·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _f·λ·if·y;
-        {
-          syl_int _$ = 1ll;
-          _f·λ·if·y = _x - _$;
-        }
-        syl_int _$ = 0ll;
-        syl_int _f·λ·if·if;
-        if(_f·λ·if·y == _$)
-        {
-          _f·λ·if·if = 0ll;
-        }
-        else
-        {
-          syl_int _$ = 1ll;
-          syl_int _$ˢ1 = _f·λ·if·y - _$;
-          _f·λ·if·if = _f(_$ˢ1);
-        }
-        _f·λ·if = _f·λ·if·if;
-      }
-      return _f·λ·if;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _f;
-      }
-      {
-        syl_int __·x = 0ll;
-        syl_int _$ = 0ll;
-        syl_int __·if;
-        if(__·x == _$)
-        {
-          __·if = 0ll;
-        }
-        else
-        {
-          syl_int __·if·y;
-          {
-            syl_int _$ = 1ll;
-            __·if·y = __·x - _$;
-          }
-          syl_int _$ = 0ll;
-          syl_int __·if·if;
-          if(__·if·y == _$)
-          {
-            __·if·if = 0ll;
-          }
-          else
-          {
-            syl_int _$ = 1ll;
-            syl_int _$ˢ1 = __·if·y - _$;
-            __·if·if = _f(_$ˢ1);
-          }
-          __·if = __·if·if;
-        }
-        __ = __·if;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8605,76 +3101,7 @@ and g (y : int) : int = if y == 0 then 0 else (f @ erased) (y - 1);;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_int _$ = 0ll;
-      syl_int _f·λ·if;
-      if(_x == _$)
-      {
-        _f·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _$ = 1ll;
-        syl_int _$ˢ1 = _x - _$;
-        _f·λ·if = _g(_$ˢ1);
-      }
-      return _f·λ·if;
-    }
-    static syl_int _g·λ(syl_int _y, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_int _$ = 0ll;
-      syl_int _g·λ·if;
-      if(_y == _$)
-      {
-        _g·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _g·λ·if·x;
-        {
-          syl_int _$ = 1ll;
-          _g·λ·if·x = _y - _$;
-        }
-        syl_int _$ = 0ll;
-        syl_int _g·λ·if·if;
-        if(_g·λ·if·x == _$)
-        {
-          _g·λ·if·if = 0ll;
-        }
-        else
-        {
-          syl_int _$ = 1ll;
-          syl_int _$ˢ1 = _g·λ·if·x - _$;
-          _g·λ·if·if = _g(_$ˢ1);
-        }
-        _g·λ·if = _g·λ·if·if;
-      }
-      return _g·λ·if;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _g;
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -8685,27 +3112,7 @@ and g (y : int) : int = let _ = f y in 0;;
 let _ = g 0;;
 |};
   [%expect
-    {|
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _g·λ(syl_int _y, syl_env 𝒰)
-    {
-      return 0ll;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _g(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -8715,17 +3122,7 @@ fun erased f (x : int) : int = 0;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        __ = 0ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -8735,17 +3132,7 @@ let f = fn erased (x : int) -> 0;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int __;
-    int main()
-    {
-      {
-        syl_int __·x = 0ll;
-        __ = 0ll;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static int" =
@@ -8755,25 +3142,7 @@ let f = fn (static x : int) -> x;;
 let _ = f (f 1);;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ1(syl_env);
-    static syl_thunk<syl_int> _fₒ1;
-    static syl_int __;
-    static syl_int _f·λₒ1(syl_env 𝒰)
-    {
-      syl_int _f·λₒ1·x = 1ll;
-      return _f·λₒ1·x;
-    }
-    int main()
-    {
-      {
-        syl_env _f·env = NULL;
-        _fₒ1 = syl_thunk<syl_int>{_f·λₒ1, _f·env};
-      }
-      __ = _fₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "top-level mutual recursion with different bodies" =
@@ -8784,38 +3153,7 @@ and g (b : int) : int = b;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λ(syl_int, syl_env);
-    static syl_int _g·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f;
-    static syl_closure<syl_int,syl_int> _g;
-    static syl_int __;
-    static syl_int _f·λ(syl_int _a, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_int _$ = 1ll;
-      syl_int _$ˢ1 = _a + _$;
-      return _g(_$ˢ1);
-    }
-    static syl_int _g·λ(syl_int _b, syl_env 𝒰)
-    {
-      return _b;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _f = syl_closure<syl_int,syl_int>{_f·λ, 𝒰};
-        _g = syl_closure<syl_int,syl_int>{_g·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _g;
-      }
-      {
-        syl_int _$ = 0ll;
-        __ = _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "top-level mutual static recursion" =
@@ -8826,45 +3164,7 @@ and g (static y : int) : int = if static y == 0 then 1 else f (y - 1);;
 let _ = f 2;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ2(syl_env);
-    static syl_int _f·λₒ0(syl_env);
-    static syl_int _g·λₒ1(syl_env);
-    static syl_thunk<syl_int> _fₒ2;
-    static syl_thunk<syl_int> _fₒ0;
-    static syl_thunk<syl_int> _gₒ1;
-    static syl_int __;
-    static syl_int _f·λₒ2(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _gₒ1 = *(syl_thunk<syl_int>*)(𝒰 + 16);
-      syl_int _f·λₒ2·x = 2ll;
-      return _gₒ1();
-    }
-    static syl_int _f·λₒ0(syl_env 𝒰)
-    {
-      syl_int _f·λₒ0·x = 0ll;
-      return 0ll;
-    }
-    static syl_int _g·λₒ1(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _fₒ0 = *(syl_thunk<syl_int>*)(𝒰 + 0);
-      syl_int _g·λₒ1·y = 1ll;
-      return _fₒ0();
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(32);
-        _fₒ2 = syl_thunk<syl_int>{_f·λₒ2, 𝒰};
-        _fₒ0 = syl_thunk<syl_int>{_f·λₒ0, 𝒰};
-        _gₒ1 = syl_thunk<syl_int>{_g·λₒ1, 𝒰};
-        *(syl_thunk<syl_int>*)(𝒰 + 0) = _fₒ0;
-        *(syl_thunk<syl_int>*)(𝒰 + 16) = _gₒ1;
-      }
-      __ = _fₒ2();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static mutual recursion cross-monomorphization" =
@@ -8875,43 +3175,7 @@ and g (static erased t : type) : t -> t = fn (x : t) -> x;;
 let _ = f int 0;;
 |};
   [%expect
-    {|
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_int _g·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀;
-    static syl_int __;
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      return _gₒ𝕀();
-    }
-    static syl_int _g·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _g·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_g·λₒ𝕀·λ, _g·λₒ𝕀·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
-        _gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_g·λₒ𝕀, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _gₒ𝕀;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _fₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static mutual recursion cross-monomorphization" =
@@ -8922,43 +3186,7 @@ and g (static erased t : type) : t -> t = f t;;
 let _ = g int 0;;
 |};
   [%expect
-    {|
-    static syl_int _f·λₒ𝕀·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env);
-    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env);
-    static syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀;
-    static syl_thunk<syl_closure<syl_int,syl_int>> _gₒ𝕀;
-    static syl_int __;
-    static syl_int _f·λₒ𝕀·λ(syl_int _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_int,syl_int> _f·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_env _f·λₒ𝕀·env = NULL;
-      return syl_closure<syl_int,syl_int>{_f·λₒ𝕀·λ, _f·λₒ𝕀·env};
-    }
-    static syl_closure<syl_int,syl_int> _g·λₒ𝕀(syl_env 𝒰)
-    {
-      syl_thunk<syl_closure<syl_int,syl_int>> _fₒ𝕀 = *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0);
-      return _fₒ𝕀();
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _fₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_f·λₒ𝕀, 𝒰};
-        _gₒ𝕀 = syl_thunk<syl_closure<syl_int,syl_int>>{_g·λₒ𝕀, 𝒰};
-        *(syl_thunk<syl_closure<syl_int,syl_int>>*)(𝒰 + 0) = _fₒ𝕀;
-      }
-      {
-        syl_closure<syl_int,syl_int> _$ = _gₒ𝕀();
-        syl_int _$ˢ1 = 0ll;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "local fun inside top-level fun" =
@@ -8970,39 +3198,7 @@ fun outer (x : int) : int =
 let _ = outer 5;;
 |};
   [%expect
-    {|
-    static syl_int _outer·λ·inner·λ(syl_int, syl_env);
-    static syl_int _outer·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _outer;
-    static syl_int __;
-    static syl_int _outer·λ·inner·λ(syl_int _y, syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 0);
-      return _y + _x;
-    }
-    static syl_int _outer·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _outer·λ·inner;
-      {
-        syl_env 𝒰 = syl_env_rec(8);
-        _outer·λ·inner = syl_closure<syl_int,syl_int>{_outer·λ·inner·λ, 𝒰};
-        *(syl_int*)(𝒰 + 0) = _x;
-      }
-      return _outer·λ·inner(_x);
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _outer = syl_closure<syl_int,syl_int>{_outer·λ, 𝒰};
-      }
-      {
-        syl_int _$ = 5ll;
-        __ = _outer(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "mutually recursive local closures share environment" =
@@ -9015,74 +3211,7 @@ fun outer (x : int) : int =
 let _ = outer 5;;
 |};
   [%expect
-    {|
-    static syl_int _outer·λ·f·λ(syl_int, syl_env);
-    static syl_int _outer·λ·g·λ(syl_int, syl_env);
-    static syl_int _outer·λ(syl_int, syl_env);
-    static syl_closure<syl_int,syl_int> _outer;
-    static syl_int __;
-    static syl_int _outer·λ·f·λ(syl_int _a, syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 32);
-      syl_closure<syl_int,syl_int> _g = *(syl_closure<syl_int,syl_int>*)(𝒰 + 16);
-      syl_int _$ = 0ll;
-      syl_int _outer·λ·f·λ·if;
-      if(_a == _$)
-      {
-        _outer·λ·f·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _$ = _a + _x;
-        _outer·λ·f·λ·if = _g(_$);
-      }
-      return _outer·λ·f·λ·if;
-    }
-    static syl_int _outer·λ·g·λ(syl_int _b, syl_env 𝒰)
-    {
-      syl_int _x = *(syl_int*)(𝒰 + 32);
-      syl_closure<syl_int,syl_int> _f = *(syl_closure<syl_int,syl_int>*)(𝒰 + 0);
-      syl_int _$ = 0ll;
-      syl_int _outer·λ·g·λ·if;
-      if(_b == _$)
-      {
-        _outer·λ·g·λ·if = 0ll;
-      }
-      else
-      {
-        syl_int _$ = _b + _x;
-        _outer·λ·g·λ·if = _f(_$);
-      }
-      return _outer·λ·g·λ·if;
-    }
-    static syl_int _outer·λ(syl_int _x, syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_int> _outer·λ·f;
-      syl_closure<syl_int,syl_int> _outer·λ·g;
-      {
-        syl_env 𝒰 = syl_env_rec(40);
-        _outer·λ·f = syl_closure<syl_int,syl_int>{_outer·λ·f·λ, 𝒰};
-        _outer·λ·g = syl_closure<syl_int,syl_int>{_outer·λ·g·λ, 𝒰};
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 0) = _outer·λ·f;
-        *(syl_closure<syl_int,syl_int>*)(𝒰 + 16) = _outer·λ·g;
-        *(syl_int*)(𝒰 + 32) = _x;
-      }
-      syl_int _$ = 0ll;
-      return _outer·λ·f(_$);
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _outer = syl_closure<syl_int,syl_int>{_outer·λ, 𝒰};
-      }
-      {
-        syl_int _$ = 5ll;
-        __ = _outer(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "monomorphizing side effects" =
@@ -9093,34 +3222,7 @@ fun print (static _ : unit) : unit = print_int 0;;
 let _ = print ();;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _print_int;
-    static syl_unit _print·λₒø(syl_env);
-    static syl_thunk<syl_unit> _printₒø;
-    static syl_unit _print·λₒø(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      ;
-      syl_int _$ = 0ll;
-      _print_int(_$);
-    }
-    int main()
-    {
-      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _printₒø = syl_thunk<syl_unit>{_print·λₒø, 𝒰};
-        *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0) = _print_int;
-      }
-      _printₒø();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "external" =
@@ -9130,23 +3232,7 @@ external f : int -> unit = syl_print_int;;
 let _ = f 0;;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _f;
-    int main()
-    {
-      _f = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_int _$ = 0ll;
-        _f(_$);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "external" =
@@ -9156,29 +3242,7 @@ external f : int -> unit = syl_print_int;;
 let _ = (f @ erased) 0;;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _f;
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit __·syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    int main()
-    {
-      _f = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_closure<syl_int,syl_unit> _$ = syl_closure<syl_int,syl_unit>{__·syl_print_int·λ, NULL};
-        syl_int _$ˢ1 = 0ll;
-        _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -9190,42 +3254,7 @@ let _ = print 0;;
 let _ = print 1;;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _print_int;
-    static syl_unit _print·λₒ1(syl_env);
-    static syl_unit _print·λₒ0(syl_env);
-    static syl_thunk<syl_unit> _printₒ1;
-    static syl_thunk<syl_unit> _printₒ0;
-    static syl_unit _print·λₒ1(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ1·x = 1ll;
-      _print_int(_print·λₒ1·x);
-    }
-    static syl_unit _print·λₒ0(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_int _print·λₒ0·x = 0ll;
-      _print_int(_print·λₒ0·x);
-    }
-    int main()
-    {
-      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_env _print·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-        _printₒ1 = syl_thunk<syl_unit>{_print·λₒ1, _print·env};
-        _printₒ0 = syl_thunk<syl_unit>{_print·λₒ0, _print·env};
-      }
-      _printₒ0();
-      _printₒ1();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static erased lambda" =
@@ -9235,26 +3264,7 @@ fun apply (static erased f : int -> int) : int = f 0;;
 let x = apply (fn (x : int) -> x + 1);;
 |};
   [%expect
-    {|
-    static syl_int _apply·λₒλ2(syl_env);
-    static syl_thunk<syl_int> _applyₒλ2;
-    static syl_int _x;
-    static syl_int _apply·λₒλ2(syl_env 𝒰)
-    {
-      syl_int _apply·λₒλ2·x = 0ll;
-      syl_int _$ = 1ll;
-      return _apply·λₒλ2·x + _$;
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _applyₒλ2 = syl_thunk<syl_int>{_apply·λₒλ2, 𝒰};
-      }
-      _x = _applyₒλ2();
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -9267,34 +3277,7 @@ fun mk_ident (static erased pick_t : static unit -> static erased type) : static
 let _ = mk_ident (fn (static _ : unit) -> if 1 + 1 == 2 then bool else unit) true;;
 |};
   [%expect
-    {|
-    static syl_bool _mk_ident·λₒλ6·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _mk_identₒλ6;
-    static syl_bool __;
-    static syl_bool _mk_ident·λₒλ6·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env 𝒰)
-    {
-      syl_env _mk_ident·λₒλ6·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _mk_identₒλ6 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_mk_ident·λₒλ6, 𝒰};
-      }
-      {
-        syl_closure<syl_bool,syl_bool> _$ = _mk_identₒλ6();
-        syl_bool _$ˢ1 = true;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -9307,45 +3290,7 @@ fun mk_ident (static pick_t : static unit -> static int) : static (let t = if pi
 let _ = mk_ident (fn (static _ : unit) -> 1) true;;
 |};
   [%expect
-    {|
-    static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env);
-    static syl_bool _mk_ident·λₒλ6·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _mk_identₒλ6;
-    static syl_bool __;
-    static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env 𝒰)
-    {
-      ;
-      return 1ll;
-    }
-    static syl_bool _mk_ident·λₒλ6·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env 𝒰)
-    {
-      syl_thunk<syl_int> _mk_ident·λₒλ6·pick_tₒø;
-      {
-        syl_env _mk_ident·λₒλ6·pick_t·env = NULL;
-        _mk_ident·λₒλ6·pick_tₒø = syl_thunk<syl_int>{_mk_ident·λₒλ6·pick_t·λₒø, _mk_ident·λₒλ6·pick_t·env};
-      }
-      syl_env _mk_ident·λₒλ6·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env};
-    }
-    int main()
-    {
-      {
-        syl_env 𝒰 = NULL;
-        _mk_identₒλ6 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_mk_ident·λₒλ6, 𝒰};
-      }
-      {
-        syl_closure<syl_bool,syl_bool> _$ = _mk_identₒλ6();
-        syl_bool _$ˢ1 = true;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "static lambda effects are thunked" =
@@ -9362,61 +3307,7 @@ fun mk_ident (static pick_t : static unit -> static int) : static (let t = if pi
 let _ = mk_ident (fn (static _ : unit) -> let _ = print_int 10 in 1) true;;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _print_int;
-    static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env);
-    static syl_bool _mk_ident·λₒλ6·λ(syl_bool, syl_env);
-    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env);
-    static syl_thunk<syl_closure<syl_bool,syl_bool>> _mk_identₒλ6;
-    static syl_bool __;
-    static syl_int _mk_ident·λₒλ6·pick_t·λₒø(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      ;
-      {
-        syl_int _$ = 10ll;
-        _print_int(_$);
-      }
-      return 1ll;
-    }
-    static syl_bool _mk_ident·λₒλ6·λ(syl_bool _x, syl_env 𝒰)
-    {
-      return _x;
-    }
-    static syl_closure<syl_bool,syl_bool> _mk_ident·λₒλ6(syl_env 𝒰)
-    {
-      syl_closure<syl_int,syl_unit> _print_int = *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0);
-      syl_thunk<syl_int> _mk_ident·λₒλ6·pick_tₒø;
-      {
-        syl_env _mk_ident·λₒλ6·pick_t·env = syl_capture<syl_closure<syl_int,syl_unit>>(_print_int);
-        _mk_ident·λₒλ6·pick_tₒø = syl_thunk<syl_int>{_mk_ident·λₒλ6·pick_t·λₒø, _mk_ident·λₒλ6·pick_t·env};
-      }
-      syl_int _mk_ident·λₒλ6·_ = _mk_ident·λₒλ6·pick_tₒø();
-      syl_int _mk_ident·λₒλ6·_ˢ1 = _mk_ident·λₒλ6·pick_tₒø();
-      syl_env _mk_ident·λₒλ6·env = NULL;
-      return syl_closure<syl_bool,syl_bool>{_mk_ident·λₒλ6·λ, _mk_ident·λₒλ6·env};
-    }
-    int main()
-    {
-      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      {
-        syl_env 𝒰 = syl_env_rec(16);
-        _mk_identₒλ6 = syl_thunk<syl_closure<syl_bool,syl_bool>>{_mk_ident·λₒλ6, 𝒰};
-        *(syl_closure<syl_int,syl_unit>*)(𝒰 + 0) = _print_int;
-      }
-      {
-        syl_closure<syl_bool,syl_bool> _$ = _mk_identₒλ6();
-        syl_bool _$ˢ1 = true;
-        __ = _$(_$ˢ1);
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "external" =
@@ -9425,19 +3316,7 @@ let%expect_test "external" =
 external print_int : int -> unit = syl_print_int;;
 |};
   [%expect
-    {|
-    extern syl_unit syl_print_int(syl_int);
-    static syl_unit _syl_print_int·λ(syl_int _, syl_env 𝒰)
-    {
-      syl_print_int(_);
-    }
-    static syl_closure<syl_int,syl_unit> _print_int;
-    int main()
-    {
-      _print_int = syl_closure<syl_int,syl_unit>{_syl_print_int·λ, NULL};
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "scoping" =
@@ -9447,23 +3326,7 @@ let x = 1 @ dynamic;;
 let _ = let _ = let _ = x + x in x + x in x + x;;
 |};
   [%expect
-    {|
-    static syl_int _x;
-    static syl_int __;
-    int main()
-    {
-      _x = 1ll;
-      {
-        syl_int __·_;
-        {
-          syl_int __·_·_ = _x + _x;
-          __·_ = _x + _x;
-        }
-        __ = _x + _x;
-      }
-      return 0;
-    }
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "scoping" =
@@ -9473,34 +3336,24 @@ let c = true @ dynamic;;
 let _ = if c then 0 else if !c then 1 else 2;;
 |};
   [%expect
+    {| |}]
+;;
+
+let%expect_test "assert" =
+  go
     {|
-    static syl_bool _c;
-    static syl_int __;
-    int main()
-    {
-      _c = true;
-      {
-        syl_int __·if;
-        if(_c)
-        {
-          __·if = 0ll;
-        }
-        else
-        {
-          syl_int __·if·if;
-          if(!_c)
-          {
-            __·if·if = 1ll;
-          }
-          else
-          {
-            __·if·if = 2ll;
-          }
-          __·if = __·if·if;
-        }
-        __ = __·if;
-      }
-      return 0;
-    }
-    |}]
+let _ = assert true;;
+  |};
+  [%expect
+    {| |}]
+;;
+
+let%expect_test "assert" =
+  go
+    {|
+let x = true @ dynamic;;
+let _ = assert x;;
+  |};
+  [%expect
+    {| |}]
 ;;

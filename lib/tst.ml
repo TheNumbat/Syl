@@ -205,14 +205,14 @@ and expr =
       ; loc : Lex.Location.t
       }
   | Unop of
-      { op : Cst.Unop.t
+      { op : Ident.Unop.t
       ; arg : expr
       ; ty : value
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
   | Binop of
-      { op : Cst.Binop.t
+      { op : Ident.Binop.t
       ; lhs : expr
       ; rhs : expr
       ; ty : value
@@ -445,18 +445,12 @@ module Env = struct
   let bind t id value = if Ident.is_anon id then t else Map.set t ~key:id ~data:value
   let find t id = Map.find t id
   let find_exn t id = Map.find_exn t id
-
-  let initial =
-    Ident.Map.of_alist_exn
-      [ Ident.of_string "type", Desc.of_type Type
-      ; Ident.of_string "unit", Desc.of_type Unit
-      ; Ident.of_string "bool", Desc.of_type Bool
-      ; Ident.of_string "int", Desc.of_type Int
-      ]
-  ;;
+  let initial = Ident.Map.empty
 end
 
 module Bool = struct
+  open Int64.O
+
   type t = vbool =
     | T of bool
     | And of value * value
@@ -469,9 +463,78 @@ module Bool = struct
     | Gte of value * value
     | Not of value
   [@@deriving sexp]
+
+  let const b : value = Bool (T b)
+
+  (* Only does rewrites that remove terms. *)
+  let rec reduce : t -> value = function
+    | And (Bool (T x), Bool (T y)) -> const (x && y)
+    | And (Bool (T false), _) | And (_, Bool (T false)) -> const false
+    | (And (Var x, Bool (Not (Var y))) | And (Bool (Not (Var x)), Var y)) when Ident.equal x y ->
+      const false
+    | And (Bool (T true), Bool b) | And (Bool b, Bool (T true)) -> reduce b
+    | And (Bool (T true), v) | And (v, Bool (T true)) -> v
+    | Or (Bool (T x), Bool (T y)) -> const (x || y)
+    | Or (Bool (T true), _) | Or (_, Bool (T true)) -> const true
+    | (Or (Var x, Bool (Not (Var y))) | Or (Bool (Not (Var x)), Var y)) when Ident.equal x y ->
+      const true
+    | Or (Bool (T false), Bool b) | Or (Bool b, Bool (T false)) -> reduce b
+    | Or (Bool (T false), v) | Or (v, Bool (T false)) -> v
+    | Not (Bool (T x)) -> const (not x)
+    | Not (Bool (Not (Bool b))) -> reduce b
+    | Not (Bool (Not v)) -> v
+    | Eq (Int (T x), Int (T y)) -> const (x = y)
+    | Eq (Int x, Int y) when eq_int x y -> const true
+    | Eq (Var x, Var y) when Ident.equal x y -> const true
+    | Neq (Int (T x), Int (T y)) -> const (x <> y)
+    | Neq (Int x, Int y) when eq_int x y -> const false
+    | Neq (Var x, Var y) when Ident.equal x y -> const false
+    | Lt (Int (T x), Int (T y)) -> const (x < y)
+    | Lt (Int x, Int y) when eq_int x y -> const false
+    | Lt (Var x, Var y) when Ident.equal x y -> const false
+    | Lte (Int (T x), Int (T y)) -> const (x <= y)
+    | Lte (Int x, Int y) when eq_int x y -> const true
+    | Lte (Var x, Var y) when Ident.equal x y -> const true
+    | Gt (Int (T x), Int (T y)) -> const (x > y)
+    | Gt (Int x, Int y) when eq_int x y -> const false
+    | Gt (Var x, Var y) when Ident.equal x y -> const false
+    | Gte (Int (T x), Int (T y)) -> const (x >= y)
+    | Gte (Int x, Int y) when eq_int x y -> const true
+    | Gte (Var x, Var y) when Ident.equal x y -> const true
+    | (T _ | And _ | Or _ | Eq _ | Neq _ | Lt _ | Lte _ | Gt _ | Gte _ | Not _) as expr -> Bool expr
+
+  and eq_int x y =
+    match x, y with
+    | T x, T y -> Int64.equal x y
+    | Add (Int x0, Int x1), Add (Int y0, Int y1)
+    | Sub (Int x0, Int x1), Sub (Int y0, Int y1)
+    | Mul (Int x0, Int x1), Mul (Int y0, Int y1)
+    | Div (Int x0, Int x1), Div (Int y0, Int y1)
+    | Mod (Int x0, Int x1), Mod (Int y0, Int y1) -> eq_int x0 y0 && eq_int x1 y1
+    | Add (Int x0, Var x1), Add (Int y0, Var y1)
+    | Sub (Int x0, Var x1), Sub (Int y0, Var y1)
+    | Mul (Int x0, Var x1), Mul (Int y0, Var y1)
+    | Div (Int x0, Var x1), Div (Int y0, Var y1)
+    | Mod (Int x0, Var x1), Mod (Int y0, Var y1) -> eq_int x0 y0 && Ident.equal x1 y1
+    | Add (Var x0, Int x1), Add (Var y0, Int y1)
+    | Sub (Var x0, Int x1), Sub (Var y0, Int y1)
+    | Mul (Var x0, Int x1), Mul (Var y0, Int y1)
+    | Div (Var x0, Int x1), Div (Var y0, Int y1)
+    | Mod (Var x0, Int x1), Mod (Var y0, Int y1) -> Ident.equal x0 y0 && eq_int x1 y1
+    | Add (Var x0, Var x1), Add (Var y0, Var y1)
+    | Sub (Var x0, Var x1), Sub (Var y0, Var y1)
+    | Mul (Var x0, Var x1), Mul (Var y0, Var y1)
+    | Div (Var x0, Var x1), Div (Var y0, Var y1)
+    | Mod (Var x0, Var x1), Mod (Var y0, Var y1) -> Ident.equal x0 y0 && Ident.equal x1 y1
+    | Neg (Int x), Neg (Int y) -> eq_int x y
+    | Neg (Var x), Neg (Var y) -> Ident.equal x y
+    | (T _ | Add _ | Sub _ | Mul _ | Div _ | Mod _ | Neg _), _ -> false
+  ;;
 end
 
 module Int = struct
+  open Int64.O
+
   type t = vint =
     | T of int64
     | Add of value * value
@@ -481,6 +544,39 @@ module Int = struct
     | Mod of value * value
     | Neg of value
   [@@deriving sexp]
+
+  let const i : value = Int (T i)
+
+  (* Only does rewrites that remove terms. *)
+  let rec reduce : t -> value = function
+    | Add (Int (T x), Int (T y)) -> const (x + y)
+    | (Add (Var x, Int (Neg (Var y))) | Add (Int (Neg (Var x)), Var y)) when Ident.equal x y ->
+      const 0L
+    | Add (Int (T 0L), Int i) | Add (Int i, Int (T 0L)) -> reduce i
+    | Add (Int (T 0L), v) | Add (v, Int (T 0L)) -> v
+    | Sub (Int (T x), Int (T y)) -> const (x - y)
+    | Sub (Int i, Int (T 0L)) -> reduce i
+    | Sub (v, Int (T 0L)) -> v
+    | Sub (Int (T 0L), v) -> reduce (Neg v)
+    | Sub (Var x, Var y) when Ident.equal x y -> const 0L
+    | Sub (x, Int (Neg y)) -> reduce (Add (x, y))
+    | Mul (Int (T x), Int (T y)) -> const (x * y)
+    | Mul (_, Int (T 0L)) | Mul (Int (T 0L), _) -> const 0L
+    | Mul (Int i, Int (T 1L)) | Mul (Int (T 1L), Int i) -> reduce i
+    | Mul (v, Int (T -1L)) | Mul (Int (T -1L), v) -> reduce (Neg v)
+    | Mul (v, Int (T 1L)) | Mul (Int (T 1L), v) -> v
+    | Div (Int (T x), Int (T y)) -> const (x / y)
+    | Div (Int i, Int (T 1L)) -> reduce i
+    | Div (v, Int (T 1L)) -> v
+    | Div (v, Int (T -1L)) -> reduce (Neg v)
+    | Mod (Int (T x), Int (T y)) -> const (x % y)
+    | Mod (_, Int (T 1L)) -> const 0L
+    | Mod (Var x, Var y) when Ident.equal x y -> Var x
+    | Neg (Int (T x)) -> const (-x)
+    | Neg (Int (Neg (Int x))) -> reduce x
+    | Neg (Int (Neg v)) -> v
+    | (T _ | Add _ | Sub _ | Mul _ | Div _ | Mod _ | Neg _) as expr -> Int expr
+  ;;
 end
 
 module Ty = struct
@@ -563,6 +659,11 @@ module Value = struct
     | Unit -> Unit
     | Bool b -> Bool (T b)
     | Int i -> Int (T i)
+  ;;
+
+  let is_true : t -> bool = function
+    | Bool (T true) -> true
+    | _ -> false
   ;;
 end
 
@@ -692,14 +793,14 @@ module Expr = struct
         ; loc : Lex.Location.t
         }
     | Unop of
-        { op : Cst.Unop.t
+        { op : Ident.Unop.t
         ; arg : t
         ; ty : value
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
     | Binop of
-        { op : Cst.Binop.t
+        { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
         ; ty : value
@@ -879,6 +980,12 @@ module Top_level = struct
     | External of
         { var : Ident.t
         ; symbol : string
+        ; ty : Value.t
+        ; loc : Lex.Location.t
+        }
+    | Builtin of
+        { var : Ident.t
+        ; builtin : Builtin0.t
         ; ty : Value.t
         ; loc : Lex.Location.t
         }
