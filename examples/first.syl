@@ -1,5 +1,3 @@
-external print_bool : bool -> unit = syl_print_bool;;
-external print_int : int -> unit = syl_print_int;;
 
 fun first (x : bool) : bool =
     let id = fn (y : bool) -> y in

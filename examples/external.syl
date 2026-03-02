@@ -1,4 +1,4 @@
-external print_int : int -> unit = syl_print_int;;
+external print_int : int -> unit = sylstd_print_int;;
 
 let _ = (print_int @ erased) 0;;
 

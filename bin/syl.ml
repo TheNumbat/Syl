@@ -71,7 +71,7 @@ let compile_to_exe file output =
   unwrap (Syl.to_c contents) ~f:(fun c_code ->
     let c_file = Stdlib.Filename.temp_file "syl" ".cpp" in
     Out_channel.write_all c_file ~data:c_code;
-    let cmd = sprintf "clang++ -g -o %s %s" (Filename.quote output) (Filename.quote c_file) in
+    let cmd = sprintf "clang++ -O2 -o %s %s" (Filename.quote output) (Filename.quote c_file) in
     (match Core_unix.system cmd with
      | Ok () -> ()
      | Error (`Exit_non_zero exit_code) -> print_s [%message "Clang failed" (exit_code : int)]
