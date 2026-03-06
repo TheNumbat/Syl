@@ -72,6 +72,7 @@ module Kind = struct
     | External : unit t
     | Builtin : unit t
     | Assert : unit t
+    | Unreachable : unit t
     | Op : Op.t t
     | Unit : unit t
     | Bool : bool t
@@ -105,6 +106,7 @@ module Token = struct
     | External
     | Builtin
     | Assert
+    | Unreachable
     | Op of Op.t
     | Unit
     | Bool of bool
@@ -137,6 +139,7 @@ module Token = struct
     | External, External -> Some ()
     | Builtin, Builtin -> Some ()
     | Assert, Assert -> Some ()
+    | Unreachable, Unreachable -> Some ()
     | Op op, Op -> Some op
     | Unit, Unit -> Some ()
     | Bool const, Bool -> Some const
@@ -166,6 +169,7 @@ module Token = struct
         | External
         | Builtin
         | Assert
+        | Unreachable
         | Op _
         | Unit
         | Bool _
@@ -199,6 +203,7 @@ module Token = struct
     | External -> "external"
     | Builtin -> "builtin"
     | Assert -> "assert"
+    | Unreachable -> "unreachable"
     | Op Arrow -> "->"
     | Op Minus -> "-"
     | Op Tilde -> "~"
@@ -247,6 +252,7 @@ module Token = struct
     | External, _
     | Builtin, _
     | Assert, _
+    | Unreachable, _
     | Op _, _
     | Unit, _
     | Bool _, _
@@ -313,11 +319,6 @@ module Tokenizer = struct
     String.sub t.input ~pos ~len
   ;;
 
-  let loc t =
-    skip_while t ~f:Char.whitespace;
-    Location.{ line = t.state.line; column = t.state.column }
-  ;;
-
   let single t tok =
     advance t;
     tok
@@ -344,6 +345,7 @@ module Tokenizer = struct
     | "external" -> External
     | "builtin" -> Builtin
     | "assert" -> Assert
+    | "unreachable" -> Unreachable
     | "true" -> Bool true
     | "false" -> Bool false
     | _ -> Ident tok
@@ -363,7 +365,7 @@ module Tokenizer = struct
     | None -> Eof
   ;;
 
-  let rec comment t =
+  let rec finish_comment t =
     match current t with
     | Some '*' ->
       advance t;
@@ -371,21 +373,35 @@ module Tokenizer = struct
        | Some ')' -> advance t
        | _ ->
          advance t;
-         comment t)
+         finish_comment t)
     | _ ->
       advance t;
-      comment t
+      finish_comment t
+  ;;
+
+  let rec skip_whitespace_and_comments t =
+    skip_while t ~f:Char.whitespace;
+    if
+      t.state.idx + 1 < String.length t.input
+      && Char.(String.get t.input t.state.idx = '(')
+      && Char.(String.get t.input (t.state.idx + 1) = '*')
+    then (
+      advance t;
+      advance t;
+      finish_comment t;
+      skip_whitespace_and_comments t)
+  ;;
+
+  let loc t =
+    skip_whitespace_and_comments t;
+    Location.{ line = t.state.line; column = t.state.column }
   ;;
 
   let op_lparen t =
     match current t with
-    | Some '*' ->
-      advance t;
-      comment t;
-      None
-    | Some ')' -> Some (single t Unit)
-    | Some _ -> Some Lparen
-    | None -> Some Eof
+    | Some ')' -> single t Unit
+    | Some _ -> Lparen
+    | None -> Eof
   ;;
 
   let op_amp t =
@@ -437,13 +453,12 @@ module Tokenizer = struct
     | None -> Eof
   ;;
 
-  let rec next' t =
+  let next t =
+    skip_whitespace_and_comments t;
     match current t with
     | Some '(' ->
       advance t;
-      (match op_lparen t with
-       | Some tok -> tok
-       | None -> next t)
+      op_lparen t
     | Some ')' -> single t Rparen
     | Some '=' ->
       advance t;
@@ -485,10 +500,6 @@ module Tokenizer = struct
       Int (Int64.of_string tok)
     | Some c -> single t (Unknown (String.of_char c))
     | None -> Eof
-
-  and next t =
-    skip_while t ~f:Char.whitespace;
-    next' t
   ;;
 
   let peek t =

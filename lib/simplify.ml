@@ -159,39 +159,39 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
     assert (not (Modes.is_erased mode));
     let arg = simplify env arg in
     (match op, arg with
-     | Neg, Scalar { value = Int i; loc; _ } -> Scalar { value = Int (Int64.neg i); ty = Int; loc }
-     | Not, Scalar { value = Bool b; loc; _ } -> Scalar { value = Bool (not b); ty = Bool; loc }
+     | Neg, Scalar { value = Int i; _ } -> Scalar { value = Int (Int64.neg i); ty = Int; loc }
+     | Not, Scalar { value = Bool b; _ } -> Scalar { value = Bool (not b); ty = Bool; loc }
      | _ -> Unop { op; arg; ty = simplify_ty ~loc ty; loc })
   | Binop { op; lhs; rhs; ty; mode; loc } ->
     assert (not (Modes.is_erased mode));
     let lhs = simplify env lhs in
     let rhs = simplify env rhs in
     (match op, lhs, rhs with
-     | Add, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Add, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Int (Int64.( + ) l r); ty = Int; loc }
-     | Sub, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Sub, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Int (Int64.( - ) l r); ty = Int; loc }
-     | Mul, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Mul, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Int (Int64.( * ) l r); ty = Int; loc }
-     | Div, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Div, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Int (Int64.( / ) l r); ty = Int; loc }
-     | Mod, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Mod, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Int (Int64.( % ) l r); ty = Int; loc }
-     | And, Scalar { value = Bool l; loc; _ }, Scalar { value = Bool r; _ } ->
+     | And, Scalar { value = Bool l; _ }, Scalar { value = Bool r; _ } ->
        Scalar { value = Bool (l && r); ty = Bool; loc }
-     | Or, Scalar { value = Bool l; loc; _ }, Scalar { value = Bool r; _ } ->
+     | Or, Scalar { value = Bool l; _ }, Scalar { value = Bool r; _ } ->
        Scalar { value = Bool (l || r); ty = Bool; loc }
-     | Eq, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Eq, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Bool (Int64.( = ) l r); ty = Bool; loc }
-     | Neq, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Neq, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Bool (Int64.( <> ) l r); ty = Bool; loc }
-     | Lt, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Lt, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Bool (Int64.( < ) l r); ty = Bool; loc }
-     | Lte, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Lte, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Bool (Int64.( <= ) l r); ty = Bool; loc }
-     | Gt, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Gt, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Bool (Int64.( > ) l r); ty = Bool; loc }
-     | Gte, Scalar { value = Int l; loc; _ }, Scalar { value = Int r; _ } ->
+     | Gte, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Bool (Int64.( <= ) l r); ty = Bool; loc }
      | _ -> Binop { op; lhs; rhs; ty = simplify_ty ~loc ty; loc })
   | If { cond; then_; else_; mode; loc; _ } ->

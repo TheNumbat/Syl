@@ -48,6 +48,7 @@ module Kind : sig
     | External : unit t
     | Builtin : unit t
     | Assert : unit t
+    | Unreachable : unit t
     | Op : Op.t t
     | Unit : unit t
     | Bool : bool t
@@ -81,6 +82,7 @@ module Token : sig
     | External
     | Builtin
     | Assert
+    | Unreachable
     | Op of Op.t
     | Unit
     | Bool of bool
@@ -106,12 +108,9 @@ end
 
 module Tokenizer : sig
   type t
-  type state
 
   val create : string -> t
   val loc : t -> Location.t
-  val save : t -> state
-  val restore : t -> state -> unit
   val next : t -> Token.t
   val peek : t -> Token.t
   val skip : t -> unit

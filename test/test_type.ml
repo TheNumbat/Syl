@@ -1,10 +1,10 @@
 open! Core
 open! Syl
 
-let go ?print input =
+let go ?(print = false) input =
   let cst = Parse.parse_exn input in
   match Typecheck.typecheck cst with
-  | Ok tst -> if Option.is_some print then print_s [%message (tst : Tst.Program.t)]
+  | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
@@ -20,8 +20,7 @@ let _ = 123 @ erased;;
 let _ = () @ dynamic;;
 let _ = true @ dynamic;;
 let _ = 123 @ dynamic;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Mode annotation valid static" =
@@ -30,8 +29,7 @@ let%expect_test "Mode annotation valid static" =
 let _ =
   1 @ static
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Mode annotation valid dynamic" =
@@ -40,8 +38,7 @@ let%expect_test "Mode annotation valid dynamic" =
 let _ =
   1 @ dynamic
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Mode annotation invalid" =
@@ -67,8 +64,7 @@ let dyn = 1;;
 let _ =
   dyn @ dynamic erased
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -78,8 +74,7 @@ let dyn = 1 @ erased;;
 let _ =
   dyn @ dynamic erased
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -89,8 +84,7 @@ let dyn = 1;;
 let _ =
   dyn @ dynamic
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -100,8 +94,7 @@ let dyn = 1 @ dynamic;;
 let _ =
   dyn @ dynamic erased
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda return dynamic erased" =
@@ -171,8 +164,7 @@ let%expect_test "Unop static" =
 let _ =
   !true
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Unop dynamic" =
@@ -181,8 +173,7 @@ let%expect_test "Unop dynamic" =
 let _ =
   !(true @ dynamic)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dynamic static erased" =
@@ -191,8 +182,7 @@ let%expect_test "dynamic static erased" =
 let _ =
   (true @ static erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dynamic erased" =
@@ -201,8 +191,7 @@ let%expect_test "dynamic erased" =
 let _ =
   (true @ dynamic erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased dynamic" =
@@ -211,8 +200,7 @@ let%expect_test "erased dynamic" =
 let _ =
   ((true @ erased) @ dynamic)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Unop var static" =
@@ -222,8 +210,7 @@ let dyn = true;;
 let _ =
   !dyn
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Unop var erased" =
@@ -233,8 +220,7 @@ let dyn = true @ erased;;
 let _ =
   !dyn
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Unop var erased" =
@@ -244,8 +230,7 @@ let dyn = true @ erased;;
 let _ =
   !(!dyn @ erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Unop var dynamic" =
@@ -255,8 +240,7 @@ let dyn = true @ dynamic;;
 let _ =
   !dyn
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Unop var dynamic erased" =
@@ -272,8 +256,7 @@ let%expect_test "Unop var dynamic" =
     {|
 let dyn = true @ dynamic;;
 let x = !dyn @ erased;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop static + static" =
@@ -282,8 +265,7 @@ let%expect_test "Binop static + static" =
 let _ =
   1 + 2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop static + static erased" =
@@ -292,8 +274,7 @@ let%expect_test "Binop static + static erased" =
 let _ =
   1 + (2 @ erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Unop erased dynamic" =
@@ -320,8 +301,7 @@ let%expect_test "Binop erased dynamic" =
 let _ =
   1 + (2 @ dynamic) + (3 @ erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop erased static" =
@@ -330,8 +310,7 @@ let%expect_test "Binop erased static" =
 let _ =
   1 + ((2 + 3) @ erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop static + dynamic" =
@@ -341,8 +320,7 @@ let dyn = 2 @ dynamic;;
 let _ =
   1 + dyn
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop dynamic + static" =
@@ -352,8 +330,7 @@ let dyn = 1 @ dynamic;;
 let _ =
   dyn + 2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop dynamic + dynamic" =
@@ -364,8 +341,7 @@ let dyn2 = 2 @ dynamic;;
 let _ =
   dyn1 + dyn2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop erased + dynamic" =
@@ -376,8 +352,7 @@ let dyn2 = 2 @ dynamic;;
 let _ =
   dyn1 + dyn2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Binop erased + erased" =
@@ -388,8 +363,7 @@ let dyn2 = 2 @ erased;;
 let _ =
   dyn1 + dyn2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "If static cond static branches" =
@@ -398,8 +372,7 @@ let%expect_test "If static cond static branches" =
 let _ =
   if true then 1 else 2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "If erased" =
@@ -408,8 +381,7 @@ let%expect_test "If erased" =
 let _ =
   (if true then int else int) @ erased
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "If erased cond" =
@@ -419,8 +391,7 @@ let x = true || false @ erased;;
 let _ =
   if x then 1 else 2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "If dynamic erased cond" =
@@ -440,8 +411,7 @@ let dyn = 1 @ dynamic;;
 let _ =
   if true then dyn else 2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "If dynamic cond" =
@@ -451,8 +421,7 @@ let dyn = true @ dynamic;;
 let _ =
   if dyn then 1 else 2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased if expr" =
@@ -462,8 +431,7 @@ let x = true;;
 let _ =
   0 + ((if x then 1 else 2) @ erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "if branch checks" =
@@ -525,8 +493,7 @@ let%expect_test "if erased branch" =
   go
     {|
 let _ = if 1==2 then unit else int;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "if erased branch" =
@@ -534,8 +501,7 @@ let%expect_test "if erased branch" =
     {|
 let cond = true @ dynamic;;
 let t = if cond then unit else int;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "if erased branch" =
@@ -543,8 +509,7 @@ let%expect_test "if erased branch" =
     {|
 let cond = true @ dynamic;;
 let t = (if cond then false else cond) @ erased;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let static" =
@@ -554,8 +519,7 @@ let _ =
   let x = 1 in
   x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let dynamic" =
@@ -566,8 +530,7 @@ let _ =
   let x = dyn in
   x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let dynamic" =
@@ -578,8 +541,7 @@ let _ =
   let x = dyn + 1 @ dynamic in
   x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -590,8 +552,7 @@ let _ =
   let x = dyn in
   x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -601,8 +562,7 @@ let _ =
   let x = 1 @ erased in
   x + 1
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -613,8 +573,7 @@ let _ =
   let y = 1 @ dynamic in
   x + y
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -625,8 +584,7 @@ let _ =
   let y = 1 @ erased in
   0 + (x + y)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -637,8 +595,7 @@ let _ =
   let y = 1 in
   0 + ((x + y) @ erased)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "static closure" =
@@ -647,8 +604,7 @@ let%expect_test "static closure" =
 let _ =
   (fn (x : int) -> x)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased closure" =
@@ -657,8 +613,7 @@ let%expect_test "erased closure" =
 let _ =
   (fn (x : int) -> x) @ erased
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure return type" =
@@ -667,8 +622,7 @@ let%expect_test "closure return type" =
 let _ =
   (fn (x : int) -> int)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dynamic capture" =
@@ -678,8 +632,7 @@ let y = 1 @ dynamic;;
 let _ =
   (fn (x : int) -> x + y)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dynamic capture inline" =
@@ -719,8 +672,7 @@ let%expect_test "erased closure arg" =
 let f = fn (erased x : int) -> x;;
 let _ = f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -729,8 +681,7 @@ let%expect_test "erased closure arg" =
 let f = fn (erased x : int) -> 1;;
 let _ = f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -739,8 +690,7 @@ let%expect_test "erased closure arg" =
 let f = fn (erased x : int) -> 1;;
 let _ = f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -764,8 +714,7 @@ let%expect_test "erased closure arg" =
 let f = fn (erased x : int -> int) -> 1;;
 let _ = f ((fn (x : int) -> x + 1) @ erased);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased closure arg" =
@@ -789,8 +738,7 @@ let%expect_test "static erased closure arg" =
 let _ =
   (fn (static erased x : int) -> x)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent closure arg" =
@@ -799,8 +747,7 @@ let%expect_test "dependent closure arg" =
 let _ =
   (fn (x : type) -> x)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -808,8 +755,7 @@ let%expect_test "closure erased" =
     {|
 let x = (fn (x : int) -> x) @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -817,8 +763,7 @@ let%expect_test "closure erased" =
     {|
 let x = (fn (erased x : int) -> x) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -826,8 +771,7 @@ let%expect_test "closure erased" =
     {|
 let x = (fn (erased x : int) -> 1) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -837,8 +781,7 @@ let f = (fn (erased x : int) -> 1);;
 let g = (fn (erased x : int) -> 2);;
 let _ = (if true @ dynamic then f else g) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure branches" =
@@ -848,8 +791,7 @@ let f = (fn (erased x : int) -> 1);;
 let g = (fn (static x : int) -> 2);;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure branches" =
@@ -859,8 +801,7 @@ let f = (fn (static erased x : int) -> 1);;
 let g = (fn (static x : int) -> 2);;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure branches" =
@@ -870,8 +811,7 @@ let f = (fn (static erased x : int) -> 1);;
 let g = (fn (static erased x : int) -> 2);;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -882,8 +822,7 @@ let f = (fn (erased x : int) -> 1);;
 let g = (fn (erased x : int) -> 2);;
 let _ = (if c () then f else g) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure erased" =
@@ -894,8 +833,7 @@ let f = (fn (x : int) -> 1);;
 let g = (fn (erased x : int) -> 2);;
 let _ = (if c () then f else g) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -905,8 +843,7 @@ let f = fn (x : int) -> 1;;
 let g = fn (f : int -> int) -> f 0;;
 let _ = g f;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -916,8 +853,7 @@ let f = fn (x : int) -> 1;;
 let g = fn (static f : int -> int) -> f 0;;
 let _ = g f;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -963,8 +899,7 @@ let f1 = (fn (x : int) -> 1) @ erased;;
 let g = fn (static erased f2 : int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -974,8 +909,7 @@ let f1 = fn (erased x : int) -> 1;;
 let g = fn (f2 : int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -985,8 +919,7 @@ let f1 = fn (erased x : int) -> 1;;
 let g = fn (f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -996,8 +929,7 @@ let f1 = fn (erased x : int) -> 1;;
 let g = fn (static f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -1007,8 +939,7 @@ let f1 = fn (erased x : int) -> 1;;
 let g = fn (static erased f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure static" =
@@ -1016,8 +947,7 @@ let%expect_test "closure static" =
     {|
 let x = (fn (static x : int) -> x) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure dependent" =
@@ -1062,8 +992,7 @@ let%expect_test "closure static erased" =
     {|
 let x = (fn (static erased x : int) -> 1) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure return dynamic type" =
@@ -1087,8 +1016,7 @@ let%expect_test "closure return static type" =
 let t = (fn (static x : int) -> int) 0;;
 let _ = 0 : t;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure return static type" =
@@ -1110,8 +1038,7 @@ let%expect_test "closure return static type" =
 let t = (fn (static erased x : int) -> int) 0;;
 let _ = 0 : t;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply fn static arg" =
@@ -1120,8 +1047,7 @@ let%expect_test "Apply fn static arg" =
 let _ =
   (fn (x : int) -> x) 1
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply static erased fn static arg" =
@@ -1130,8 +1056,7 @@ let%expect_test "Apply static erased fn static arg" =
 let _ =
   (fn (static erased x : int) -> x) 1
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply fn dynamic arg" =
@@ -1141,8 +1066,7 @@ let dyn = 1 @ dynamic;;
 let _ =
   (fn (x : int) -> x) dyn
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply erased fn dynamic arg" =
@@ -1170,8 +1094,7 @@ let y =
   (fn (erased x : int) -> 5) (dyn-1)
 ;;
 let _ = y @ unerased;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply erased fn dynamic arg" =
@@ -1193,8 +1116,7 @@ let y =
   (fn (erased x : int) -> 5) (f 1)
 ;;
 let _ = y @ unerased;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply erased fn stat arg" =
@@ -1205,8 +1127,7 @@ let y =
   (fn (erased x : int) -> 5) (dyn-1)
 ;;
 let _ = y @ unerased;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply dynamic fn static arg" =
@@ -1216,8 +1137,7 @@ let dyn_fn = (fn (x : int) -> x) @ dynamic;;
 let _ =
   dyn_fn 1
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply dynamic fn erased arg" =
@@ -1237,8 +1157,7 @@ let dyn_fn = (fn (erased x : int) -> 0) @ dynamic;;
 let _ =
   dyn_fn (1 @ dynamic)
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply dynamic fn dynamic arg" =
@@ -1249,8 +1168,7 @@ let dyn_arg = 1 @ dynamic;;
 let _ =
   dyn_fn dyn_arg
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Apply erased fn dynamic arg" =
@@ -1272,8 +1190,7 @@ let dyn_arg = 1 @ dynamic;;
 let _ =
   dyn_fn dyn_arg
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda dynamic arg" =
@@ -1282,8 +1199,7 @@ let%expect_test "Lambda dynamic arg" =
 let _ =
   fn (x : int) -> x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda static arg" =
@@ -1292,8 +1208,7 @@ let%expect_test "Lambda static arg" =
 let _ =
   fn (static x : int) -> 1
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda erased arg" =
@@ -1302,8 +1217,7 @@ let%expect_test "Lambda erased arg" =
 let _ =
   fn (erased x : int) -> x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda capturing dynamic var" =
@@ -1313,8 +1227,7 @@ let x = 1 @ dynamic;;
 let _ =
   fn (y : int) -> x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda capturing static var" =
@@ -1324,8 +1237,7 @@ let x = 1 @ static;;
 let _ =
   fn (y : int) -> x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda capturing erased var" =
@@ -1335,8 +1247,7 @@ let x = 1 @ static erased;;
 let _ =
   fn (y : int) -> x
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda capturing erased var" =
@@ -1346,8 +1257,7 @@ let x = 1 @ static erased;;
 let _ =
   (fn (y : int) -> x) 0
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda capturing type" =
@@ -1370,8 +1280,7 @@ let%expect_test "Lambda capturing type" =
     {|
 let f = fn (static _ : unit) -> int;;
 let g = fn (x : f ()) -> x + 1;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda take type" =
@@ -1395,8 +1304,7 @@ let%expect_test "Lambda take type" =
 let f = fn (erased ty : type) -> ty;;
 let _ = f int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda take type" =
@@ -1405,8 +1313,7 @@ let%expect_test "Lambda take type" =
 let f = fn (static erased ty : type) -> ty;;
 let _ = 0 : f int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda take type" =
@@ -1444,8 +1351,7 @@ let%expect_test "mono fn" =
 let x = fn (static erased x : type) -> x;;
 let y = x int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -1454,8 +1360,7 @@ let%expect_test "mono fn" =
 let x = fn (static x : type) -> x;;
 let y = x @ dynamic;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -1464,8 +1369,7 @@ let%expect_test "mono fn" =
 let x = fn (erased x : type) -> x;;
 let y = x @ dynamic;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -1474,8 +1378,7 @@ let%expect_test "mono fn" =
 let x = fn (static x : type) -> x;;
 let y = x @ unerased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -1512,8 +1415,7 @@ let%expect_test "mono fn" =
 let x = fn (static erased x : type) -> x;;
 let y = (x int) @ dynamic;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -1535,8 +1437,7 @@ let%expect_test "Dependent lambda" =
     {|
 let f = fn (static erased ty : type) -> fn (x : ty) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "static erased lambda" =
@@ -1545,8 +1446,7 @@ let%expect_test "static erased lambda" =
 let f = fn (static x : int) -> fn (_ : unit) -> x;;
 let g = (f 1 ()) @ unerased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "lift universal type" =
@@ -1554,8 +1454,7 @@ let%expect_test "lift universal type" =
     {|
 let f = fn (static ty : type) -> ty @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "lift universal int" =
@@ -1564,8 +1463,7 @@ let%expect_test "lift universal int" =
 let f = fn (static x : int) -> x @ erased;;
 let _ = f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -1577,8 +1475,7 @@ let _ = g 0;;
 let g = f bool;;
 let _ = g true;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -1587,8 +1484,7 @@ let%expect_test "Dependent lambda" =
 let f = fn (static g : int -> int) -> g 0;;
 let _ = f (fn (x : int) -> x + 1);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent unit" =
@@ -1597,8 +1493,7 @@ let%expect_test "dependent unit" =
 let f = fn (static x : unit) -> ();;
 let _ = f ();;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent bool" =
@@ -1607,8 +1502,7 @@ let%expect_test "dependent bool" =
 let f = fn (static x : bool) -> !x;;
 let _ = f true;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent int" =
@@ -1617,8 +1511,7 @@ let%expect_test "dependent int" =
 let f = fn (static x : int) -> -x;;
 let _ = f 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent type" =
@@ -1638,8 +1531,7 @@ let%expect_test "dependent type" =
     {|
 let f = fn (static erased t : type) -> fn (x : t) -> if true then x else x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent type" =
@@ -1660,8 +1552,7 @@ let%expect_test "arrow typechecking" =
 let f = fn (g : int -> int) -> g 0;;
 let _ = f (fn (x : int) -> 0);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -1709,8 +1600,7 @@ let%expect_test "arrow typechecking" =
 let f = fn (static g : static int -> int) -> g 0;;
 let _ = f (fn (static x : int) -> 0);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -1719,8 +1609,7 @@ let%expect_test "arrow typechecking" =
 let f = fn (static g : static int -> int) -> g 0;;
 let _ = f (fn (x : int) -> 0);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -1737,8 +1626,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (static x : int) -> x else fn (x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1746,8 +1634,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (static x : int) -> x else fn (erased x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1755,8 +1642,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (static erased x : int) -> x else fn (x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1764,8 +1650,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (erased x : int) -> x else fn (x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1773,8 +1658,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (x : int) -> x else fn (static x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1782,8 +1666,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (x : int) -> x else fn (erased x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1791,8 +1674,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (erased x : int) -> x else fn (static x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1800,8 +1682,7 @@ let%expect_test "arrow-pi join" =
     {|
 let _ = if true then fn (x : int) -> x else fn (static erased x : int) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "return erased" =
@@ -1825,8 +1706,7 @@ let%expect_test "return erased" =
 let f = fn (x : int) -> 0 @ erased;;
 let _ = f 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -1834,8 +1714,7 @@ let%expect_test "arrow typechecking" =
     {|
   let f = fn (g : erased int -> int) -> g 0;;
   |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -1858,8 +1737,7 @@ let%expect_test "pi typechecking" =
   let f = fn (static g : erased int -> int) -> g 0;;
   let _ = f (fn (erased x : int) -> 0);;
   |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi typechecking" =
@@ -1900,8 +1778,7 @@ let%expect_test "arrow-pi typechecking" =
 let f = fn (static g : static int -> int) -> g 1;;
 let _ = f (fn (x : int) -> 0);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Pi typechecking" =
@@ -1910,8 +1787,7 @@ let%expect_test "Pi typechecking" =
 let f = fn (static erased g : static int -> int) -> g 0;;
 let _ = f (fn (static x : int) -> x + 1);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Pi typechecking" =
@@ -1959,8 +1835,7 @@ let%expect_test "dependent lambda" =
 let f = fn (static g : static erased type -> int -> int) -> g int;;
 let _ = f (fn (static erased t : type) -> fn (x : int) -> x);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent fn" =
@@ -1970,8 +1845,7 @@ let id = fn (static erased t : type) -> (fn (x : t) -> x);;
 let x = (id int) (0 @ dynamic);;
 let y = (id bool) (true @ dynamic);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent fn" =
@@ -1981,8 +1855,7 @@ let id = fn (static erased t : type) -> (fn (x : t) -> x) @ erased;;
 let x = (id int) (0 @ dynamic);;
 let y = (id bool) (true @ dynamic);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -1991,8 +1864,7 @@ let%expect_test "dependent arrow" =
 let mk_int = fn (static x : int) -> int;;
 let apply_int = fn (static f : static int \ x -> mk_int x) -> 2;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -2001,8 +1873,7 @@ let%expect_test "dependent arrow" =
 let mk_int = fn (static x : int) -> int;;
 let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -2011,8 +1882,7 @@ let%expect_test "dependent arrow" =
 let apply_int = fn (static f : static erased type \ t -> t -> t) -> f int;;
 let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent arrow" =
@@ -2023,8 +1893,7 @@ let f = apply (fn (static erased t : type) -> fn (x : t) -> x);;
 let g = f int;;
 let h = f bool;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -2034,8 +1903,7 @@ let f = fn (static x : int) -> if static x == 0 then 1 else true;;
 let _ = f 0;;
 let _ = f 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -2072,8 +1940,7 @@ let%expect_test "dependent if" =
     {|
 let _ = (if static true then 1 else true) : (if true then int else bool);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -2081,8 +1948,7 @@ let%expect_test "dependent if" =
     {|
 let _ = (if static true then 1 else true) : (if static true then int else bool);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -2115,8 +1981,7 @@ let%expect_test "dependent if" =
 let f = fn (static _ : unit) -> int;;
 let _ = (if static true then 1 else (0 : f ())) : int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -2124,8 +1989,7 @@ let%expect_test "dependent if" =
     {|
 let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 then int else bool);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent if" =
@@ -2133,8 +1997,7 @@ let%expect_test "dependent if" =
     {|
 let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static x == 0 then int else bool);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "bad annotation" =
@@ -2209,8 +2072,7 @@ let f = fn (static x : int) -> if static x == 0 then 1 else true;;
 let g = fn (static x : int) -> if static x == 0 then 1 else true;;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent if unify" =
@@ -2220,8 +2082,7 @@ let f = fn (static x : int) -> if static x == 0 then 1 else true;;
 let g = fn (static x : int) -> if static x == 0 then true else 2;;
 let _ = if true then f 0 else g 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "symbolic arrow type" =
@@ -2230,8 +2091,7 @@ let%expect_test "symbolic arrow type" =
 let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
 let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Fun recursive dynamic arg" =
@@ -2239,8 +2099,7 @@ let%expect_test "Fun recursive dynamic arg" =
     {|
 fun f (x : int) : int = f x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "fun recursive erased" =
@@ -2248,8 +2107,7 @@ let%expect_test "fun recursive erased" =
     {|
 fun f (erased x : int) : int = f x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Fun erased arg" =
@@ -2257,8 +2115,7 @@ let%expect_test "Fun erased arg" =
     {|
 fun f (erased x : int) : erased int = x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Fun erased ret" =
@@ -2281,8 +2138,7 @@ let%expect_test "Fun return static" =
     {|
 fun f (x : int) : int = 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Fun return erased" =
@@ -2290,8 +2146,7 @@ let%expect_test "Fun return erased" =
     {|
 fun f (x : int) : erased int = 1 @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "mono fun" =
@@ -2315,8 +2170,7 @@ let%expect_test "mono fun" =
 fun x (static x : int) : int = x;;
 let y = x 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "static type" =
@@ -2340,8 +2194,7 @@ let%expect_test "static type" =
 fun f (static _ : unit) : static erased type = int;;
 let y = 0 : f ();;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "types are erased" =
@@ -2350,8 +2203,7 @@ let%expect_test "types are erased" =
 fun f (static _ : unit) : static erased type = int;;
 let y = (f () @ dynamic);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "types are erased" =
@@ -2360,8 +2212,7 @@ let%expect_test "types are erased" =
 fun f (static _ : unit) : static erased type = int;;
 let y = 5 : f ();;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "types are erased" =
@@ -2393,8 +2244,7 @@ let%expect_test "dependent fun " =
 fun id (static erased t : type) : t -> t = fn (x : t) -> x;;
 let i = id int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased fun " =
@@ -2403,8 +2253,7 @@ let%expect_test "erased fun " =
 fun id (erased x : int) : erased int = x;;
 let _ = id 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased fun " =
@@ -2422,8 +2271,7 @@ let%expect_test "dependent fun erased" =
 fun id (static erased t : type) : t -> t = fn (x : t) -> x;;
 let x = (id int) (0 @ dynamic);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent fun" =
@@ -2433,8 +2281,7 @@ let ty = fn (static _ : unit) -> int -> int;;
 fun id (_ : unit) : ty () = fn (x : int) -> x;;
 let x = id () 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent fun" =
@@ -2444,8 +2291,7 @@ fun id1 (static erased t : type) : t -> t = fn (x : t) -> x;;
 fun id2 (static erased t : type) : t -> t = id1 t;;
 let x = id2 int (0 @ dynamic);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join" =
@@ -2456,8 +2302,7 @@ fun b (_ : unit) : unit -> unit = fn (_ : unit) -> ();;
 let x = if static false then a else b;;
 let _ = x () ();;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "return fn" =
@@ -2466,8 +2311,7 @@ let%expect_test "return fn" =
 fun x (_ : unit) : unit -> unit = fn (_ : unit) -> ();;
 let _ = x () ();;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arg fn" =
@@ -2476,8 +2320,7 @@ let%expect_test "arg fn" =
 fun x (f : unit -> int) : int = f ();;
 let _ = x (fn (_ : unit) -> 1);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "universal value" =
@@ -2553,7 +2396,7 @@ let f = static type \ t -> (t @ dynamic);;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 20)))
+    ((loc ((line 2) (column 24)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
@@ -2567,7 +2410,7 @@ let f = static int \ t -> t;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 19)))
+    ((loc ((line 2) (column 23)))
      (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
     |}]
 ;;
@@ -2702,8 +2545,7 @@ let%expect_test "erased closure arg" =
 let f = fn (static erased g : int -> erased int) -> let _ = g 1 in 2;;
 let _ = f (fn (x : int) -> 0 @ erased);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "external" =
@@ -2712,8 +2554,7 @@ let%expect_test "external" =
 external f : int -> int = asdf;;
 let _ = f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "external" =
@@ -2722,8 +2563,7 @@ let%expect_test "external" =
 external f : int -> int = asdf;;
 let _ = (f @ erased) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "external" =
@@ -2757,8 +2597,7 @@ let _ = f 0 1;;
 let _ = f 1 0;;
 let _ = f 1 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure branches" =
@@ -2769,8 +2608,7 @@ let g = (fn (static x : int) -> 2);;
 let h = if true then f else g;;
 let _ = h 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "assert" =
@@ -2778,8 +2616,7 @@ let%expect_test "assert" =
     {|
 let _ = assert true;;
   |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "assert" =
@@ -2788,8 +2625,7 @@ let%expect_test "assert" =
 let x = true @ dynamic;;
 let _ = assert x;;
   |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2797,8 +2633,7 @@ let%expect_test "assert static" =
     {|
 let _ = assert static true;;
   |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2806,7 +2641,7 @@ let%expect_test "assert static" =
     {|
 let _ = assert static false;;
   |};
-  [%expect {| ((loc ((line 2) (column 8))) (reason (Static_assert Failed))) |}]
+  [%expect {| ((loc ((line 2) (column 8))) (reason (Static_assert (Bool (T false))))) |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2829,10 +2664,7 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if x then assert static x else ();;
   |};
-  [%expect {|
-    ((loc ((line 2) (column 42)))
-     (reason (Static_assert (Ambiguous (Var (Id $0))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 42))) (reason (Static_assert (Var (Id $0))))) |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2840,10 +2672,7 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if x then () else assert static x;;
   |};
-  [%expect {|
-    ((loc ((line 2) (column 50)))
-     (reason (Static_assert (Ambiguous (Var (Id $0))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 50))) (reason (Static_assert (Var (Id $0))))) |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2851,10 +2680,7 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> assert static x;;
   |};
-  [%expect {|
-    ((loc ((line 2) (column 32)))
-     (reason (Static_assert (Ambiguous (Var (Id $0))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 32))) (reason (Static_assert (Var (Id $0))))) |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2862,6 +2688,5 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if static x then assert static x else ();;
   |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;

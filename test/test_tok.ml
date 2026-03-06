@@ -2,20 +2,15 @@ open! Core
 open! Syl
 open Lex
 
-let print ~loc t token =
-  if loc
-  then (
-    let loc = Tokenizer.loc t in
-    print_s [%message (token : Token.t) (loc : Location.t)])
-  else print_s [%message (token : Token.t)]
-;;
-
-let go ?(loc = false) input =
+let go ?(print = false) input =
   let tokenizer = Tokenizer.create input in
   let rec loop () =
-    let tok = Tokenizer.next tokenizer in
-    print ~loc tokenizer tok;
-    match tok with
+    let loc = Tokenizer.loc tokenizer in
+    let token = Tokenizer.next tokenizer in
+    if print
+    then print_s [%message (token : Token.t) (loc : Location.t)]
+    else print_s [%message (token : Token.t)];
+    match token with
     | Eof -> ()
     | _ -> loop ()
   in
@@ -95,19 +90,19 @@ let%expect_test "Unknown token" =
 ;;
 
 let%expect_test "error line and column" =
-  go ~loc:true "hello\nworld\n-!";
+  go ~print:true "hello\nworld\n-!";
   [%expect
     {|
-    ((token (Ident hello)) (loc ((line 2) (column 0))))
-    ((token (Ident world)) (loc ((line 3) (column 0))))
-    ((token (Op Minus)) (loc ((line 3) (column 1))))
-    ((token Eof) (loc ((line 3) (column 2))))
+    ((token (Ident hello)) (loc ((line 1) (column 0))))
+    ((token (Ident world)) (loc ((line 2) (column 0))))
+    ((token (Op Minus)) (loc ((line 3) (column 0))))
+    ((token Eof) (loc ((line 3) (column 1))))
     |}]
 ;;
 
 let%expect_test "location after each token" =
   go
-    ~loc:true
+    ~print:true
     {|if then
     else
     fn
@@ -117,20 +112,20 @@ let%expect_test "location after each token" =
     false         hello    and    h_eL_O_o|};
   [%expect
     {|
-    ((token If) (loc ((line 1) (column 3))))
-    ((token Then) (loc ((line 2) (column 4))))
-    ((token Else) (loc ((line 3) (column 4))))
-    ((token Fn) (loc ((line 4) (column 4))))
-    ((token Let) (loc ((line 4) (column 8))))
-    ((token At) (loc ((line 5) (column 4))))
-    ((token Asn) (loc ((line 6) (column 4))))
-    ((token Unit) (loc ((line 6) (column 8))))
-    ((token (Bool true)) (loc ((line 6) (column 13))))
-    ((token Fun) (loc ((line 7) (column 4))))
-    ((token (Bool false)) (loc ((line 7) (column 18))))
-    ((token (Ident hello)) (loc ((line 7) (column 27))))
-    ((token And) (loc ((line 7) (column 34))))
-    ((token (Ident h_eL_O_o)) (loc ((line 7) (column 42))))
+    ((token If) (loc ((line 1) (column 0))))
+    ((token Then) (loc ((line 1) (column 3))))
+    ((token Else) (loc ((line 2) (column 4))))
+    ((token Fn) (loc ((line 3) (column 4))))
+    ((token Let) (loc ((line 4) (column 4))))
+    ((token At) (loc ((line 4) (column 8))))
+    ((token Asn) (loc ((line 5) (column 4))))
+    ((token Unit) (loc ((line 6) (column 4))))
+    ((token (Bool true)) (loc ((line 6) (column 8))))
+    ((token Fun) (loc ((line 6) (column 13))))
+    ((token (Bool false)) (loc ((line 7) (column 4))))
+    ((token (Ident hello)) (loc ((line 7) (column 18))))
+    ((token And) (loc ((line 7) (column 27))))
+    ((token (Ident h_eL_O_o)) (loc ((line 7) (column 34))))
     ((token Eof) (loc ((line 7) (column 42))))
     |}]
 ;;

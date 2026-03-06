@@ -1,10 +1,10 @@
 open! Core
 open! Syl
 
-let go ?print input =
+let go ?(print = false) input =
   let cst = Parse.parse_exn input in
   match Typecheck.typecheck cst with
-  | Ok tst -> if Option.is_some print then print_s [%message (tst : Tst.Program.t)]
+  | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
@@ -13,8 +13,7 @@ let%expect_test "weaken mode: static unerased -> static erased (literal substitu
     {|
 let _ = 1 @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken mode: dynamic unerased -> dynamic erased (erased marker)" =
@@ -23,8 +22,7 @@ let%expect_test "weaken mode: dynamic unerased -> dynamic erased (erased marker)
 let x = 1 @ dynamic;;
 let _ = x @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken mode: static -> dynamic (staticity only)" =
@@ -32,8 +30,7 @@ let%expect_test "weaken mode: static -> dynamic (staticity only)" =
     {|
 let _ = (fn (x : int) -> x) @ dynamic;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken type: arrow ret_mode covariant" =
@@ -42,8 +39,7 @@ let%expect_test "weaken type: arrow ret_mode covariant" =
 let f = fn (x : int) -> x;;
 let _ = f : int -> erased int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken type: arrow arg_mode contravariant" =
@@ -52,8 +48,7 @@ let%expect_test "weaken type: arrow arg_mode contravariant" =
 let f = fn (erased x : int) -> 1;;
 let _ = f : int -> int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if non-split: mode erasure on branch" =
@@ -61,8 +56,7 @@ let%expect_test "weaken if non-split: mode erasure on branch" =
     {|
 let _ = if true then 1 else 1 @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if non-split: arrow type join" =
@@ -70,8 +64,7 @@ let%expect_test "weaken if non-split: arrow type join" =
     {|
 let _ = if true then fn (erased x : int) -> 1 else fn (x : int) -> 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if split: mode only" =
@@ -79,8 +72,7 @@ let%expect_test "weaken if split: mode only" =
     {|
 let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken binder apply: body weakened to ret_mode" =
@@ -89,8 +81,7 @@ let%expect_test "weaken binder apply: body weakened to ret_mode" =
 let f = fn (static x : int) -> x;;
 let _ = f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken arrow closure apply erased: body weakened" =
@@ -99,8 +90,7 @@ let%expect_test "weaken arrow closure apply erased: body weakened" =
 let f = fn (x : int) -> x;;
 let _ = (f @ erased) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken pi closure apply erased: both axes" =
@@ -110,8 +100,7 @@ let f = fn (x : int) -> 1;;
 let g = fn (static erased x : int) -> x;;
 let _ = ((if true then f else g) @ erased) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken mode: both axes (static unerased -> dynamic erased)" =
@@ -119,8 +108,7 @@ let%expect_test "weaken mode: both axes (static unerased -> dynamic erased)" =
     {|
 let _ = 1 @ dynamic erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if non-split: staticity on branch" =
@@ -129,8 +117,7 @@ let%expect_test "weaken if non-split: staticity on branch" =
 let x = 1 @ dynamic;;
 let _ = if true then 1 else x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if non-split: both axes on branch" =
@@ -139,8 +126,7 @@ let%expect_test "weaken if non-split: both axes on branch" =
 let x = 1 @ dynamic;;
 let _ = if true then 1 else x @ erased;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if split: staticity on branch" =
@@ -149,8 +135,7 @@ let%expect_test "weaken if split: staticity on branch" =
 let f = fn (static b : bool) -> if static b then 1 @ dynamic else 1;;
 let _ = f false;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if split: both axes on branch" =
@@ -159,8 +144,7 @@ let%expect_test "weaken if split: both axes on branch" =
 let f = fn (static b : bool) -> if static b then 1 @ dynamic erased else 1;;
 let _ = f false;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken binder apply: erasure on body" =
@@ -169,8 +153,7 @@ let%expect_test "weaken binder apply: erasure on body" =
 let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
 let _ = f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken arrow closure apply erased: staticity on body" =
@@ -179,8 +162,7 @@ let%expect_test "weaken arrow closure apply erased: staticity on body" =
 let f = fn (x : int) -> 1;;
 let _ = (f @ erased) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken pi closure apply erased: erasure only" =
@@ -190,8 +172,7 @@ let f = fn (x : int) -> x;;
 let g = fn (static erased x : int) -> x;;
 let _ = ((if true then f else g) @ erased) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken pi closure apply erased: staticity only" =
@@ -201,8 +182,7 @@ let f = fn (x : int) -> 1;;
 let g = fn (static x : int) -> x;;
 let _ = ((if true then f else g) @ erased) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure to closure: arg erasure contravariant" =
@@ -212,8 +192,7 @@ let apply = fn (f : int -> int) -> f 0;;
 let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure to closure: ret erasure covariant" =
@@ -223,8 +202,7 @@ let apply = fn (f : int -> erased int) -> f 0;;
 let g = fn (x : int) -> x;;
 let _ = apply g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure to closure: both arg and ret subtyping" =
@@ -234,8 +212,7 @@ let apply = fn (f : int -> erased int) -> f 0;;
 let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure where binder expected: Arrow leq Pi" =
@@ -245,8 +222,7 @@ let apply = fn (static f : static int -> int) -> f 0;;
 let g = fn (x : int) -> x;;
 let _ = apply g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "binder to binder: arg erasure contravariant" =
@@ -256,8 +232,7 @@ let apply = fn (static f : static int -> int) -> f 0;;
 let g = fn (static erased x : int) -> 1;;
 let _ = apply g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "erased closure taking closure arg" =
@@ -266,8 +241,7 @@ let%expect_test "erased closure taking closure arg" =
 let apply = fn (f : int -> int) -> f 0;;
 let _ = (apply @ erased) (fn (x : int) -> x);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "binder taking closure, applied erased inside" =
@@ -277,8 +251,7 @@ let apply = fn (static f : static int -> erased int) -> (f @ erased) 0;;
 let g = fn (x : int) -> 1;;
 let _ = apply g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi: ret_mode covariant" =
@@ -287,8 +260,7 @@ let%expect_test "leq Pi/Pi: ret_mode covariant" =
 let f = fn (static x : int) -> 1;;
 let _ = f : static int -> erased int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi: arg_mode contravariant" =
@@ -297,8 +269,7 @@ let%expect_test "leq Pi/Pi: arg_mode contravariant" =
 let f = fn (static erased x : int) -> 1;;
 let _ = f : static int -> int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi: fails when ret_mode wrong direction" =
@@ -334,8 +305,7 @@ let apply = fn (static f : static int -> erased int) -> f 0;;
 let g = fn (x : int) -> x;;
 let _ = apply g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Pi/Pi: different ret_mode" =
@@ -345,8 +315,7 @@ let f = fn (static x : int) -> 1;;
 let g = fn (static x : int) -> 1 @ erased;;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Pi/Pi: different arg_mode" =
@@ -356,8 +325,7 @@ let f = fn (static x : int) -> 1;;
 let g = fn (static erased x : int) -> 1;;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Arrow/Pi" =
@@ -367,8 +335,7 @@ let f = fn (x : int) -> 1;;
 let g = fn (static x : int) -> 1;;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Pi/Arrow" =
@@ -378,8 +345,7 @@ let f = fn (static x : int) -> 1;;
 let g = fn (x : int) -> 1;;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "meet Pi/Pi: via arg contravariance in join" =
@@ -389,8 +355,7 @@ let f = fn (static g : static int -> int) -> g 0;;
 let h = fn (static g : static erased int -> int) -> g 0;;
 let _ = if true then f else h;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "apply joined Pi/Pi" =
@@ -400,8 +365,7 @@ let f = fn (static x : int) -> 1;;
 let g = fn (static x : int) -> 1 @ erased;;
 let _ = (if true then f else g) 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi dependent return: ret_mode covariant" =
@@ -452,8 +416,7 @@ let%expect_test "leq Pi/Pi dependent return: ret_mode covariant" =
 let id = fn (static t : type) -> fn (x : t) -> x;;
 let _ = id : static type \ t -> erased (t -> t);;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Pi/Pi dependent return: different ret_mode" =
@@ -463,8 +426,7 @@ let f = fn (static t : type) -> fn (x : t) -> x;;
 let g = fn (static t : type) -> (fn (x : t) -> x) @ erased;;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Pi/Pi dependent return: different arg_mode" =
@@ -474,8 +436,7 @@ let f = fn (static t : type) -> fn (x : t) -> x;;
 let g = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "apply joined dependent Pi/Pi" =
@@ -485,8 +446,7 @@ let f = fn (static erased t : type) -> fn (x : t) -> x;;
 let g = fn (static erased t : type) -> (fn (x : t) -> x) @ erased;;
 let _ = (if true then f else g) int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi function-type arg: arg contravariant" =
@@ -495,8 +455,7 @@ let%expect_test "leq Pi/Pi function-type arg: arg contravariant" =
 let f = fn (static g : static int -> int) -> g 0;;
 let _ = f : static (static erased int -> int) -> int;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi function-type arg: arg contravariant" =
@@ -505,8 +464,7 @@ let%expect_test "leq Pi/Pi function-type arg: arg contravariant" =
 let f = fn (static g : static type \ t -> t) -> ();;
 let _ = f : static (static erased type \ t -> t) -> unit;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi function-type ret" =
@@ -515,8 +473,7 @@ let%expect_test "leq Pi/Pi function-type ret" =
 let f = fn (static g : static type \ t -> erased t) -> ();;
 let _ = f : static (static erased type \ t -> t) -> unit;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Pi/Pi function-type arg: different inner arg_mode" =
@@ -526,8 +483,7 @@ let f = fn (static g : static int -> int) -> g 0;;
 let h = fn (static g : static erased int -> int) -> g 0;;
 let _ = if true then f else h;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent return via function-type arg returning type" =
@@ -535,8 +491,7 @@ let%expect_test "dependent return via function-type arg returning type" =
     {|
 let wrap = fn (static f : static int -> static type) -> fn (x : f 0) -> x;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "leq Pi/Pi function-type arg returning type" =
@@ -545,8 +500,7 @@ let%expect_test "leq Pi/Pi function-type arg returning type" =
 let wrap = fn (static f : static int -> static type) -> fn (x : f 0) -> x;;
 let _ = wrap : static (static int -> static type) \ f -> f 0 -> f 0;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "meet Pi/Pi function-type arg: via arg contravariance in join" =
@@ -556,8 +510,7 @@ let f = fn (static apply : static (static int -> int) -> int) -> apply (fn (stat
 let g = fn (static apply : static (static erased int -> int) -> int) -> apply (fn (static erased x : int) -> 0);;
 let _ = if true then f else g;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "join Pi/Pi function-type arg returning type: fresh var issue" =
@@ -567,6 +520,5 @@ let f = fn (static g : static int -> static type) -> fn (x : g 0) -> x;;
 let h = fn (static g : static int -> static type) -> fn (x : g 0) -> x;;
 let _ = if true then f else h;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;

@@ -5,7 +5,6 @@ type t =
   | BoolT
   | IntT
   | TypeT
-  | Assert
 [@@deriving sexp, compare, equal, hash]
 
 val find : string -> t option

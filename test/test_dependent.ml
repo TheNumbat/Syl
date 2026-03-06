@@ -436,7 +436,7 @@ let _ = if true then f else g;;
                 (loc ((line 2) (column 43)))))
               (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
               (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
-              (static true) (loc ((line 2) (column 31)))))))
+              (static Static) (loc ((line 2) (column 31)))))))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (rhs
         (Type
@@ -454,7 +454,7 @@ let _ = if true then f else g;;
                 (loc ((line 3) (column 43)))))
               (then_ (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
               (else_ (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
-              (static true) (loc ((line 3) (column 31)))))))
+              (static Static) (loc ((line 3) (column 31)))))))
           (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
@@ -834,7 +834,7 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if static x then () else assert static x;;
   |};
-  [%expect {| ((loc ((line 2) (column 57))) (reason (Static_assert Failed))) |}]
+  [%expect {| ((loc ((line 2) (column 57))) (reason (Static_assert (Bool (T false))))) |}]
 ;;
 
 let%expect_test "static bool reduction" =
@@ -885,11 +885,13 @@ let _ = fn (static x : int) ->
   let _ = assert static (x == x / 1) in
   let _ = assert static (-x == x / -1) in
   let _ = assert static (x % 1 == 0) in
-  let _ = assert static (x % x == x) in
+  let _ = assert static (x % x == 0) in
   let _ = assert static (-(-x) == x) in
   let _ = assert static (x == -(-x)) in
   let _ = assert static (x * -1 == -x) in
   let _ = assert static (-x == x * -1) in
+  let _ = assert static (-1 * x == -x) in
+  let _ = assert static (-x == -1 * x) in
   ()
 ;;
   |};
@@ -920,21 +922,197 @@ let _ = fn (static x : int) -> assert static (x % 0 == 1);;
     |}]
 ;;
 
-(* TODO *)
 let%expect_test "var renaming" =
   go
     {|
 let _ = fn (static x : bool) ->
-  let y = x in
-  fn (static x : bool) ->
-    assert static (x && !y)
+  let y = !x in
+  let z = if true then y else !y in
+  assert static (x || z)
 ;;
   |};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in else branch of if static" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then 42 else unreachable int;;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in then branch of if static" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then unreachable int else 42;;
+let _ = f false;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable reached raises error" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then 42 else unreachable int;;
+let _ = f false;;
+|};
+  [%expect {| ((loc ((line 2) (column 57))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable with mismatched branch types" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then 42 else unreachable bool;;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in fun partial function" =
+  go
+    {|
+fun f (static x : int) : int = if static x == 0 then 1 else unreachable int;;
+let _ = f 0;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable reached in fun" =
+  go
+    {|
+fun f (static x : int) : int = if static x == 0 then 1 else unreachable int;;
+let _ = f 1;;
+|};
+  [%expect {| ((loc ((line 2) (column 60))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable with function type" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  if static x then fn (y : int) -> y else unreachable (int -> int);;
+let g = f true;;
+let _ = g 42;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in nested if static" =
+  go
+    {|
+let f = fn (static x : int) ->
+  if static x == 0 then 42
+  else if static x == 1 then 99
+  else unreachable int;;
+let _ = f 0;;
+let _ = f 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable reached in nested if static" =
+  go
+    {|
+let f = fn (static x : int) ->
+  if static x == 0 then 42
+  else if static x == 1 then 99
+  else unreachable int;;
+let _ = f 2;;
+|};
+  [%expect {| ((loc ((line 5) (column 7))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable with polymorphic identity — only valid branch used" =
+  go
+    {|
+let id = fn (static erased t : type) -> fn (x : t) -> x;;
+let f = fn (static x : bool) ->
+  if static x then id int 42 else unreachable int;;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable does not poison mode of if static" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then 42 else unreachable int;;
+let _ = f true + 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable at top level is rejected" =
+  go
+    {|
+let _ = unreachable int;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable at top level rejected before type check" =
+  go
+    {|
+let _ = unreachable 42;;
+|};
   [%expect
     {|
-    ((loc ((line 5) (column 4)))
-     (reason
-      (Static_assert
-       (Ambiguous (Bool (And (Var (Id $1)) (Bool (Not (Var (Id $0))))))))))
+    ((loc ((line 2) (column 8)))
+     (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
     |}]
+;;
+
+let%expect_test "unreachable requires valid type argument" =
+  go
+    {|
+let f = fn (static x : bool) -> unreachable 42;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 32)))
+     (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
+    |}]
+;;
+
+let%expect_test "unreachable in both branches of if static" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  if static x then unreachable int else unreachable int;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in nested binder defined during monomorphization" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable int in
+  if static x then g 0 else 99;;
+let _ = f true;;
+|};
+  [%expect {| ((loc ((line 3) (column 63))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable in inner binder, reached via inner monomorphization" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable int in
+  if static x then g 0 else g 1;;
+let _ = f false;;
+|};
+  [%expect {| ((loc ((line 3) (column 63))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable in dynamic lambda inside static lambda" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  if static x then fn (y : int) -> y else unreachable (int -> int);;
+let _ = f true 42;;
+|};
+  [%expect {| |}]
 ;;

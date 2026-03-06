@@ -314,6 +314,7 @@ and Expr : sig
   val free_vars : t -> Ident.Set.t
   val ty : t -> Value.t
   val mode : t -> Modes.t
+  val loc : t -> Lex.Location.t
   val desc : t -> Value.t Lazy.t -> Desc.t
   val with_ : t -> ty:Value.t -> mode:Modes.t -> t
   val with_ty : t -> Value.t -> t

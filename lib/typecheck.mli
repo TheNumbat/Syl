@@ -20,8 +20,9 @@ module Error : sig
     | Static_external of Ident.t * string
     | Unknown_builtin of Ident.t * string
     | Recursion_limit of int
-    | Static_assert of [ `Failed | `Ambiguous of Value.t ]
+    | Static_assert of Value.t
     | Divide_by_zero of Int.t
+    | Unreachable_reached
     | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
   [@@deriving sexp]
 end

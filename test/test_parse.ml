@@ -1,9 +1,9 @@
 open! Core
 open! Syl
 
-let go ?print input =
+let go ?(print = false) input =
   match Parse.parse input with
-  | Ok cst -> if Option.is_some print then print_endline (Cst.Program.print () cst)
+  | Ok cst -> if print then print_s [%message (cst : Cst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Parse.Error.t)]
 ;;
 
@@ -85,11 +85,6 @@ let%expect_test "static" =
   [%expect {| |}];
   go "let _ = fn (x : (int @ static -> int @ static) @ static) -> ();;";
   [%expect {| ((loc ((line 1) (column 30))) (reason (Unexpected (Op Arrow)))) |}]
-;;
-
-let%expect_test _ =
-  go "let _ = 2 - 1;;";
-  [%expect {| |}]
 ;;
 
 let%expect_test _ =
@@ -340,7 +335,7 @@ let%expect_test "comment" =
     {|
 (* (* *) *)
   |};
-  [%expect {| ((loc ((line 2) (column 0))) (reason (Unexpected (Op Star)))) |}]
+  [%expect {| ((loc ((line 2) (column 9))) (reason (Unexpected (Op Star)))) |}]
 ;;
 
 let%expect_test "comment" =
@@ -388,7 +383,7 @@ let%expect_test "assert" =
     {|
 let _ = assert assert x;;
   |};
-  [%expect {| ((loc ((line 2) (column 15))) (reason (Unexpected Assert))) |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "assert" =

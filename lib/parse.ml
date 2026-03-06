@@ -20,14 +20,6 @@ module Fail = struct
   let duplicate_mode ~loc mode = raise (Error { loc; reason = Duplicate_mode mode })
   let unexpected_modes ~loc mode = raise (Error { loc; reason = Unexpected_modes mode })
   let fun_underscore ~loc = raise (Error { loc; reason = Fun_underscore })
-
-  let backtrack t ~f =
-    let state = Tokenizer.save t.tokens in
-    try Some (f ()) with
-    | Error _ ->
-      Tokenizer.restore t.tokens state;
-      None
-  ;;
 end
 
 let expect (type a) t ~(kind : a Kind.t) : a =
@@ -144,7 +136,6 @@ and expr_ty_annot t : Expr.t =
 and expr_arrow t : Expr.t =
   let arg_mode = maybe_modes ~required:false t in
   let arg = expr_lor t in
-  let loc = Tokenizer.loc t.tokens in
   let arg_id =
     match Tokenizer.peek t.tokens with
     | Op Backslash ->
@@ -152,6 +143,7 @@ and expr_arrow t : Expr.t =
       Some (expect_ident t)
     | _ -> None
   in
+  let loc = Tokenizer.loc t.tokens in
   match Tokenizer.peek t.tokens with
   | Op Arrow ->
     Tokenizer.skip t.tokens;
@@ -280,26 +272,18 @@ and expr_neg t : Expr.t =
     Unop { op = Neg; arg; loc }
   | _ -> expr_app t
 
+and can_start_atom t =
+  match Tokenizer.peek t.tokens with
+  | Op Not | Assert | If | Fun | Fn | Let | Lparen | Unit | Bool _ | Int _ | Ident _ | Unreachable
+    -> true
+  | _ -> false
+
 and expr_app t : Expr.t =
-  let first = expr_assert t in
-  let rec aux acc =
-    match Fail.backtrack t ~f:(fun () -> expr_assert t) with
-    | Some exp -> aux (exp :: acc)
-    | None -> acc
-  in
+  let first = expr_lnot t in
+  let rec aux acc = if can_start_atom t then aux (expr_lnot t :: acc) else acc in
   let args = aux [] in
   List.fold_right args ~init:first ~f:(fun exp acc ->
     Expr.Apply { fn = acc; arg = exp; loc = Expr.loc acc })
-
-and expr_assert t : Expr.t =
-  let loc = Tokenizer.loc t.tokens in
-  match Tokenizer.peek t.tokens with
-  | Assert ->
-    Tokenizer.skip t.tokens;
-    let static = maybe_static t in
-    let cond = expr_lnot t in
-    Assert { cond; static; loc }
-  | _ -> expr_lnot t
 
 and expr_lnot t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
@@ -313,14 +297,15 @@ and expr_lnot t : Expr.t =
 and expr_primary t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
   match Tokenizer.next t.tokens with
+  | Unreachable ->
+    let ty = expr t in
+    Unreachable { ty; loc }
+  | Assert ->
+    let static = maybe_static t in
+    let cond = expr_lnot t in
+    Assert { cond; static; loc }
   | If ->
-    let static =
-      match Tokenizer.peek t.tokens with
-      | Static ->
-        Tokenizer.skip t.tokens;
-        true
-      | _ -> false
-    in
+    let static = maybe_static t in
     let cond = expr t in
     expect t ~kind:Then;
     let then_ = expr t in

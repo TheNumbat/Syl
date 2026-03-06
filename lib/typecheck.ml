@@ -22,8 +22,9 @@ module Error = struct
     | Static_external of Ident.t * string
     | Unknown_builtin of Ident.t * string
     | Recursion_limit of int
-    | Static_assert of [ `Failed | `Ambiguous of Value.t ]
+    | Static_assert of Value.t
     | Divide_by_zero of Int.t
+    | Unreachable_reached
     | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
   [@@deriving sexp]
 end
@@ -42,6 +43,7 @@ module Fail = struct
   let unknown_builtin ~loc id name = raise (Error { loc; reason = Unknown_builtin (id, name) })
   let static_assert ~loc expr = raise (Error { loc; reason = Static_assert expr })
   let divide_by_zero ~loc expr = raise (Error { loc; reason = Divide_by_zero expr })
+  let unreachable_reached ~loc = raise (Error { loc; reason = Unreachable_reached })
 
   let unreachable ~loc =
     Lazy.from_fun (fun () -> raise_s [%message "Bug: forced dynamic" (loc : Lex.Location.t)])
@@ -96,10 +98,11 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
 let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
   let expr : Expr.t =
     if (not (Modes.is_erased src_mode)) && Modes.is_erased dst_mode
-    then
+    then (
+      let loc = Expr.loc expr in
       if Modes.is_static dst_mode
       then Literal { value = Lazy.force static; ty = src_ty; mode = src_mode; loc }
-      else Erased { ty = src_ty; mode = src_mode; loc }
+      else Erased { ty = src_ty; mode = src_mode; loc })
     else expr
   in
   let static =
@@ -610,6 +613,16 @@ and reduce state env (expr : Cst.Expr.t) : Desc.t =
 and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
   let open Lazy.Let_syntax in
   match expr with
+  | Unreachable { ty; loc } ->
+    (* TODO wrong *)
+    if State.monomorphizing state
+    then Fail.unreachable_reached ~loc
+    else (
+      let ty_desc = reduce state env ty in
+      let ty = require_static_type state ~loc ty_desc in
+      let mode = Modes.bottom () in
+      let value = State.fresh state in
+      Literal { value; ty; mode; loc }, { Desc.ty; mode; static = Lazy.from_val value })
   | Assert { cond; static; loc } ->
     let cond, cond_desc = typecheck state env cond in
     require_exists ~loc cond_desc.mode;
@@ -619,16 +632,19 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
        require_static ~loc cond_desc;
        (match Lazy.force cond_desc.static with
         | Bool (T true) -> typecheck state env (Literal { value = Unit; loc })
-        | Bool (T false) -> Fail.static_assert ~loc `Failed
-        | expr -> Fail.static_assert ~loc (`Ambiguous expr))
+        | expr -> Fail.static_assert ~loc expr)
      | Dynamic ->
        if Modes.is_static cond_desc.mode && Value.is_true (Lazy.force cond_desc.static)
        then typecheck state env (Literal { value = Unit; loc })
        else (
-         let desc = Builtin.desc Assert in
-         let fn =
-           Expr.Literal { value = Lazy.force desc.static; ty = desc.ty; mode = desc.mode; loc }
+         let mode = Modes.create ~staticity:Static ~erasure:Unerased in
+         let ty =
+           let mode = Modes.create ~staticity:Dynamic ~erasure:Unerased in
+           Value.Type
+             (Arrow { arg_ty = Type Bool; arg_mode = mode; ret_ty = Type Unit; ret_mode = mode })
          in
+         let value = Value.External { symbol = "syl_assert"; ty } in
+         let fn = Expr.Literal { value; ty; mode; loc } in
          ( Apply
              { fn
              ; arg = cond
@@ -636,7 +652,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
              ; mode = Modes.create ~staticity:Static ~erasure:Unerased
              ; loc
              }
-         , desc )))
+         , { Desc.ty; mode; static = Lazy.from_val value } )))
   | Paren { expr; _ } -> typecheck state env expr
   | Literal { value; loc } ->
     let ty = Value.Type (Ty.of_literal value) in
@@ -694,56 +710,56 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
     let cond, cond_desc = typecheck state env cond in
     require_exists ~loc cond_desc.mode;
     require_leq state ~loc cond_desc.ty (Type Bool);
-    if static
-    then (
-      require_static ~loc cond_desc;
-      match Lazy.force cond_desc.static with
-      | Bool (T true) when State.monomorphizing state -> typecheck state env then_
-      | Bool (T false) when State.monomorphizing state -> typecheck state env else_
-      | Bool (T true) ->
-        let _else_desc = reduce state env else_ in
-        typecheck state env then_
-      | Bool (T false) ->
-        let _then_desc = reduce state env then_ in
-        typecheck state env else_
-      | value ->
-        let then_, then_desc =
-          let env = rebind_if_var env cond (Value.Bool (T true)) in
+    (match static with
+     | Static ->
+       require_static ~loc cond_desc;
+       (match Lazy.force cond_desc.static with
+        | Bool (T true) when State.monomorphizing state -> typecheck state env then_
+        | Bool (T false) when State.monomorphizing state -> typecheck state env else_
+        | Bool (T true) ->
+          let _else_desc = reduce state env else_ in
           typecheck state env then_
-        in
-        let else_, else_desc =
-          let env = rebind_if_var env cond (Value.Bool (T false)) in
+        | Bool (T false) ->
+          let _then_desc = reduce state env then_ in
           typecheck state env else_
-        in
-        let mode = Modes.cond ~cond:cond_desc.mode then_desc.mode else_desc.mode in
-        let static =
-          if Modes.is_static mode
-          then (
-            let%map then_ = then_desc.static
-            and else_ = else_desc.static in
-            Value.If { cond = value; then_; else_ })
-          else Fail.unreachable ~loc
-        in
-        let ty = Value.If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty } in
-        If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
-    else (
-      let then_, then_desc = typecheck state env then_ in
-      let else_, else_desc = typecheck state env else_ in
-      let mode = Modes.cond ~cond:cond_desc.mode then_desc.mode else_desc.mode in
-      let static =
-        if Modes.is_static mode
-        then
-          Lazy.bind cond_desc.static ~f:(function
-            | Bool (T true) -> then_desc.static
-            | Bool (T false) -> else_desc.static
-            | cond ->
+        | value ->
+          let then_, then_desc =
+            let env = rebind_if_var env cond (Value.Bool (T true)) in
+            typecheck state env then_
+          in
+          let else_, else_desc =
+            let env = rebind_if_var env cond (Value.Bool (T false)) in
+            typecheck state env else_
+          in
+          let mode = Modes.cond ~cond:cond_desc.mode then_desc.mode else_desc.mode in
+          let static =
+            if Modes.is_static mode
+            then (
               let%map then_ = then_desc.static
               and else_ = else_desc.static in
-              Value.If { cond; then_; else_ })
-        else Fail.unreachable ~loc
-      in
-      let ty = require_join state ~loc then_desc.ty else_desc.ty in
-      If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
+              Value.If { cond = value; then_; else_ })
+            else Fail.unreachable ~loc
+          in
+          let ty = Value.If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty } in
+          If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
+     | Dynamic ->
+       let then_, then_desc = typecheck state env then_ in
+       let else_, else_desc = typecheck state env else_ in
+       let mode = Modes.cond ~cond:cond_desc.mode then_desc.mode else_desc.mode in
+       let static =
+         if Modes.is_static mode
+         then
+           Lazy.bind cond_desc.static ~f:(function
+             | Bool (T true) -> then_desc.static
+             | Bool (T false) -> else_desc.static
+             | cond ->
+               let%map then_ = then_desc.static
+               and else_ = else_desc.static in
+               Value.If { cond; then_; else_ })
+         else Fail.unreachable ~loc
+       in
+       let ty = require_join state ~loc then_desc.ty else_desc.ty in
+       If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
   | Let { var; bind; rest; loc } ->
     let bind, bind_desc = typecheck state env bind in
     let env = Env.bind env var bind_desc in

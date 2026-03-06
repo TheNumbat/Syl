@@ -571,7 +571,7 @@ module Int = struct
     | Div (v, Int (T -1L)) -> reduce (Neg v)
     | Mod (Int (T x), Int (T y)) -> const (x % y)
     | Mod (_, Int (T 1L)) -> const 0L
-    | Mod (Var x, Var y) when Ident.equal x y -> Var x
+    | Mod (Var x, Var y) when Ident.equal x y -> const 0L
     | Neg (Int (T x)) -> const (-x)
     | Neg (Int (Neg (Int x))) -> reduce x
     | Neg (Int (Neg v)) -> v
@@ -913,6 +913,21 @@ module Expr = struct
     | Let { mode; _ }
     | Fun { mode; _ }
     | Symbol { mode; _ } -> mode
+  ;;
+
+  let loc = function
+    | Literal { loc; _ }
+    | Apply { loc; _ }
+    | Unop { loc; _ }
+    | Binop { loc; _ }
+    | If { loc; _ }
+    | Var { loc; _ }
+    | Lambda { loc; _ }
+    | Binder { loc; _ }
+    | Erased { loc; _ }
+    | Let { loc; _ }
+    | Fun { loc; _ }
+    | Symbol { loc; _ } -> loc
   ;;
 
   let desc t static = { ty = ty t; mode = mode t; static }

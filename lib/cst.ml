@@ -33,7 +33,7 @@ module Expr = struct
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : bool
+        ; static : Staticity.t
         ; loc : Lex.Location.t
         }
     | Let of
@@ -96,6 +96,10 @@ module Expr = struct
         ; static : Staticity.t
         ; loc : Lex.Location.t
         }
+    | Unreachable of
+        { ty : t
+        ; loc : Lex.Location.t
+        }
     | Type_annotation of
         { expr : t
         ; ty : t
@@ -112,6 +116,7 @@ module Expr = struct
     match expr with
     | Paren { expr; _ } -> free_vars expr
     | Assert { cond; _ } -> free_vars cond
+    | Unreachable { ty; _ } -> free_vars ty
     | Arrow { arg; ret; _ } -> Set.union (free_vars arg) (free_vars ret)
     | Var { id; _ } -> Ident.Set.singleton id
     | Mode_annotation { expr; _ } -> free_vars expr
@@ -158,6 +163,7 @@ module Expr = struct
     | Binop { loc; _ }
     | Arrow { loc; _ }
     | Assert { loc; _ }
+    | Unreachable { loc; _ }
     | Type_annotation { loc; _ }
     | Mode_annotation { loc; _ } -> loc
   ;;
@@ -196,8 +202,7 @@ module Expr = struct
 
   and print () = function
     | If { cond; then_; else_; static; _ } ->
-      let static = if static then " static" else "" in
-      sprintf "if%s %a then %a else %a" static print cond print then_ print else_
+      sprintf "if%a %a then %a else %a" maybe_static static print cond print then_ print else_
     | Fun { funs; rest; _ } ->
       let funs = Nonempty_list.mapi funs ~f:(fun i f -> print_fun (i > 0) f) in
       let funs = String.concat ~sep:" " (Nonempty_list.to_list funs) in
@@ -221,6 +226,7 @@ module Expr = struct
     | Var { id; _ } -> Ident.print () id
     | Literal { value; _ } -> sprintf "%a" Literal.print value
     | Assert { cond; static; _ } -> sprintf "assert%a %a" maybe_static static print cond
+    | Unreachable { ty; _ } -> sprintf "unreachable %a" print ty
     | Unop { op; arg; _ } -> sprintf "%a%a" Ident.Unop.print op print arg
     | Binop { op; lhs; rhs; _ } -> sprintf "%a %a %a" print lhs Ident.Binop.print op print rhs
     | Arrow { arg; arg_id; arg_mode; ret; ret_mode; _ } ->

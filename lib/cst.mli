@@ -29,7 +29,7 @@ module Expr : sig
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : bool
+        ; static : Staticity.t
         ; loc : Lex.Location.t
         }
     | Let of
@@ -90,6 +90,10 @@ module Expr : sig
     | Assert of
         { cond : t
         ; static : Staticity.t
+        ; loc : Lex.Location.t
+        }
+    | Unreachable of
+        { ty : t
         ; loc : Lex.Location.t
         }
     | Type_annotation of
