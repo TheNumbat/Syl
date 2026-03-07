@@ -66,6 +66,7 @@ and vint =
 [@@deriving sexp]
 
 and value =
+  | Bottom
   | Unit
   | Bool of vbool
   | Int of vint
@@ -252,7 +253,7 @@ let rec is_concrete_value : value -> _ = function
   | Bool b -> is_concrete_bool b
   | Int i -> is_concrete_int i
   | Type ty -> is_concrete_ty ty
-  | Var _ | If _ | Apply _ -> false
+  | Bottom | Var _ | If _ | Apply _ -> false
 
 and is_concrete_bool : vbool -> _ = function
   | T _ -> true
@@ -633,6 +634,7 @@ module Value = struct
   end
 
   type t = value =
+    | Bottom
     | Unit
     | Bool of vbool
     | Int of vint
@@ -654,6 +656,23 @@ module Value = struct
         ; ty : t
         }
   [@@deriving sexp]
+
+  (* Only does rewrites that remove terms. *)
+  let rec reduce = function
+    | Bool b -> Bool.reduce b
+    | Int i -> Int.reduce i
+    | If { cond; then_; else_ } ->
+      (match reduce cond with
+       | Bool (T true) -> reduce then_
+       | Bool (T false) -> reduce else_
+       | cond ->
+         (match reduce then_, reduce else_ with
+          | Bottom, else_ -> else_
+          | then_, Bottom -> then_
+          | then_, else_ -> If { cond; then_; else_ }))
+    | Apply { fn; arg } -> Apply { fn = reduce fn; arg = reduce arg }
+    | value -> value
+  ;;
 
   let of_literal : Cst.Literal.t -> t = function
     | Unit -> Unit

@@ -157,6 +157,7 @@ and Value : sig
   end
 
   type t =
+    | Bottom
     | Unit
     | Bool of Bool.t
     | Int of Int.t
@@ -179,6 +180,7 @@ and Value : sig
         }
   [@@deriving sexp]
 
+  val reduce : t -> t
   val of_literal : Cst.Literal.t -> t
   val is_true : t -> bool
 end

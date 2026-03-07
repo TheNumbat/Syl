@@ -117,6 +117,14 @@ let _ = (fn (_ : unit) -> let _ = int in ()) @ unerased;;
 
 let _ = (fn (_ : unit) -> int) @ erased;;
 
+(* Static asserts fail at compile time if the condition is not known to be true. *)
+
+let _ = assert static true;;
+
+(* Dynamic asserts fail at runtime if the condition is false. )
+
+let _ = assert true;;
+
 (* -----------------------------------------------------
    Inlining with erasure
    ----------------------------------------------------- *)
@@ -190,6 +198,19 @@ let _ = (if static false then f else g) : static int -> int;;
 
 let _ = fn (static b : bool) ->
   (if static b then f else g) : static int -> erased int
+;;
+
+(* Simple reductions happen automatically. *)
+
+let _ = fn (static b : bool) ->
+  assert static (b || !b)
+;;
+
+(* Branches can fail at compile time with unreachable. It's an error to emit an
+   unreachable branch as runtime code. *)
+
+let needs_true = fn (static b : bool) ->
+  if static b then 0 else unreachable
 ;;
 
 (* Dependent functions can have branching types *)

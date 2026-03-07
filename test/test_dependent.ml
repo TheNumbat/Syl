@@ -937,7 +937,7 @@ let _ = fn (static x : bool) ->
 let%expect_test "unreachable in else branch of if static" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable int;;
+let f = fn (static x : bool) -> if static x then 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -946,7 +946,7 @@ let _ = f true;;
 let%expect_test "unreachable in then branch of if static" =
   go
     {|
-let f = fn (static x : bool) -> if static x then unreachable int else 42;;
+let f = fn (static x : bool) -> if static x then unreachable else 42;;
 let _ = f false;;
 |};
   [%expect {| |}]
@@ -955,7 +955,7 @@ let _ = f false;;
 let%expect_test "unreachable reached raises error" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable int;;
+let f = fn (static x : bool) -> if static x then 42 else unreachable;;
 let _ = f false;;
 |};
   [%expect {| ((loc ((line 2) (column 57))) (reason Unreachable_reached)) |}]
@@ -964,7 +964,7 @@ let _ = f false;;
 let%expect_test "unreachable with mismatched branch types" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable bool;;
+let f = fn (static x : bool) -> if static x then 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -973,7 +973,7 @@ let _ = f true;;
 let%expect_test "unreachable in fun partial function" =
   go
     {|
-fun f (static x : int) : int = if static x == 0 then 1 else unreachable int;;
+fun f (static x : int) : int = if static x == 0 then 1 else unreachable;;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -982,7 +982,7 @@ let _ = f 0;;
 let%expect_test "unreachable reached in fun" =
   go
     {|
-fun f (static x : int) : int = if static x == 0 then 1 else unreachable int;;
+fun f (static x : int) : int = if static x == 0 then 1 else unreachable;;
 let _ = f 1;;
 |};
   [%expect {| ((loc ((line 2) (column 60))) (reason Unreachable_reached)) |}]
@@ -992,7 +992,7 @@ let%expect_test "unreachable with function type" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then fn (y : int) -> y else unreachable (int -> int);;
+  if static x then fn (y : int) -> y else unreachable;;
 let g = f true;;
 let _ = g 42;;
 |};
@@ -1005,7 +1005,7 @@ let%expect_test "unreachable in nested if static" =
 let f = fn (static x : int) ->
   if static x == 0 then 42
   else if static x == 1 then 99
-  else unreachable int;;
+  else unreachable;;
 let _ = f 0;;
 let _ = f 1;;
 |};
@@ -1018,7 +1018,7 @@ let%expect_test "unreachable reached in nested if static" =
 let f = fn (static x : int) ->
   if static x == 0 then 42
   else if static x == 1 then 99
-  else unreachable int;;
+  else unreachable;;
 let _ = f 2;;
 |};
   [%expect {| ((loc ((line 5) (column 7))) (reason Unreachable_reached)) |}]
@@ -1029,7 +1029,7 @@ let%expect_test "unreachable with polymorphic identity — only valid branch use
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let f = fn (static x : bool) ->
-  if static x then id int 42 else unreachable int;;
+  if static x then id int 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -1038,7 +1038,7 @@ let _ = f true;;
 let%expect_test "unreachable does not poison mode of if static" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable int;;
+let f = fn (static x : bool) -> if static x then 42 else unreachable;;
 let _ = f true + 1;;
 |};
   [%expect {| |}]
@@ -1047,40 +1047,24 @@ let _ = f true + 1;;
 let%expect_test "unreachable at top level is rejected" =
   go
     {|
-let _ = unreachable int;;
+let _ = unreachable;;
 |};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 2) (column 8))) (reason Unreachable_reached)) |}]
 ;;
 
 let%expect_test "unreachable at top level rejected before type check" =
   go
     {|
-let _ = unreachable 42;;
+let _ = unreachable;;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 8)))
-     (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
-    |}]
-;;
-
-let%expect_test "unreachable requires valid type argument" =
-  go
-    {|
-let f = fn (static x : bool) -> unreachable 42;;
-|};
-  [%expect
-    {|
-    ((loc ((line 2) (column 32)))
-     (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 8))) (reason Unreachable_reached)) |}]
 ;;
 
 let%expect_test "unreachable in both branches of if static" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then unreachable int else unreachable int;;
+  if static x then unreachable else unreachable;;
 |};
   [%expect {| |}]
 ;;
@@ -1089,8 +1073,19 @@ let%expect_test "unreachable in nested binder defined during monomorphization" =
   go
     {|
 let f = fn (static x : bool) ->
-  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable int in
+  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable in
   if static x then g 0 else 99;;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in nested binder defined during monomorphization" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable in
+  if static x then g 9 else 99;;
 let _ = f true;;
 |};
   [%expect {| ((loc ((line 3) (column 63))) (reason Unreachable_reached)) |}]
@@ -1100,7 +1095,7 @@ let%expect_test "unreachable in inner binder, reached via inner monomorphization
   go
     {|
 let f = fn (static x : bool) ->
-  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable int in
+  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable in
   if static x then g 0 else g 1;;
 let _ = f false;;
 |};
@@ -1111,8 +1106,184 @@ let%expect_test "unreachable in dynamic lambda inside static lambda" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then fn (y : int) -> y else unreachable (int -> int);;
+  if static x then fn (y : int) -> y else unreachable;;
 let _ = f true 42;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in dependent arrow return type — not concrete during definition" =
+  go
+    {|
+let f = fn (static g : static bool \ x -> if x then int else unreachable) -> g true;;
+|};
+  [%expect {| ((loc ((line 2) (column 61))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable in dependent arrow return type with if static — not concrete" =
+  go
+    {|
+let f = fn (static g : static bool \ x -> if static x then int else unreachable) -> g true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in dependent arrow return type — fires during dependent eval on apply" =
+  go
+    {|
+let f = fn (static g : static bool \ x -> if static x then int else unreachable) -> g true;;
+let _ = f (fn (static x : bool) -> if static x then 42 else unreachable);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in fun return type annotation — fires during body validation" =
+  go
+    {|
+fun f (static x : bool) : if static x then int else unreachable = if static x then 42 else unreachable;;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test
+    "unreachable in fun return type annotation with non-static if — fires during definition"
+  =
+  go
+    {|
+fun f (static x : bool) : if x then int else unreachable = if static x then 42 else unreachable;;
+|};
+  [%expect {| ((loc ((line 2) (column 45))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable in fun body — not concrete during definition" =
+  go
+    {|
+fun f (static x : bool) : int = if static x then 42 else unreachable;;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in fun body — reached when applied with bad arg" =
+  go
+    {|
+fun f (static x : bool) : int = if static x then 42 else unreachable;;
+let _ = f false;;
+|};
+  [%expect {| ((loc ((line 2) (column 57))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable in lambda body Pi computation — not concrete" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then 42 else unreachable;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in fun returning lambda — not concrete during definition" =
+  go
+    {|
+fun outer (static x : bool) : int -> int =
+  if static x then fn (y : int) -> y else unreachable;;
+let g = outer true;;
+let _ = g 42;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable in fun returning lambda — reached on application" =
+  go
+    {|
+fun outer (static x : bool) : int -> int =
+  if static x then fn (y : int) -> y else unreachable;;
+let _ = outer false;;
+|};
+  [%expect {| ((loc ((line 3) (column 42))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable in dependent arrow return type — non-static if survives definition" =
+  go
+    {|
+let f = fn (static g : static bool \ x -> if x then int else unreachable) -> ();;
+|};
+  [%expect {| ((loc ((line 2) (column 61))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable in dependent arrow return type — non-static if survives definition" =
+  go
+    {|
+let f = static bool \ x -> if static x then if x then int else unreachable else unreachable;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable leq — Bottom type accepted where int expected" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then 42 else (unreachable : int);;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable leq — Bottom type accepted as function argument" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  let g = fn (y : int) -> y + 1 in
+  if static x then g 42 else g unreachable;;
+let _ = f true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable leq — Bottom type accepted where function type expected" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  if static x then fn (y : int) -> y else unreachable;;
+let g = f true;;
+let _ = g 42;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable join — non-static if joins Bottom with int (no application)" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  if static x then (if true then 42 else unreachable) else 99;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable join — non-static if joins int with Bottom (no application)" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  if static x then (if true then unreachable else 42) else 99;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "unreachable join — non-static if with unreachable, applied" =
+  go
+    {|
+let f = fn (static x : bool) ->
+  if static x then (if true then 42 else unreachable) else 99;;
+let _ = f true;;
+|};
+  [%expect {| ((loc ((line 3) (column 41))) (reason Unreachable_reached)) |}]
+;;
+
+let%expect_test "unreachable leq — Bottom in Pi return type comparison" =
+  go
+    {|
+let f = fn (static x : bool) -> if static x then 42 else unreachable;;
+let g = fn (static x : bool) -> if static x then 42 else 99;;
+let _ = if true then f else g;;
 |};
   [%expect {| |}]
 ;;

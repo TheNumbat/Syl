@@ -96,10 +96,7 @@ module Expr = struct
         ; static : Staticity.t
         ; loc : Lex.Location.t
         }
-    | Unreachable of
-        { ty : t
-        ; loc : Lex.Location.t
-        }
+    | Unreachable of { loc : Lex.Location.t }
     | Type_annotation of
         { expr : t
         ; ty : t
@@ -116,12 +113,11 @@ module Expr = struct
     match expr with
     | Paren { expr; _ } -> free_vars expr
     | Assert { cond; _ } -> free_vars cond
-    | Unreachable { ty; _ } -> free_vars ty
     | Arrow { arg; ret; _ } -> Set.union (free_vars arg) (free_vars ret)
     | Var { id; _ } -> Ident.Set.singleton id
     | Mode_annotation { expr; _ } -> free_vars expr
     | Type_annotation { expr; ty; _ } -> Set.union (free_vars expr) (free_vars ty)
-    | Literal _ -> Ident.Set.empty
+    | Unreachable _ | Literal _ -> Ident.Set.empty
     | Unop { arg; _ } -> free_vars arg
     | Binop { lhs; rhs; _ } -> Set.union (free_vars lhs) (free_vars rhs)
     | If { cond; then_; else_; _ } ->
@@ -226,7 +222,7 @@ module Expr = struct
     | Var { id; _ } -> Ident.print () id
     | Literal { value; _ } -> sprintf "%a" Literal.print value
     | Assert { cond; static; _ } -> sprintf "assert%a %a" maybe_static static print cond
-    | Unreachable { ty; _ } -> sprintf "unreachable %a" print ty
+    | Unreachable _ -> "unreachable"
     | Unop { op; arg; _ } -> sprintf "%a%a" Ident.Unop.print op print arg
     | Binop { op; lhs; rhs; _ } -> sprintf "%a %a %a" print lhs Ident.Binop.print op print rhs
     | Arrow { arg; arg_id; arg_mode; ret; ret_mode; _ } ->

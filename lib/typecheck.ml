@@ -53,19 +53,26 @@ end
 module State = struct
   type t =
     { mutable next_id : int
-    ; mutable recursion_depth : int
+    ; mutable app_depth : int
+    ; mutable abs_depth : int
     }
 
   let recursion_limit = 1000
-  let create () = { next_id = 0; recursion_depth = 0 }
-  let monomorphizing t = t.recursion_depth > 0
+  let create () = { next_id = 0; app_depth = 0; abs_depth = 0 }
+  let concrete t = t.abs_depth = 0
+  let monomorphizing t = t.app_depth > 0
 
-  let recur ~loc t ~f =
-    if t.recursion_depth > recursion_limit
+  let with_app ~loc t ~f =
+    if t.app_depth > recursion_limit
     then Fail.recursion_limit ~loc recursion_limit
     else (
-      t.recursion_depth <- t.recursion_depth + 1;
-      Exn.protect ~f ~finally:(fun () -> t.recursion_depth <- t.recursion_depth - 1))
+      t.app_depth <- t.app_depth + 1;
+      Exn.protect ~f ~finally:(fun () -> t.app_depth <- t.app_depth - 1))
+  ;;
+
+  let with_abs t ~f =
+    t.abs_depth <- t.abs_depth + 1;
+    Exn.protect ~f ~finally:(fun () -> t.abs_depth <- t.abs_depth - 1)
   ;;
 
   let fresh_id t =
@@ -232,7 +239,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
     (match concrete state arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> reduce ()
+         | None -> State.with_app ~loc:Lex.Location.empty state ~f:reduce
          | Some ty -> ty)
      | None -> reduce ())
   | Typecheck { env; arg; arg_ty; arg_mode; memo; body } ->
@@ -244,12 +251,14 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
     (match concrete state arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> reduce ()
+         | None -> State.with_app ~loc:Lex.Location.empty state ~f:reduce
          | Some ty -> ty)
      | None -> reduce ())
 
 and leq_value state (a : Value.t) (b : Value.t) =
   match a, b with
+  | Bottom, _ -> true
+  | _, Bottom -> false
   | Unit, Unit -> true
   | Bool a, Bool b -> leq_bool state a b
   | Int a, Int b -> leq_int state a b
@@ -270,6 +279,8 @@ and leq_value state (a : Value.t) (b : Value.t) =
 
 and geq_value state (a : Value.t) (b : Value.t) =
   match a, b with
+  | _, Bottom -> true
+  | Bottom, _ -> false
   | Unit, Unit -> true
   | Bool a, Bool b -> geq_bool state a b
   | Int a, Int b -> geq_int state a b
@@ -290,6 +301,8 @@ and geq_value state (a : Value.t) (b : Value.t) =
 
 and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   match a, b with
+  | a, Bottom -> Some a
+  | Bottom, b -> Some b
   | Unit, Unit -> Some Unit
   | Bool a, Bool b -> Option.map (join_bool state a b) ~f:(fun b : Value.t -> Bool b)
   | Int a, Int b -> Option.map (join_int state a b) ~f:(fun i : Value.t -> Int i)
@@ -321,6 +334,7 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
 
 and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   match a, b with
+  | Bottom, _ | _, Bottom -> Some Bottom
   | Unit, Unit -> Some Unit
   | Bool a, Bool b -> Option.map (meet_bool state a b) ~f:(fun b : Value.t -> Bool b)
   | Int a, Int b -> Option.map (meet_int state a b) ~f:(fun i : Value.t -> Int i)
@@ -613,15 +627,13 @@ and reduce state env (expr : Cst.Expr.t) : Desc.t =
 and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
   let open Lazy.Let_syntax in
   match expr with
-  | Unreachable { ty; loc } ->
-    (* TODO wrong *)
-    if State.monomorphizing state
+  | Unreachable { loc } ->
+    if State.concrete state
     then Fail.unreachable_reached ~loc
     else (
-      let ty_desc = reduce state env ty in
-      let ty = require_static_type state ~loc ty_desc in
       let mode = Modes.bottom () in
-      let value = State.fresh state in
+      let ty = Value.Bottom in
+      let value = Value.Bottom in
       Literal { value; ty; mode; loc }, { Desc.ty; mode; static = Lazy.from_val value })
   | Assert { cond; static; loc } ->
     let cond, cond_desc = typecheck state env cond in
@@ -717,19 +729,19 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
         | Bool (T true) when State.monomorphizing state -> typecheck state env then_
         | Bool (T false) when State.monomorphizing state -> typecheck state env else_
         | Bool (T true) ->
-          let _else_desc = reduce state env else_ in
+          let _else_desc = State.with_abs state ~f:(fun () -> reduce state env else_) in
           typecheck state env then_
         | Bool (T false) ->
-          let _then_desc = reduce state env then_ in
+          let _then_desc = State.with_abs state ~f:(fun () -> reduce state env then_) in
           typecheck state env else_
         | value ->
           let then_, then_desc =
             let env = rebind_if_var env cond (Value.Bool (T true)) in
-            typecheck state env then_
+            State.with_abs state ~f:(fun () -> typecheck state env then_)
           in
           let else_, else_desc =
             let env = rebind_if_var env cond (Value.Bool (T false)) in
-            typecheck state env else_
+            State.with_abs state ~f:(fun () -> typecheck state env else_)
           in
           let mode = Modes.cond ~cond:cond_desc.mode then_desc.mode else_desc.mode in
           let static =
@@ -737,10 +749,10 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
             then (
               let%map then_ = then_desc.static
               and else_ = else_desc.static in
-              Value.If { cond = value; then_; else_ })
+              Value.reduce (If { cond = value; then_; else_ }))
             else Fail.unreachable ~loc
           in
-          let ty = Value.If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty } in
+          let ty = Value.reduce (If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty }) in
           If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
      | Dynamic ->
        let then_, then_desc = typecheck state env then_ in
@@ -755,7 +767,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
              | cond ->
                let%map then_ = then_desc.static
                and else_ = else_desc.static in
-               Value.If { cond; then_; else_ })
+               Value.reduce (If { cond; then_; else_ }))
          else Fail.unreachable ~loc
        in
        let ty = require_join state ~loc then_desc.ty else_desc.ty in
@@ -829,7 +841,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
                        { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
                    in
                    let body, body_desc =
-                     State.recur ~loc state ~f:(fun () -> typecheck state env binder.body)
+                     State.with_app ~loc state ~f:(fun () -> typecheck state env binder.body)
                    in
                    let body, body_desc = weaken ~loc body body_desc ~ty:ret_ty ~mode:ret_mode in
                    { arg = binder.arg; arg_mode; arg_desc; body; body_desc }

@@ -297,9 +297,7 @@ and expr_lnot t : Expr.t =
 and expr_primary t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
   match Tokenizer.next t.tokens with
-  | Unreachable ->
-    let ty = expr t in
-    Unreachable { ty; loc }
+  | Unreachable -> Unreachable { loc }
   | Assert ->
     let static = maybe_static t in
     let cond = expr_lnot t in

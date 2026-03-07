@@ -92,10 +92,7 @@ module Expr : sig
         ; static : Staticity.t
         ; loc : Lex.Location.t
         }
-    | Unreachable of
-        { ty : t
-        ; loc : Lex.Location.t
-        }
+    | Unreachable of { loc : Lex.Location.t }
     | Type_annotation of
         { expr : t
         ; ty : t

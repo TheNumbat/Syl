@@ -87,7 +87,7 @@ let rec simplify_value ~loc env (value : Tst.Value.t) : Expr.t =
     let pack, fvs, ty = simplify_mono ~loc env b.mono in
     Pack { pack; fvs; ty; loc }
   | External { symbol; ty; _ } -> External { symbol; ty = simplify_ty ~loc ty; loc }
-  | Type _ | Var _ | If _ | Apply _ ->
+  | Bottom | Type _ | Var _ | If _ | Apply _ ->
     raise_s [%message "Cannot simplify literal" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
 and simplify_mono ~loc env mono =
