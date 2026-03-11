@@ -46,11 +46,29 @@ module Binop = struct
   ;;
 end
 
+module Nop = struct
+  type t =
+    | Comma
+    | Caret
+  [@@deriving sexp, compare, equal, hash]
+
+  let print () = function
+    | Comma -> ","
+    | Caret -> "^"
+  ;;
+
+  let sep = function
+    | Comma -> ", "
+    | Caret -> " ^ "
+  ;;
+end
+
 module T = struct
   type t =
     | Anon
     | Unop of Unop.t
     | Binop of Binop.t
+    | Nop of Nop.t
     | Id of string
   [@@deriving sexp, compare, equal, hash]
 end
@@ -63,6 +81,7 @@ let anon = Anon
 let id id = Id id
 let unop op = Unop op
 let binop op = Binop op
+let nop op = Nop op
 
 let is_anon = function
   | Anon -> true
@@ -73,5 +92,6 @@ let print () = function
   | Anon -> "_"
   | Unop op -> sprintf "(%a)" Unop.print op
   | Binop op -> sprintf "(%a)" Binop.print op
+  | Nop op -> sprintf "(%a)" Nop.print op
   | Id id -> id
 ;;

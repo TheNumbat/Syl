@@ -53,21 +53,27 @@ end
 module State = struct
   type t =
     { mutable next_id : int
+    ; mutable depth : int
     ; mutable app_depth : int
     ; mutable abs_depth : int
     }
 
   let recursion_limit = 1000
-  let create () = { next_id = 0; app_depth = 0; abs_depth = 0 }
+  let create () = { next_id = 0; depth = 0; app_depth = 0; abs_depth = 0 }
   let concrete t = t.abs_depth = 0
   let monomorphizing t = t.app_depth > 0
 
-  let with_app ~loc t ~f =
-    if t.app_depth > recursion_limit
+  let recur ~loc t ~f =
+    if t.depth > recursion_limit
     then Fail.recursion_limit ~loc recursion_limit
     else (
-      t.app_depth <- t.app_depth + 1;
-      Exn.protect ~f ~finally:(fun () -> t.app_depth <- t.app_depth - 1))
+      t.depth <- t.depth + 1;
+      Exn.protect ~f ~finally:(fun () -> t.depth <- t.depth - 1))
+  ;;
+
+  let with_app t ~f =
+    t.app_depth <- t.app_depth + 1;
+    Exn.protect ~f ~finally:(fun () -> t.app_depth <- t.app_depth - 1)
   ;;
 
   let with_abs t ~f =
@@ -94,12 +100,15 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
   | Type Int -> Some IntT
   | Type Type -> Some TypeT
   | Closure _ | Binder _ -> Some (Closure (State.fresh_id state))
+  | Tuple elts ->
+    let elts = List.map elts ~f:(concrete state) in
+    Option.map (Option.all elts) ~f:(fun elts -> Value.Concrete.Tuple elts)
   | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
   | Type (Pi { arg_ty; arg_mode; ret_ty = T ret_ty; ret_mode }) ->
     let%map arg = concrete state arg_ty
     and ret = concrete state ret_ty in
     Value.Concrete.ArrowT { arg; arg_mode; ret; ret_mode }
-  | _ -> None
+  | Bottom | Bool _ | Int _ | Var _ | If _ | Apply _ | External _ | Type (Pi _) -> None
 ;;
 
 let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
@@ -239,7 +248,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
     (match concrete state arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> State.with_app ~loc:Lex.Location.empty state ~f:reduce
+         | None -> State.with_app state ~f:reduce
          | Some ty -> ty)
      | None -> reduce ())
   | Typecheck { env; arg; arg_ty; arg_mode; memo; body } ->
@@ -251,7 +260,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
     (match concrete state arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> State.with_app ~loc:Lex.Location.empty state ~f:reduce
+         | None -> State.with_app state ~f:reduce
          | Some ty -> ty)
      | None -> reduce ())
 
@@ -266,6 +275,10 @@ and leq_value state (a : Value.t) (b : Value.t) =
   | Closure a, Closure b -> leq_closure a b
   | Binder a, Binder b -> leq_binder a b
   | Var a, Var b -> Ident.equal a b
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.for_all2 a_elts b_elts ~f:(leq_value state) with
+     | Ok leq -> leq
+     | Unequal_lengths -> false)
   | External a, External b -> String.equal a.symbol b.symbol
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
     , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
@@ -274,8 +287,17 @@ and leq_value state (a : Value.t) (b : Value.t) =
   | a, If { then_; else_; _ } -> leq_value state a then_ && leq_value state a else_
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
     leq_value state a_fn b_fn && leq_value state a_arg b_arg
-  | (Unit | Bool _ | Int _ | Type _ | Closure _ | Binder _ | Var _ | Apply _ | External _), _ ->
-    false
+  | ( ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Var _
+      | Apply _
+      | External _
+      | Tuple _ )
+    , _ ) -> false
 
 and geq_value state (a : Value.t) (b : Value.t) =
   match a, b with
@@ -288,6 +310,10 @@ and geq_value state (a : Value.t) (b : Value.t) =
   | Closure a, Closure b -> geq_closure a b
   | Binder a, Binder b -> geq_binder a b
   | Var a, Var b -> Ident.equal a b
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.for_all2 a_elts b_elts ~f:(geq_value state) with
+     | Ok leq -> leq
+     | Unequal_lengths -> false)
   | External a, External b -> String.equal a.symbol b.symbol
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
     , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
@@ -296,8 +322,17 @@ and geq_value state (a : Value.t) (b : Value.t) =
   | a, If { then_; else_; _ } -> geq_value state a then_ && geq_value state a else_
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
     geq_value state a_fn b_fn && geq_value state a_arg b_arg
-  | (Unit | Bool _ | Int _ | Type _ | Closure _ | Binder _ | Var _ | Apply _ | External _), _ ->
-    false
+  | ( ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Var _
+      | Apply _
+      | External _
+      | Tuple _ )
+    , _ ) -> false
 
 and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   match a, b with
@@ -310,6 +345,10 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Closure a, Closure b -> Option.map (join_closure a b) ~f:(fun c : Value.t -> Closure c)
   | Binder a, Binder b -> Option.map (join_binder a b) ~f:(fun p : Value.t -> Binder p)
   | Var a, Var b when Ident.equal a b -> Some (Var a)
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:(join_value state) with
+     | Ok elts -> Option.bind (Option.all elts) ~f:(fun elts -> Some (Value.Tuple elts))
+     | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
     , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
@@ -329,8 +368,17 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
     let%map fn = join_value state a_fn b_fn
     and arg = join_value state a_arg b_arg in
     Value.Apply { fn; arg }
-  | (Unit | Bool _ | Int _ | Type _ | Closure _ | Binder _ | Var _ | Apply _ | External _), _ ->
-    None
+  | ( ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Var _
+      | Apply _
+      | External _
+      | Tuple _ )
+    , _ ) -> None
 
 and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   match a, b with
@@ -342,6 +390,10 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Closure a, Closure b -> Option.map (meet_closure a b) ~f:(fun c : Value.t -> Closure c)
   | Binder a, Binder b -> Option.map (meet_binder a b) ~f:(fun p : Value.t -> Binder p)
   | Var a, Var b when Ident.equal a b -> Some (Var a)
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:(meet_value state) with
+     | Ok elts -> Option.bind (Option.all elts) ~f:(fun elts -> Some (Value.Tuple elts))
+     | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
     , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
@@ -361,8 +413,17 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
     let%map fn = meet_value state a_fn b_fn
     and arg = meet_value state a_arg b_arg in
     Value.Apply { fn; arg }
-  | (Unit | Bool _ | Int _ | Type _ | Closure _ | Binder _ | Var _ | Apply _ | External _), _ ->
-    None
+  | ( ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Var _
+      | Apply _
+      | External _
+      | Tuple _ )
+    , _ ) -> None
 
 and leq_closure _ _ = false
 and geq_closure _ _ = false
@@ -624,7 +685,10 @@ and reduce state env (expr : Cst.Expr.t) : Desc.t =
   let _expr, expr_desc = typecheck state env expr in
   expr_desc
 
-and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
+and typecheck state env expr =
+  State.recur state ~loc:(Cst.Expr.loc expr) ~f:(fun () -> typecheck' state env expr)
+
+and typecheck' state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
   let open Lazy.Let_syntax in
   match expr with
   | Unreachable { loc } ->
@@ -718,6 +782,31 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
     in
     let static = bind_binop ~loc ~op lhs_desc.static rhs_desc.static in
     Binop { op; lhs; rhs; ty; mode; loc }, { ty; mode; static }
+  | Nop { op; elts; loc } ->
+    (* TODO replace with apply *)
+    (match op with
+     | Caret ->
+       let ty = Value.Type Type in
+       let mode = Modes.create ~staticity:Static ~erasure:Erased in
+       let elts =
+         List.map elts ~f:(fun elt ->
+           let elt_desc = reduce state env elt in
+           require_static_type state ~loc elt_desc)
+       in
+       let value = Value.Tuple elts in
+       Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
+     | Comma ->
+       let elts, descs = List.map elts ~f:(fun elt -> typecheck state env elt) |> List.unzip in
+       let mode =
+         List.fold descs ~init:(Modes.bottom ()) ~f:(fun acc desc -> Modes.join acc desc.mode)
+       in
+       let ty = Value.Tuple (List.map descs ~f:(fun desc -> desc.ty)) in
+       let static =
+         List.map descs ~f:(fun desc -> desc.static)
+         |> Lazy.all
+         |> Lazy.map ~f:(fun elts -> Value.Tuple elts)
+       in
+       Tuple { elts; ty; mode; loc }, { ty; mode; static })
   | If { cond; then_; else_; static; loc } ->
     let cond, cond_desc = typecheck state env cond in
     require_exists ~loc cond_desc.mode;
@@ -841,7 +930,7 @@ and typecheck state env (expr : Cst.Expr.t) : Expr.t * Desc.t =
                        { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
                    in
                    let body, body_desc =
-                     State.with_app ~loc state ~f:(fun () -> typecheck state env binder.body)
+                     State.with_app state ~f:(fun () -> typecheck state env binder.body)
                    in
                    let body, body_desc = weaken ~loc body body_desc ~ty:ret_ty ~mode:ret_mode in
                    { arg = binder.arg; arg_mode; arg_desc; body; body_desc }

@@ -9,6 +9,7 @@ module Ty = struct
         { arg_ty : t
         ; ret_ty : t
         }
+    | Tuple of t list
     | Pack of ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
   [@@deriving sexp]
 
@@ -104,6 +105,11 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Tuple of
+        { elts : t list
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
     | If of
         { cond : t
         ; then_ : t
@@ -148,6 +154,7 @@ module Expr = struct
     | Let { ty; _ }
     | Unop { ty; _ }
     | Binop { ty; _ }
+    | Tuple { ty; _ }
     | If { ty; _ }
     | Var { ty; _ }
     | Pack { ty; _ }
@@ -165,6 +172,7 @@ module Expr = struct
     | Let expr -> Let { expr with ty }
     | Unop expr -> Unop { expr with ty }
     | Binop expr -> Binop { expr with ty }
+    | Tuple expr -> Tuple { expr with ty }
     | If expr -> If { expr with ty }
     | Var expr -> Var { expr with ty }
     | Pack expr -> Pack { expr with ty }
@@ -181,6 +189,7 @@ module Expr = struct
     | Let { loc; _ }
     | Unop { loc; _ }
     | Binop { loc; _ }
+    | Tuple { loc; _ }
     | If { loc; _ }
     | Var { loc; _ }
     | Pack { loc; _ }
@@ -196,6 +205,9 @@ module Expr = struct
     | Unop { arg; _ } -> free_keys arg
     | Binop { lhs; rhs; _ } ->
       Map.merge_skewed (free_keys lhs) (free_keys rhs) ~combine:(fun ~key:_ -> Set.union)
+    | Tuple { elts; _ } ->
+      List.map elts ~f:free_keys
+      |> List.fold ~init:Ident.Map.empty ~f:(Map.merge_skewed ~combine:(fun ~key:_ -> Set.union))
     | Apply { fn; arg; _ } ->
       Map.merge_skewed (free_keys fn) (free_keys arg) ~combine:(fun ~key:_ -> Set.union)
     | If { cond; then_; else_; _ } ->

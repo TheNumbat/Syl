@@ -79,6 +79,11 @@ module Expr : sig
         ; rhs : t
         ; loc : Lex.Location.t
         }
+    | Nop of
+        { op : Ident.Nop.t
+        ; elts : t list
+        ; loc : Lex.Location.t
+        }
     | Arrow of
         { arg : t
         ; arg_id : Ident.t Option.t

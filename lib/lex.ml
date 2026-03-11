@@ -44,6 +44,8 @@ module Op = struct
     | Gt
     | Gte
     | Arrow
+    | Caret
+    | Comma
   [@@deriving sexp, equal]
 end
 
@@ -222,6 +224,8 @@ module Token = struct
     | Op Lte -> "<="
     | Op Gt -> ">"
     | Op Gte -> ">="
+    | Op Caret -> "^"
+    | Op Comma -> ","
     | Unit -> "()"
     | Bool true -> "true"
     | Bool false -> "false"
@@ -463,6 +467,7 @@ module Tokenizer = struct
     | Some '=' ->
       advance t;
       op_eq t
+    | Some ',' -> single t (Op Comma)
     | Some ':' -> single t Colon
     | Some ';' ->
       advance t;
@@ -476,6 +481,7 @@ module Tokenizer = struct
     | Some '/' -> single t (Op Slash)
     | Some '\\' -> single t (Op Backslash)
     | Some '%' -> single t (Op Percent)
+    | Some '^' -> single t (Op Caret)
     | Some '~' ->
       advance t;
       op_tilde t

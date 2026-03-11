@@ -140,6 +140,7 @@ and Value : sig
       | Bool of bool
       | Int of int64
       | Closure of int
+      | Tuple of t list
       | UnitT
       | BoolT
       | IntT
@@ -165,6 +166,7 @@ and Value : sig
     | Closure of Closure.t
     | Binder of Binder.t
     | Var of Ident.t
+    | Tuple of t list
     | If of
         { cond : t
         ; then_ : t
@@ -281,6 +283,12 @@ and Expr : sig
         { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Tuple of
+        { elts : t list
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t

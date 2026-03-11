@@ -83,6 +83,11 @@ module Expr = struct
         ; rhs : t
         ; loc : Lex.Location.t
         }
+    | Nop of
+        { op : Ident.Nop.t
+        ; elts : t list
+        ; loc : Lex.Location.t
+        }
     | Arrow of
         { arg : t
         ; arg_id : Ident.t Option.t
@@ -117,6 +122,7 @@ module Expr = struct
     | Var { id; _ } -> Ident.Set.singleton id
     | Mode_annotation { expr; _ } -> free_vars expr
     | Type_annotation { expr; ty; _ } -> Set.union (free_vars expr) (free_vars ty)
+    | Nop { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
     | Unreachable _ | Literal _ -> Ident.Set.empty
     | Unop { arg; _ } -> free_vars arg
     | Binop { lhs; rhs; _ } -> Set.union (free_vars lhs) (free_vars rhs)
@@ -161,7 +167,8 @@ module Expr = struct
     | Assert { loc; _ }
     | Unreachable { loc; _ }
     | Type_annotation { loc; _ }
-    | Mode_annotation { loc; _ } -> loc
+    | Mode_annotation { loc; _ }
+    | Nop { loc; _ } -> loc
   ;;
 
   let maybe_erased () : Erasure.t -> _ = function
@@ -244,6 +251,10 @@ module Expr = struct
         ret
     | Mode_annotation { expr; mode; _ } -> sprintf "%a @ %a" print expr Modes.Maybe.print mode
     | Type_annotation { expr; ty; _ } -> sprintf "%a : %a" print expr print ty
+    | Nop { op; elts; _ } ->
+      let elts = List.map elts ~f:(print ()) in
+      let sep = Ident.Nop.sep op in
+      String.concat ~sep elts
   ;;
 end
 

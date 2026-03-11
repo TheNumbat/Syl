@@ -20,6 +20,8 @@ module Op : sig
     | Gt
     | Gte
     | Arrow
+    | Caret
+    | Comma
   [@@deriving sexp, equal]
 end
 

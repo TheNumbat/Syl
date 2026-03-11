@@ -20,7 +20,10 @@ let rec simplify_ty ~loc (ty : Tst.Value.t) : Ty.t =
   | Type Type -> Unit
   | Type (Arrow { arg_ty; ret_ty; _ }) ->
     Arrow { arg_ty = simplify_ty ~loc arg_ty; ret_ty = simplify_ty ~loc ret_ty }
-  | _ -> raise_s [%message "Cannot simplify type" (ty : Tst.Value.t) (loc : Lex.Location.t)]
+  | Tuple elts -> Tuple (List.map elts ~f:(simplify_ty ~loc))
+  | Bottom | Unit | Bool _ | Int _ | Closure _ | Binder _ | Var _ | If _ | Apply _ | External _
+  | Type (Pi _) ->
+    raise_s [%message "Cannot simplify type" (ty : Tst.Value.t) (loc : Lex.Location.t)]
 ;;
 
 let simplify_arrow ~loc (ty : Tst.Value.t) : Ty.t * Ty.t =
@@ -87,6 +90,9 @@ let rec simplify_value ~loc env (value : Tst.Value.t) : Expr.t =
     let pack, fvs, ty = simplify_mono ~loc env b.mono in
     Pack { pack; fvs; ty; loc }
   | External { symbol; ty; _ } -> External { symbol; ty = simplify_ty ~loc ty; loc }
+  | Tuple elts ->
+    let elts = List.map elts ~f:(simplify_value ~loc env) in
+    Tuple { elts; ty = Tuple (List.map elts ~f:Expr.ty); loc }
   | Bottom | Type _ | Var _ | If _ | Apply _ ->
     raise_s [%message "Cannot simplify literal" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
@@ -192,8 +198,12 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
      | Gt, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
        Scalar { value = Bool (Int64.( > ) l r); ty = Bool; loc }
      | Gte, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Bool (Int64.( <= ) l r); ty = Bool; loc }
+       Scalar { value = Bool (Int64.( >= ) l r); ty = Bool; loc }
      | _ -> Binop { op; lhs; rhs; ty = simplify_ty ~loc ty; loc })
+  | Tuple { elts; ty; mode; loc } ->
+    assert (not (Modes.is_erased mode));
+    let elts = List.map elts ~f:(simplify env) in
+    Tuple { elts; ty = simplify_ty ~loc ty; loc }
   | If { cond; then_; else_; mode; loc; _ } ->
     assert (not (Modes.is_erased mode));
     let cond = simplify env cond in

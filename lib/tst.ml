@@ -74,6 +74,7 @@ and value =
   | Closure of closure
   | Binder of binder
   | Var of Ident.t
+  | Tuple of value list
   | If of
       { cond : value
       ; then_ : value
@@ -94,6 +95,7 @@ and concrete =
   | Bool of bool
   | Int of int64
   | Closure of int
+  | Tuple of concrete list
   | UnitT
   | BoolT
   | IntT
@@ -220,6 +222,12 @@ and expr =
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
+  | Tuple of
+      { elts : expr list
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
+      }
   | If of
       { cond : expr
       ; then_ : expr
@@ -253,6 +261,7 @@ let rec is_concrete_value : value -> _ = function
   | Bool b -> is_concrete_bool b
   | Int i -> is_concrete_int i
   | Type ty -> is_concrete_ty ty
+  | Tuple elts -> List.for_all elts ~f:is_concrete_value
   | Bottom | Var _ | If _ | Apply _ -> false
 
 and is_concrete_bool : vbool -> _ = function
@@ -615,6 +624,7 @@ module Value = struct
         | Bool of bool
         | Int of int64
         | Closure of int
+        | Tuple of t list
         | UnitT
         | BoolT
         | IntT
@@ -642,6 +652,7 @@ module Value = struct
     | Closure of closure
     | Binder of binder
     | Var of Ident.t
+    | Tuple of t list
     | If of
         { cond : t
         ; then_ : t
@@ -826,6 +837,12 @@ module Expr = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
+    | Tuple of
+        { elts : t list
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
     | If of
         { cond : t
         ; then_ : t
@@ -881,6 +898,7 @@ module Expr = struct
     | Symbol { fn; _ } -> free_vars fn
     | Unop { arg; _ } -> free_vars arg
     | Binop { lhs; rhs; _ } -> Set.union (free_vars lhs) (free_vars rhs)
+    | Tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
     | Apply { fn; arg; _ } -> Set.union (free_vars fn) (free_vars arg)
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
@@ -909,6 +927,7 @@ module Expr = struct
     | Apply { ty; _ }
     | Unop { ty; _ }
     | Binop { ty; _ }
+    | Tuple { ty; _ }
     | If { ty; _ }
     | Var { ty; _ }
     | Lambda { ty; _ }
@@ -924,6 +943,7 @@ module Expr = struct
     | Apply { mode; _ }
     | Unop { mode; _ }
     | Binop { mode; _ }
+    | Tuple { mode; _ }
     | If { mode; _ }
     | Var { mode; _ }
     | Lambda { mode; _ }
@@ -939,6 +959,7 @@ module Expr = struct
     | Apply { loc; _ }
     | Unop { loc; _ }
     | Binop { loc; _ }
+    | Tuple { loc; _ }
     | If { loc; _ }
     | Var { loc; _ }
     | Lambda { loc; _ }
@@ -957,6 +978,7 @@ module Expr = struct
     | Apply t -> Apply { t with ty; mode }
     | Unop t -> Unop { t with ty; mode }
     | Binop t -> Binop { t with ty; mode }
+    | Tuple t -> Tuple { t with ty; mode }
     | If t -> If { t with ty; mode }
     | Var t -> Var { t with ty; mode }
     | Lambda t -> Lambda { t with ty; mode }
@@ -973,6 +995,7 @@ module Expr = struct
     | Apply t -> Apply { t with ty }
     | Unop t -> Unop { t with ty }
     | Binop t -> Binop { t with ty }
+    | Tuple t -> Tuple { t with ty }
     | If t -> If { t with ty }
     | Var t -> Var { t with ty }
     | Lambda t -> Lambda { t with ty }
@@ -989,6 +1012,7 @@ module Expr = struct
     | Apply t -> Apply { t with mode }
     | Unop t -> Unop { t with mode }
     | Binop t -> Binop { t with mode }
+    | Tuple t -> Tuple { t with mode }
     | If t -> If { t with mode }
     | Var t -> Var { t with mode }
     | Lambda t -> Lambda { t with mode }

@@ -79,12 +79,12 @@ let%expect_test _ =
     |}]
 ;;
 
-let%expect_test "Unknown token" =
+let%expect_test "caret" =
   go "hello ^";
   [%expect
     {|
     (token (Ident hello))
-    (token (Unknown ^))
+    (token (Op Caret))
     (token Eof)
     |}]
 ;;

@@ -60,6 +60,8 @@ let expect_ident t =
          | Lte -> Ident.(binop Binop.Lte)
          | Gt -> Ident.(binop Binop.Gt)
          | Gte -> Ident.(binop Binop.Gte)
+         | Comma -> Ident.(nop Nop.Comma)
+         | Caret -> Ident.(nop Nop.Caret)
          | op -> Fail.unexpected ~loc (Op op)
        in
        expect t ~kind:Rparen;
@@ -135,7 +137,7 @@ and expr_ty_annot t : Expr.t =
 
 and expr_arrow t : Expr.t =
   let arg_mode = maybe_modes ~required:false t in
-  let arg = expr_lor t in
+  let arg = expr_comma t in
   let arg_id =
     match Tokenizer.peek t.tokens with
     | Op Backslash ->
@@ -156,6 +158,36 @@ and expr_arrow t : Expr.t =
     Arrow { arg; arg_id; arg_mode; ret; ret_mode; loc }
   | _ ->
     if Modes.Modes.Maybe.(equal arg_mode none) then arg else Fail.unexpected_modes ~loc arg_mode
+
+and expr_comma t : Expr.t =
+  let loc = Tokenizer.loc t.tokens in
+  let first = expr_caret t in
+  match Tokenizer.peek t.tokens with
+  | Op Comma ->
+    let rec aux acc =
+      match Tokenizer.peek t.tokens with
+      | Op Comma ->
+        Tokenizer.skip t.tokens;
+        aux (expr_caret t :: acc)
+      | _ -> List.rev acc
+    in
+    Expr.Nop { op = Comma; elts = aux [ first ]; loc }
+  | _ -> first
+
+and expr_caret t : Expr.t =
+  let loc = Tokenizer.loc t.tokens in
+  let first = expr_lor t in
+  match Tokenizer.peek t.tokens with
+  | Op Caret ->
+    let rec aux acc =
+      match Tokenizer.peek t.tokens with
+      | Op Caret ->
+        Tokenizer.skip t.tokens;
+        aux (expr_lor t :: acc)
+      | _ -> List.rev acc
+    in
+    Expr.Nop { op = Caret; elts = aux [ first ]; loc }
+  | _ -> first
 
 and expr_lor t : Expr.t =
   let first = expr_land t in

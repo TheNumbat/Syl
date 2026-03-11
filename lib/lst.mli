@@ -30,11 +30,14 @@ module Ty : sig
         ; ret_ty : t
         }
     | Thunk of t
+    | Tuple of t list
     | Pack of (Tst.Value.Concrete.t, t) Hashtbl.t
   [@@deriving sexp]
 
-  val size_in_bytes : t -> int
+  val size_in_mem : t -> int
+  val align_in_mem : t -> int
   val is_zero_size : t -> bool
+  val align_to : int -> align:int -> int
 end
 
 module Env : sig
@@ -67,6 +70,11 @@ module Expr : sig
     | Make_closure of
         { body : Path.t
         ; env : Path.t option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Make_tuple of
+        { elts : (Path.t * Ty.t) array
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

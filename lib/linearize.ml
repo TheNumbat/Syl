@@ -4,6 +4,8 @@ module Key = Tst.Value.Concrete
 
 module Id = struct
   let if_ = Ident.id "if"
+  let then_ = Ident.id "then"
+  let else_ = Ident.id "else"
   let temp = Ident.id "$"
   let lambda = Ident.id "λ"
   let env = Ident.id "env"
@@ -76,6 +78,7 @@ let rec linearize_ty (ty : Sst.Ty.t) : Ty.t =
   | Arrow { arg_ty; ret_ty } ->
     Closure { arg_ty = linearize_ty arg_ty; ret_ty = linearize_ty ret_ty }
   | Pack pack -> Pack (Hashtbl.map pack ~f:linearize_ty)
+  | Tuple elts -> Tuple (List.map elts ~f:linearize_ty)
 ;;
 
 let linearize_arrow ~loc (ty : Sst.Ty.t) : Ty.t * Ty.t =
@@ -112,6 +115,7 @@ let expand_pack path (expr : Expr.t) =
     | Scalar { ty; _ }
     | Unop { ty; _ }
     | Binop { ty; _ }
+    | Make_tuple { ty; _ }
     | Ident { ty; _ } ->
       (match ty with
        | Pack _ -> raise_s [%message "Unexpected pack" (expr : Expr.t)]
@@ -147,8 +151,15 @@ let unarize_env env (fvs : Sst.Ty.t Ident.Map.t) =
           Ty.Thunk (f ty)))
     | _ ->
       let ty = f ty in
+      let size =
+        match Ty.size_in_mem ty with
+        | 0 -> 0
+        | size ->
+          offset := Ty.align_to !offset ~align:(Ty.align_in_mem ty);
+          size
+      in
       let idx = !offset in
-      offset := idx + Ty.size_in_bytes ty;
+      offset := !offset + size;
       Hashtbl.set
         path_to_bind
         ~key:inner_path
@@ -210,11 +221,23 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
     let lhs = linearize_path state env lhs in
     let rhs = linearize_path state env rhs in
     Binop { op; lhs; rhs; ty = linearize_ty ty; loc }
+  | Tuple { elts; ty; loc } ->
+    Make_tuple
+      { elts =
+          Array.of_list_map elts ~f:(fun elt ->
+            linearize_path state env elt, linearize_ty (Sst.Expr.ty elt))
+      ; ty = linearize_ty ty
+      ; loc
+      }
   | If { cond; then_; else_; ty; loc } ->
     let path = State.global state Id.if_ in
     let cond = linearize_expr state env cond in
-    let then_, then_bind = State.scope state path ~f:(fun () -> linearize_expr state env then_) in
-    let else_, else_bind = State.scope state path ~f:(fun () -> linearize_expr state env else_) in
+    let then_, then_bind =
+      State.scope state (Path.with_id path Id.then_) ~f:(fun () -> linearize_expr state env then_)
+    in
+    let else_, else_bind =
+      State.scope state (Path.with_id path Id.else_) ~f:(fun () -> linearize_expr state env else_)
+    in
     let stmt = Stmt.If { path; cond; then_bind; then_; else_bind; else_; loc } in
     State.stmt state stmt;
     Ident { path; ty = linearize_ty ty; loc }

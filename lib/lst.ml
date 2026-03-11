@@ -34,20 +34,47 @@ module Ty = struct
         ; ret_ty : t
         }
     | Thunk of t
+    | Tuple of t list
     | Pack of ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
   [@@deriving sexp]
 
-  let size_in_bytes = function
+  let align_to x ~align =
+    assert (Int.is_pow2 align);
+    (x + align - 1) land lnot (align - 1)
+  ;;
+
+  let rec size_in_mem = function
     | Unit -> 0
     | Bool -> 1
     | Int -> 8
     | Env -> 8
     | Closure _ -> 16
     | Thunk _ -> 16
+    | Tuple elts ->
+      List.fold elts ~init:0 ~f:(fun acc elt ->
+        match size_in_mem elt with
+        | 0 -> acc
+        | size ->
+          let acc = align_to acc ~align:(align_in_mem elt) in
+          acc + size)
     | Pack _ -> raise_s [%message "Unexpected pack"]
+
+  and align_in_mem = function
+    | Bool -> 1
+    | Int -> 8
+    | Env -> 8
+    | Closure _ -> 8
+    | Thunk _ -> 8
+    | Tuple elts ->
+      List.fold elts ~init:1 ~f:(fun acc elt ->
+        match size_in_mem elt with
+        | 0 -> acc
+        | _ -> Int.max acc (align_in_mem elt))
+    | Pack _ -> raise_s [%message "Unexpected pack"]
+    | Unit -> raise_s [%message "Unit has undefined alignment"]
   ;;
 
-  let is_zero_size t = size_in_bytes t = 0
+  let is_zero_size t = size_in_mem t = 0
 end
 
 module Env = struct
@@ -80,6 +107,11 @@ module Expr = struct
     | Make_closure of
         { body : Path.t
         ; env : Path.t option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Make_tuple of
+        { elts : (Path.t * Ty.t) array
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -128,6 +160,7 @@ module Expr = struct
     | Scalar { ty; _ }
     | Unop { ty; _ }
     | Binop { ty; _ }
+    | Make_tuple { ty; _ }
     | Ident { ty; _ }
     | Builtin { ty; _ } -> ty
   ;;
@@ -141,6 +174,7 @@ module Expr = struct
     | Scalar expr -> Scalar { expr with ty }
     | Unop expr -> Unop { expr with ty }
     | Binop expr -> Binop { expr with ty }
+    | Make_tuple expr -> Make_tuple { expr with ty }
     | Ident expr -> Ident { expr with ty }
     | Builtin expr -> Builtin { expr with ty }
   ;;

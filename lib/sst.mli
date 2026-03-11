@@ -9,6 +9,7 @@ module Ty : sig
         { arg_ty : t
         ; ret_ty : t
         }
+    | Tuple of t list
     | Pack of (Tst.Value.Concrete.t, t) Hashtbl.t
   [@@deriving sexp]
 
@@ -89,6 +90,11 @@ module Expr : sig
         { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Tuple of
+        { elts : t list
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

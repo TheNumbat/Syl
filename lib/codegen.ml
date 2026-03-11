@@ -34,16 +34,39 @@ struct syl_closure<syl_unit,Ret> {
 template<typename Ret>
 using syl_thunk = syl_closure<syl_unit, Ret>;
 
+template<typename...> struct syl_tuple;
+
+template<>
+struct syl_tuple<> {};
+
+template<typename T>
+struct syl_tuple<T> {
+  T first;
+};
+
+template<typename T, typename... Ts>
+struct syl_tuple<T, Ts...> {
+  T first;
+  syl_tuple<Ts...> rest;
+};
+
+template<typename... Ts>
+struct syl_tuple<syl_unit, Ts...> {
+  syl_tuple<Ts...> rest;
+};
+
 static syl_env syl_env_rec(size_t size) {
   return (syl_env)malloc(size);
 }
 
 template<typename... Env>
 static syl_env syl_capture(Env... captures) {
-  size_t size = (sizeof(captures) + ...);
+  syl_env env = (syl_env)malloc(sizeof(syl_tuple<decltype(captures)...>));
   size_t offset = 0;
-  syl_env env = (syl_env)malloc(size);
-  ((*(decltype(captures)*)(env + offset) = captures, offset += sizeof(captures)), ...);
+  ((offset = (offset + alignof(decltype(captures)) - 1) & ~(alignof(decltype(captures)) - 1),
+    *(decltype(captures)*)(env + offset) = captures,
+    offset += sizeof(captures)),
+   ...);
   return env;
 }
 
@@ -105,6 +128,9 @@ let rec print_key (key : Tst.Value.Concrete.t) =
   | BoolT -> "𝔹"
   | IntT -> "𝕀"
   | TypeT -> "𝕋"
+  | Tuple elts ->
+    let elts = List.map elts ~f:print_key in
+    String.concat elts ~sep:"ₓ"
   | ArrowT { arg; arg_mode; ret; ret_mode } ->
     let arg = print_key arg in
     let ret = print_key ret in
@@ -130,10 +156,13 @@ let rec print_ty (ty : Ty.t) =
   | Bool -> "syl_bool"
   | Int -> "syl_int"
   | Env -> "syl_env"
-  | Closure { arg_ty; ret_ty } -> sprintf "syl_closure<%s,%s>" (print_ty arg_ty) (print_ty ret_ty)
-  | Thunk ty -> sprintf "syl_thunk<%s>" (print_ty ty)
+  | Closure { arg_ty; ret_ty } ->
+    sprintf "syl_closure<%s,%s>" (print_ty arg_ty) (print_ty_or_void ret_ty)
+  | Thunk ty -> sprintf "syl_thunk<%s>" (print_ty_or_void ty)
+  | Tuple elts -> sprintf "syl_tuple<%s>" (String.concat ~sep:", " (List.map elts ~f:print_ty))
   | Pack _ -> raise_s [%message "Unexpected type" (ty : Ty.t)]
-;;
+
+and print_ty_or_void (ty : Ty.t) = if Ty.is_zero_size ty then "void" else print_ty ty
 
 let print_unop (op : Ident.Unop.t) =
   match op with
@@ -167,15 +196,11 @@ let print_expr_nonzero (expr : Expr.t) =
   | Scalar { value = Int i; _ } -> Int64.to_string i ^ "ll"
   | Make_env { captures = { size_in_bytes; _ }; _ } when size_in_bytes = 0 -> "NULL"
   | Make_env { captures = { entries; _ }; _ } ->
-    let paths, tys =
+    let paths =
       Array.filter_map entries ~f:(fun { path; ty; _ } ->
-        if Ty.is_zero_size ty then None else Some (print_path path, print_ty ty))
-      |> Array.unzip
+        if Ty.is_zero_size ty then None else Some (print_path path))
     in
-    Printf.sprintf
-      "syl_capture<%s>(%s)"
-      (String.concat_array ~sep:", " tys)
-      (String.concat_array ~sep:", " paths)
+    Printf.sprintf "syl_capture(%s)" (String.concat_array ~sep:", " paths)
   | Make_closure { body; env; ty; _ } ->
     let env = Option.value_map env ~default:"NULL" ~f:print_path in
     Printf.sprintf "%s{%s, %s}" (print_ty ty) (print_path body) env
@@ -187,13 +212,19 @@ let print_expr_nonzero (expr : Expr.t) =
   | Unop { op; arg; _ } -> Printf.sprintf "%s%s" (print_unop op) (print_path arg)
   | Binop { op; lhs; rhs; _ } ->
     Printf.sprintf "%s %s %s" (print_path lhs) (print_binop op) (print_path rhs)
+  | Make_tuple { elts; ty; _ } ->
+    let paths =
+      Array.filter_map elts ~f:(fun (path, ty) ->
+        if Ty.is_zero_size ty then None else Some (print_path path))
+    in
+    Printf.sprintf "%s{%s}" (print_ty ty) (String.concat_array ~sep:", " paths)
   | Ident { path; _ } -> print_path path
 ;;
 
 let print_expr_zero (expr : Expr.t) =
   match expr with
   | Builtin _ -> assert false (* TODO *)
-  | Scalar { value = Unit; _ } | Ident _ -> ""
+  | Scalar { value = Unit; _ } | Ident _ | Make_tuple _ -> ""
   | Apply_closure { fn; arg; arg_ty; _ } ->
     if Ty.is_zero_size arg_ty
     then Printf.sprintf "%s()" (print_path fn)
@@ -220,7 +251,12 @@ let rec emit_decl state (decl : Decl.t) =
       State.line state "static %s %s;" (print_ty ty) (print_path path))
   | Closure_body { path; arg_ty; return; _ } ->
     if Ty.is_zero_size arg_ty
-    then State.line state "static %s %s(syl_env);" (print_ty (Expr.ty return)) (print_path path)
+    then
+      State.line
+        state
+        "static %s %s(syl_env);"
+        (print_ty_or_void (Expr.ty return))
+        (print_path path)
     else
       State.line
         state
@@ -229,10 +265,10 @@ let rec emit_decl state (decl : Decl.t) =
         (print_path path)
         (print_ty arg_ty)
   | Thunk_body { path; return; _ } ->
-    State.line state "static %s %s(syl_env);" (print_ty (Expr.ty return)) (print_path path)
+    State.line state "static %s %s(syl_env);" (print_ty_or_void (Expr.ty return)) (print_path path)
   | External { path; symbol; arg_ty; ret_ty; _ } ->
     let arg = print_ty arg_ty in
-    let ret = print_ty ret_ty in
+    let ret = print_ty_or_void ret_ty in
     State.line state "extern %s %s(%s);" ret symbol arg;
     if Ty.is_zero_size arg_ty
     then State.line state "static %s %s(syl_env 𝒰)" ret (print_path path)
@@ -320,12 +356,17 @@ let emit_procs_and_thunks state (lst : Program.t) =
   Array.iter lst ~f:(function
     | Closure_body { path; arg; arg_ty; captures; bind; return; _ } ->
       if Ty.is_zero_size arg_ty
-      then State.line state "static %s %s(syl_env 𝒰)" (print_ty (Expr.ty return)) (print_path path)
+      then
+        State.line
+          state
+          "static %s %s(syl_env 𝒰)"
+          (print_ty_or_void (Expr.ty return))
+          (print_path path)
       else
         State.line
           state
           "static %s %s(%s %s, syl_env 𝒰)"
-          (print_ty (Expr.ty return))
+          (print_ty_or_void (Expr.ty return))
           (print_path path)
           (print_ty arg_ty)
           (print_path arg);
@@ -334,7 +375,11 @@ let emit_procs_and_thunks state (lst : Program.t) =
         emit_stmts state bind;
         emit_return state return)
     | Thunk_body { path; captures; bind; return; _ } ->
-      State.line state "static %s %s(syl_env 𝒰)" (print_ty (Expr.ty return)) (print_path path);
+      State.line
+        state
+        "static %s %s(syl_env 𝒰)"
+        (print_ty_or_void (Expr.ty return))
+        (print_path path);
       State.scope state ~f:(fun () ->
         emit_env_sub state captures;
         emit_stmts state bind;
