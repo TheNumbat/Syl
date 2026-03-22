@@ -4,7 +4,6 @@ module Path : sig
   module Entry : sig
     type t =
       | Id of Ident.t
-      | Shadow of int
       | Key of Tst.Value.Concrete.t
     [@@deriving sexp, compare, equal, hash]
   end
@@ -12,9 +11,9 @@ module Path : sig
   type t = Entry.t list [@@deriving sexp, compare, equal, hash]
 
   val empty : t
+  val id : Ident.t -> t
   val with_id : t -> Ident.t -> t
   val with_key : t -> Tst.Value.Concrete.t -> t
-  val with_shadow : t -> int -> t
 
   include Comparable.S with type t := t
 end

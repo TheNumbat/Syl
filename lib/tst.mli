@@ -21,7 +21,7 @@ module rec Ty : sig
         }
   [@@deriving sexp]
 
-  val of_literal : Cst.Literal.t -> t
+  val of_literal : Dst.Literal.t -> t
 end
 
 and Dependent : sig
@@ -35,7 +35,7 @@ and Dependent : sig
         ; arg_ty : Value.t
         ; arg_mode : Modes.t
         ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
-        ; ret_ty : Cst.Expr.t
+        ; ret_ty : Dst.Expr.t
         }
     | Typecheck of
         { env : Env.t
@@ -43,7 +43,7 @@ and Dependent : sig
         ; arg_ty : Value.t
         ; arg_mode : Modes.t
         ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
-        ; body : Cst.Expr.t
+        ; body : Dst.Expr.t
         }
   [@@deriving sexp]
 
@@ -57,7 +57,7 @@ and Dependent : sig
     -> arg:Ident.t
     -> arg_ty:Value.t
     -> arg_mode:Modes.t
-    -> ret_ty:Cst.Expr.t
+    -> ret_ty:Dst.Expr.t
     -> t
 
   val typecheck
@@ -66,7 +66,7 @@ and Dependent : sig
     -> arg:Ident.t
     -> arg_ty:Value.t
     -> arg_mode:Modes.t
-    -> body:Cst.Expr.t
+    -> body:Dst.Expr.t
     -> t
 end
 
@@ -106,6 +106,7 @@ and Closure : sig
     { arg : Ident.t
     ; ty : Value.t
     ; body : Expr.t
+    ; body_cst : Dst.Expr.t
     ; env : Env.t
     }
   [@@deriving sexp]
@@ -126,7 +127,7 @@ and Binder : sig
   type t =
     { arg : Ident.t
     ; ty : Value.t
-    ; body : Cst.Expr.t
+    ; body : Dst.Expr.t
     ; mono : (Value.Concrete.t, Mono.t) Hashtbl.t
     ; env : Env.t
     }
@@ -183,7 +184,7 @@ and Value : sig
   [@@deriving sexp]
 
   val reduce : t -> t
-  val of_literal : Cst.Literal.t -> t
+  val of_literal : Dst.Literal.t -> t
   val is_true : t -> bool
 end
 
@@ -220,7 +221,7 @@ and Expr : sig
     | Binder of
         { var : Ident.t
         ; arg : Ident.t
-        ; body : Cst.Expr.t
+        ; body : Dst.Expr.t
         ; mono : (Value.Concrete.t, Binder.Mono.t) Hashtbl.t
         ; ty : Value.t
         ; mode : Modes.t
@@ -251,7 +252,7 @@ and Expr : sig
         }
     | Binder of
         { arg : Ident.t
-        ; body : Cst.Expr.t
+        ; body : Dst.Expr.t
         ; mono : (Value.Concrete.t, Binder.Mono.t) Hashtbl.t
         ; ty : Value.t
         ; mode : Modes.t

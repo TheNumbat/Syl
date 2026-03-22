@@ -3,7 +3,8 @@ open! Syl
 
 let go ?(print = false) input =
   let cst = Parse.parse_exn input in
-  match Typecheck.typecheck cst with
+  let dst = Desugar.desugar cst in
+  match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
@@ -113,7 +114,7 @@ let%expect_test "recursive inlining" =
 fun f (x : int) : erased int = f x;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self ((Id f))))) |}]
+  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self (((Id f) <opaque>))))) |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -173,7 +174,11 @@ fun erased f (x : int) : int = g x
 and erased g (y : int) : int = f y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self ((Id f) (Id g))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 4)))
+     (reason (Inline_self (((Id f) <opaque>) ((Id g) <opaque>)))))
+    |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -203,7 +208,11 @@ fun f (x : int) : int = (g @ erased) x
 and g (y : int) : int = (f @ erased) y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self ((Id f) (Id g))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 4)))
+     (reason (Inline_self (((Id f) <opaque>) ((Id g) <opaque>)))))
+    |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -213,7 +222,11 @@ fun f (x : int) : int = (g @ erased) x
 and g (y : int) : int = (f @ erased) y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self ((Id f) (Id g))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 4)))
+     (reason (Inline_self (((Id f) <opaque>) ((Id g) <opaque>)))))
+    |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -223,7 +236,11 @@ fun f (x : int) : erased int = g x @ erased
 and g (y : int) : erased int = (f @ erased) y;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 4))) (reason (Inline_self ((Id f) (Id g))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 4)))
+     (reason (Inline_self (((Id f) <opaque>) ((Id g) <opaque>)))))
+    |}]
 ;;
 
 let%expect_test "recursive inlining" =

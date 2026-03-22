@@ -3,7 +3,8 @@ open! Syl
 
 let go ?print input =
   let cst = Parse.parse_exn input in
-  match Typecheck.typecheck cst with
+  let dst = Desugar.desugar cst in
+  match Typecheck.typecheck dst with
   | Ok tst -> if Option.is_some print then print_s [%message (tst : Tst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
@@ -183,8 +184,8 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : int;;
      (reason
       (Type_mismatch
        (got
-        (If (cond (Bool (Eq (Var (Id $0)) (Int (T 0))))) (then_ (Type Int))
-         (else_ (Type Bool))))
+        (If (cond (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (then_ (Type Int)) (else_ (Type Bool))))
        (need (Type Int)))))
     |}]
 ;;
@@ -277,7 +278,7 @@ let%expect_test "fun with erased (non-static) type arg fails for dependent ret t
     {|
 fun id (erased t : type) : t -> t = fn (x : t) -> x;;
 |};
-  [%expect {| ((loc ((line 2) (column 27))) (reason (Unbound_ident (Id t)))) |}]
+  [%expect {| ((loc ((line 2) (column 27))) (reason (Unbound_ident ((Id t) <opaque>)))) |}]
 ;;
 
 let%expect_test "dynamic app" =
@@ -286,12 +287,22 @@ let%expect_test "dynamic app" =
 fun f (x : int) : static int = 0;;
 let _ = 0 : if f 0 == 0 then int else bool;;
 |};
+  [%expect {| |}]
+;;
+
+let%expect_test "dynamic app" =
+  go
+    {|
+fun f (x : int) : static int = 0;;
+let a = 0 @ dynamic;;
+let _ = 0 : if f a == 0 then int else bool;;
+|};
   [%expect
     {|
-    ((loc ((line 2) (column 4)))
+    ((loc ((line 4) (column 10)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
 
@@ -425,13 +436,13 @@ let _ = if true then f else g;;
          (Pi (arg_ty (Type Int))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
-           (Typecheck (env <opaque>) (arg (Id x)) (arg_ty (Type Int))
+           (Typecheck (env <opaque>) (arg ((Id x) <opaque>)) (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
             (body
              (If
               (cond
                (Binop (op Eq)
-                (lhs (Var (id (Id x)) (loc ((line 2) (column 41)))))
+                (lhs (Var (id ((Id x) <opaque>)) (loc ((line 2) (column 41)))))
                 (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
                 (loc ((line 2) (column 43)))))
               (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
@@ -443,13 +454,13 @@ let _ = if true then f else g;;
          (Pi (arg_ty (Type Int))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
-           (Typecheck (env <opaque>) (arg (Id x)) (arg_ty (Type Int))
+           (Typecheck (env <opaque>) (arg ((Id x) <opaque>)) (arg_ty (Type Int))
             (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
             (body
              (If
               (cond
                (Binop (op Eq)
-                (lhs (Var (id (Id x)) (loc ((line 3) (column 41)))))
+                (lhs (Var (id ((Id x) <opaque>)) (loc ((line 3) (column 41)))))
                 (rhs (Literal (value (Int 0)) (loc ((line 3) (column 46)))))
                 (loc ((line 3) (column 43)))))
               (then_ (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
@@ -906,7 +917,7 @@ let _ = fn (static x : int) -> assert static (x / 0 == 1);;
   [%expect
     {|
     ((loc ((line 2) (column 48)))
-     (reason (Divide_by_zero (Div (Var (Id $0)) (Int (T 0))))))
+     (reason (Divide_by_zero (Div (Var (Anon <opaque>)) (Int (T 0))))))
     |}]
 ;;
 
@@ -918,7 +929,7 @@ let _ = fn (static x : int) -> assert static (x % 0 == 1);;
   [%expect
     {|
     ((loc ((line 2) (column 48)))
-     (reason (Divide_by_zero (Mod (Var (Id $0)) (Int (T 0))))))
+     (reason (Divide_by_zero (Mod (Var (Anon <opaque>)) (Int (T 0))))))
     |}]
 ;;
 

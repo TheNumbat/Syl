@@ -3,7 +3,8 @@ open! Syl
 
 let go ?(print = false) input =
   let cst = Parse.parse_exn input in
-  let tst = Typecheck.typecheck_exn cst in
+  let dst = Desugar.desugar cst in
+  let tst = Typecheck.typecheck_exn dst in
   let sst = Simplify.simplify tst in
   let lst = Linearize.linearize sst in
   if print then print_s [%message (lst : Lst.Program.t)]

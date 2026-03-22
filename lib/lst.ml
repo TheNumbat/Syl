@@ -4,7 +4,6 @@ module Path = struct
   module Entry = struct
     type t =
       | Id of Ident.t
-      | Shadow of int
       | Key of Tst.Value.Concrete.t
     [@@deriving sexp, compare, hash, equal]
   end
@@ -18,9 +17,9 @@ module Path = struct
   include Comparable.Make (T)
 
   let empty = []
+  let id id = [ Id id ]
   let with_id t id = Id id :: t
   let with_key t key = Key key :: t
-  let with_shadow t n = Shadow n :: t
 end
 
 module Ty = struct

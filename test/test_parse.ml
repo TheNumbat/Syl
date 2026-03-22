@@ -111,7 +111,7 @@ let%expect_test _ =
 
 let%expect_test _ =
   go "let _ = let x = false in x;;";
-  [%expect {| let _ = let x = false; x;; |}]
+  [%expect {| let _ = let x = false in x;; |}]
 ;;
 
 let%expect_test _ =
@@ -146,22 +146,23 @@ let%expect_test _ =
 
 let%expect_test _ =
   go "let _ = (let x = fn (y : bool) -> fn (z : bool) -> y in x true) false;;";
-  [%expect {| let _ = (let x = fn (y : bool) -> fn (z : bool) -> y; x true) false;; |}]
+  [%expect {| let _ = (let x = fn (y : bool) -> fn (z : bool) -> y in x true) false;; |}]
 ;;
 
 let%expect_test _ =
   go "let _ = let a = (let x = fn (y : bool) -> fn (z : bool) -> y in x true) in a false;;";
-  [%expect {| let _ = let a = (let x = fn (y : bool) -> fn (z : bool) -> y; x true); a false;; |}]
+  [%expect
+    {| let _ = let a = (let x = fn (y : bool) -> fn (z : bool) -> y in x true) in a false;; |}]
 ;;
 
 let%expect_test _ =
   go "let _ = let x = fn (y : bool) -> y in x true;;";
-  [%expect {| let _ = let x = fn (y : bool) -> y; x true;; |}]
+  [%expect {| let _ = let x = fn (y : bool) -> y in x true;; |}]
 ;;
 
 let%expect_test _ =
   go "let _ = let x = fn (y : lol) -> y in x true;;";
-  [%expect {| let _ = let x = fn (y : lol) -> y; x true;; |}]
+  [%expect {| let _ = let x = fn (y : lol) -> y in x true;; |}]
 ;;
 
 let%expect_test _ =
@@ -176,7 +177,7 @@ let a =
     let second = fn (y : bool) -> y in
     second (second (true))
 ;;|};
-  [%expect {| let a = let second = fn (y : bool) -> y; second (second (true));; |}]
+  [%expect {| let a = let second = fn (y : bool) -> y in second (second (true));; |}]
 ;;
 
 let%expect_test _ =
@@ -186,7 +187,7 @@ let a = (
     let second = fn (y : bool) -> y in
     second (second (true))
 );;|};
-  [%expect {| let a = (let second = fn (y : bool) -> y; second (second (true)));; |}]
+  [%expect {| let a = (let second = fn (y : bool) -> y in second (second (true)));; |}]
 ;;
 
 let%expect_test _ =
@@ -268,7 +269,7 @@ let%expect_test _ =
   ;;
 |};
   [%expect
-    {| let _ = let capture = 10; fun aux ( x : int) : int = (if x > 0 then aux (x - 1) else capture); print_int (aux 5);; |}]
+    {| let _ = let capture = 10 in fun aux ( x : int) : int = (if x > 0 then aux (x - 1) else capture); print_int (aux 5);; |}]
 ;;
 
 let%expect_test "mutual" =
@@ -547,4 +548,14 @@ let%expect_test "comma and caret parenthesized" =
 let%expect_test "caret in comma" =
   go "let t = a ^ b, c ^ d;;";
   [%expect {| let t = a ^ b, c ^ d;; |}]
+;;
+
+let%expect_test "let in tuple" =
+  go "let _ = (let first = x in 1, let second = x in 2);;";
+  [%expect {| let _ = (let first = x in 1, let second = x in 2);; |}]
+;;
+
+let%expect_test "let in tuple" =
+  go "let _ = (let first = x in 1), (let second = x in 2);;";
+  [%expect {| let _ = (let first = x in 1), (let second = x in 2);; |}]
 ;;

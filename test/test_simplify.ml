@@ -3,7 +3,8 @@ open! Syl
 
 let go ?(print = false) input =
   let cst = Parse.parse_exn input in
-  let tst = Typecheck.typecheck_exn cst in
+  let dst = Desugar.desugar cst in
+  let tst = Typecheck.typecheck_exn dst in
   let sst = Simplify.simplify tst in
   if print then print_s [%message (sst : Sst.Program.t)]
 ;;
@@ -2441,6 +2442,26 @@ let%expect_test "recursive inlining" =
     {|
 fun f (x : int) : int = g x
 and g (y : int) : int = (f @ erased) y;;
+let _ = f 0;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "recursive inlining" =
+  go
+    {|
+fun f (x : int) : int = g x
+and g (y : int) : int = let g = 0 in (f @ erased) y;;
+let _ = f 0;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "recursive inlining" =
+  go
+    {|
+fun f (x : int) : int = (g @ erased) x
+and g (y : int) : int = f y;;
 let _ = f 0;;
 |};
   [%expect {| |}]

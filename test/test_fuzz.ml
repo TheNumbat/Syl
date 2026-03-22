@@ -51,7 +51,8 @@ let strip_prelude c =
 
 let go ?print ?(check = check_all) input =
   let cst = Parse.parse_exn input in
-  let tst = Typecheck.typecheck_exn cst in
+  let dst = Desugar.desugar cst in
+  let tst = Typecheck.typecheck_exn dst in
   let sst = Simplify.simplify tst in
   let lst = Linearize.linearize sst in
   let c = Codegen.c lst in

@@ -3,7 +3,8 @@ open! Syl
 
 let go ?(print = false) input =
   let cst = Parse.parse_exn input in
-  match Typecheck.typecheck cst with
+  let dst = Desugar.desugar cst in
+  match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
@@ -384,13 +385,13 @@ let _ = id : static type \ t -> erased t -> t;;
          (Pi (arg_ty (Type Type))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
-           (Typecheck (env <opaque>) (arg (Id t)) (arg_ty (Type Type))
+           (Typecheck (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
             (body
-             (Lambda (arg (Id x)) (erased Unerased)
+             (Lambda (arg ((Id x) <opaque>)) (erased Unerased)
               (arg_mode ((staticity ()) (erasure ())))
-              (arg_ty (Var (id (Id t)) (loc ((line 2) (column 41)))))
-              (body (Var (id (Id x)) (loc ((line 2) (column 47)))))
+              (arg_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 41)))))
+              (body (Var (id ((Id x) <opaque>)) (loc ((line 2) (column 47)))))
               (loc ((line 2) (column 33)))))))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
@@ -398,12 +399,14 @@ let _ = id : static type \ t -> erased t -> t;;
          (Pi (arg_ty (Type Type))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
-           (Reduce (env <opaque>) (arg (Id t)) (arg_ty (Type Type))
+           (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
             (ret_ty
-             (Arrow (arg (Var (id (Id t)) (loc ((line 3) (column 39)))))
-              (arg_id ()) (arg_mode ((staticity ()) (erasure (Erased))))
-              (ret (Var (id (Id t)) (loc ((line 3) (column 44)))))
+             (Arrow
+              (arg (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 39)))))
+              (arg_id (Anon <opaque>))
+              (arg_mode ((staticity ()) (erasure (Erased))))
+              (ret (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 44)))))
               (ret_mode ((staticity ()) (erasure ())))
               (loc ((line 3) (column 41)))))))
           (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))

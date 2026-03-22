@@ -142,7 +142,6 @@ let rec print_key (key : Tst.Value.Concrete.t) =
 let print_path (path : Path.t) =
   List.concat_map path ~f:(function
     | Id id -> [ Ident.print () id; "·" ]
-    | Shadow n -> [ Int.to_string n; "ˢ" ]
     | Key k -> [ print_key k; "ₒ" ])
   |> List.rev
   |> List.tl_exn

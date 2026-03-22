@@ -1,11 +1,13 @@
 open! Core
 module Cst = Cst
+module Dst = Dst
 module Tst = Tst
 module Sst = Sst
 module Lst = Lst
 module Loc = Loc
 module Lex = Lex
 module Parse = Parse
+module Desugar = Desugar
 module Typecheck = Typecheck
 module Simplify = Simplify
 module Linearize = Linearize
@@ -49,10 +51,16 @@ end
 
 let to_cst input = Parse.parse input |> Result.parsed
 
-let to_tst input =
+let to_dst input =
   let open Result.Let_syntax in
   let%bind cst = to_cst input in
-  Typecheck.typecheck cst |> Result.typechecked
+  Desugar.desugar cst |> Result.return
+;;
+
+let to_tst input =
+  let open Result.Let_syntax in
+  let%bind dst = to_dst input in
+  Typecheck.typecheck dst |> Result.typechecked
 ;;
 
 let to_sst input =

@@ -3,7 +3,8 @@ open! Syl
 
 let go ?(print = false) input =
   let cst = Parse.parse_exn input in
-  match Typecheck.typecheck cst with
+  let dst = Desugar.desugar cst in
+  match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
@@ -153,8 +154,8 @@ let y = x @ unerased;;
     {|
     ((loc ((line 5) (column 10)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Static) (erasure Unerased))))))
     |}]
 ;;
 
@@ -958,7 +959,7 @@ let x = (fn (static x : type) -> 0 : x);;
   [%expect
     {|
     ((loc ((line 2) (column 35)))
-     (reason (Type_mismatch (got (Type Int)) (need (Var (Id $0))))))
+     (reason (Type_mismatch (got (Type Int)) (need (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -971,7 +972,7 @@ let _ = x int;;
   [%expect
     {|
     ((loc ((line 2) (column 42)))
-     (reason (Type_mismatch (got (Type Int)) (need (Var (Id $0))))))
+     (reason (Type_mismatch (got (Type Int)) (need (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -983,7 +984,7 @@ let x = (fn (static erased x : type) -> 0 : x);;
   [%expect
     {|
     ((loc ((line 2) (column 42)))
-     (reason (Type_mismatch (got (Type Int)) (need (Var (Id $0))))))
+     (reason (Type_mismatch (got (Type Int)) (need (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -1001,13 +1002,7 @@ let%expect_test "closure return dynamic type" =
 let t = (fn (x : int) -> int) 0;;
 let _ = 0 : t;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 10)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure return static type" =
@@ -1266,13 +1261,7 @@ let%expect_test "Lambda capturing type" =
 let f = fn (_ : unit) -> int;;
 let g = fn (x : f ()) -> x + 1;;
 let _ = g 0;;|};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Lambda capturing type" =
@@ -1522,7 +1511,7 @@ let f = fn (static erased t : type) -> fn (x : t) -> -x;;
   [%expect
     {|
     ((loc ((line 2) (column 53)))
-     (reason (Type_mismatch (got (Var (Id $0))) (need (Type Int)))))
+     (reason (Type_mismatch (got (Var (Anon <opaque>))) (need (Type Int)))))
     |}]
 ;;
 
@@ -1542,7 +1531,8 @@ let f = fn (static erased t1 : type) -> fn (static erased t2 : type) -> fn (x : 
   [%expect
     {|
     ((loc ((line 2) (column 102)))
-     (reason (Cannot_unify (lhs (Var (Id $0))) (rhs (Var (Id $1))))))
+     (reason
+      (Cannot_unify (lhs (Var (Anon <opaque>))) (rhs (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -1691,13 +1681,7 @@ let%expect_test "return erased" =
 let f = fn (x : int) -> int;;
 let _ = 0 : f 1;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 10)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "return erased" =
@@ -1763,13 +1747,7 @@ let f = fn (x : int) -> 0;;
 let s = fn (static x : int) -> ();;
 let _ = s (f 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 4) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi typechecking" =
@@ -1799,7 +1777,7 @@ let _ = f (fn (static erased t : type) -> () : t);;
   [%expect
     {|
     ((loc ((line 3) (column 45)))
-     (reason (Type_mismatch (got (Type Unit)) (need (Var (Id $2))))))
+     (reason (Type_mismatch (got (Type Unit)) (need (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -1812,7 +1790,7 @@ let _ = f (fn (static erased t : type) -> () : t);;
   [%expect
     {|
     ((loc ((line 3) (column 45)))
-     (reason (Type_mismatch (got (Type Unit)) (need (Var (Id $2))))))
+     (reason (Type_mismatch (got (Type Unit)) (need (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -1825,7 +1803,7 @@ let _ = f (fn (static erased t : type) -> () : t);;
   [%expect
     {|
     ((loc ((line 3) (column 45)))
-     (reason (Type_mismatch (got (Type Unit)) (need (Var (Id $2))))))
+     (reason (Type_mismatch (got (Type Unit)) (need (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -1929,8 +1907,8 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : int;;
      (reason
       (Type_mismatch
        (got
-        (If (cond (Bool (Eq (Var (Id $0)) (Int (T 0))))) (then_ (Type Int))
-         (else_ (Type Bool))))
+        (If (cond (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (then_ (Type Int)) (else_ (Type Bool))))
        (need (Type Int)))))
     |}]
 ;;
@@ -2011,8 +1989,8 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static 
      (reason
       (Type_mismatch
        (got
-        (If (cond (Bool (Eq (Var (Id $0)) (Int (T 0))))) (then_ (Type Int))
-         (else_ (Type Type))))
+        (If (cond (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (then_ (Type Int)) (else_ (Type Type))))
        (need (Type Type)))))
     |}]
 ;;
@@ -2235,7 +2213,7 @@ let%expect_test "dependent fun " =
     {|
 fun id (erased t : type) : t -> t = fn (x : t) -> x;;
 |};
-  [%expect {| ((loc ((line 2) (column 27))) (reason (Unbound_ident (Id t)))) |}]
+  [%expect {| ((loc ((line 2) (column 27))) (reason (Unbound_ident ((Id t) <opaque>)))) |}]
 ;;
 
 let%expect_test "dependent fun " =
@@ -2331,7 +2309,7 @@ let f = fn (static erased t : type) -> fn (static x : t) -> !x;;
   [%expect
     {|
     ((loc ((line 2) (column 60)))
-     (reason (Type_mismatch (got (Var (Id $0))) (need (Type Bool)))))
+     (reason (Type_mismatch (got (Var (Anon <opaque>))) (need (Type Bool)))))
     |}]
 ;;
 
@@ -2498,7 +2476,7 @@ let%expect_test "fun" =
     {|
 fun f (x : type) : x = ();;
 |};
-  [%expect {| ((loc ((line 2) (column 19))) (reason (Unbound_ident (Id x)))) |}]
+  [%expect {| ((loc ((line 2) (column 19))) (reason (Unbound_ident ((Id x) <opaque>)))) |}]
 ;;
 
 let%expect_test "fun" =
@@ -2509,7 +2487,7 @@ fun f (static x : type) : x = ();;
   [%expect
     {|
     ((loc ((line 2) (column 4)))
-     (reason (Type_mismatch (got (Type Unit)) (need (Var (Id $1))))))
+     (reason (Type_mismatch (got (Type Unit)) (need (Var (Anon <opaque>))))))
     |}]
 ;;
 
@@ -2572,7 +2550,11 @@ let%expect_test "external" =
 external f : static int -> int = asdf;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 0))) (reason (Static_external (Id f) asdf))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 0)))
+     (reason (Static_external ((Id f) <opaque>) asdf)))
+    |}]
 ;;
 
 let%expect_test "external" =
@@ -2581,7 +2563,11 @@ let%expect_test "external" =
 external f : int -> static int = asdf;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 0))) (reason (Static_external (Id f) asdf))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 0)))
+     (reason (Static_external ((Id f) <opaque>) asdf)))
+    |}]
 ;;
 
 let%expect_test "nested if static with different types per level" =
@@ -2664,7 +2650,7 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if x then assert static x else ();;
   |};
-  [%expect {| ((loc ((line 2) (column 42))) (reason (Static_assert (Var (Id $0))))) |}]
+  [%expect {| ((loc ((line 2) (column 42))) (reason (Static_assert (Var (Anon <opaque>))))) |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2672,7 +2658,7 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if x then () else assert static x;;
   |};
-  [%expect {| ((loc ((line 2) (column 50))) (reason (Static_assert (Var (Id $0))))) |}]
+  [%expect {| ((loc ((line 2) (column 50))) (reason (Static_assert (Var (Anon <opaque>))))) |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2680,7 +2666,7 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> assert static x;;
   |};
-  [%expect {| ((loc ((line 2) (column 32))) (reason (Static_assert (Var (Id $0))))) |}]
+  [%expect {| ((loc ((line 2) (column 32))) (reason (Static_assert (Var (Anon <opaque>))))) |}]
 ;;
 
 let%expect_test "assert static" =

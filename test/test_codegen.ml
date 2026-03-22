@@ -47,13 +47,14 @@ let strip_prelude c =
      | None -> c)
 ;;
 
-let go ?print ?(check = check_all) input =
+let go ?(print = false) ?(check = check_all) input =
   let cst = Parse.parse_exn input in
-  let tst = Typecheck.typecheck_exn cst in
+  let dst = Desugar.desugar cst in
+  let tst = Typecheck.typecheck_exn dst in
   let sst = Simplify.simplify tst in
   let lst = Linearize.linearize sst in
   let c = Codegen.c lst in
-  if Option.is_some print then print_string (strip_prelude c);
+  if print then print_string (strip_prelude c);
   match check with
   | `Compile -> compile c
   | `Run -> compile_and_run c
@@ -2332,8 +2333,7 @@ let _ = print 0;;
 let _ = print 0;;
 let _ = print 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -2347,8 +2347,7 @@ let _ = print 0 in
 let _ = print 1 in
 ();;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "static lambda effects" =
@@ -2362,8 +2361,7 @@ let _ = print 0 1;;
 let _ = print 1 2;;
 let _ = print 1 3;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dependent type: apply polymorphic id to itself" =
@@ -2961,8 +2959,7 @@ let print = fn (static x : int) -> print_int x;;
 let _ = print 0;;
 let _ = print 1;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "static erased lambda" =
@@ -3011,8 +3008,7 @@ fun mk_ident (static pick_t : static unit -> static int) : static (let t = if pi
 
 let _ = mk_ident (fn (static _ : unit) -> let _ = print_int 10 in 1) true;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "external" =

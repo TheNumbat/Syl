@@ -27,5 +27,5 @@ module Error : sig
   [@@deriving sexp]
 end
 
-val typecheck : Cst.Program.t -> (Tst.Program.t, Error.t Loc.t) Result.t
-val typecheck_exn : Cst.Program.t -> Tst.Program.t
+val typecheck : Dst.Program.t -> (Tst.Program.t, Error.t Loc.t) Result.t
+val typecheck_exn : Dst.Program.t -> Tst.Program.t

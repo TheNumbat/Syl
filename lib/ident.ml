@@ -63,35 +63,59 @@ module Nop = struct
   ;;
 end
 
+module Raw = struct
+  module T = struct
+    type t =
+      | Anon
+      | Unop of Unop.t
+      | Binop of Binop.t
+      | Nop of Nop.t
+      | Id of string
+    [@@deriving sexp, compare, equal, hash]
+  end
+
+  include T
+  include Hashable.Make (T)
+  include Comparable.Make (T)
+
+  let anon = Anon
+
+  let id id =
+    match id with
+    | "_" -> Anon
+    | _ -> Id id
+  ;;
+
+  let unop op = Unop op
+  let binop op = Binop op
+  let nop op = Nop op
+
+  let print () = function
+    | Anon -> "_"
+    | Unop op -> sprintf "(%a)" Unop.print op
+    | Binop op -> sprintf "(%a)" Binop.print op
+    | Nop op -> sprintf "(%a)" Nop.print op
+    | Id id -> id
+  ;;
+end
+
 module T = struct
-  type t =
-    | Anon
-    | Unop of Unop.t
-    | Binop of Binop.t
-    | Nop of Nop.t
-    | Id of string
-  [@@deriving sexp, compare, equal, hash]
+  type t = Raw.t * (int[@sexp.opaque]) [@@deriving sexp, compare, equal, hash]
 end
 
 include T
 include Hashable.Make (T)
 include Comparable.Make (T)
 
-let anon = Anon
-let id id = Id id
-let unop op = Unop op
-let binop op = Binop op
-let nop op = Nop op
+let create raw ~stamp = raw, stamp
 
-let is_anon = function
-  | Anon -> true
+let is_anon : t -> bool = function
+  | Anon, _ -> true
   | _ -> false
 ;;
 
-let print () = function
-  | Anon -> "_"
-  | Unop op -> sprintf "(%a)" Unop.print op
-  | Binop op -> sprintf "(%a)" Binop.print op
-  | Nop op -> sprintf "(%a)" Nop.print op
-  | Id id -> id
+let print () (raw, stamp) =
+  match stamp with
+  | 0 -> Raw.print () raw
+  | _ -> Raw.print () raw ^ "ˢ" ^ Int.to_string stamp
 ;;

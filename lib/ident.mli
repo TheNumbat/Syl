@@ -39,13 +39,23 @@ module Nop : sig
   val sep : t -> string
 end
 
+module Raw : sig
+  type t [@@deriving sexp, compare, equal, hash]
+
+  val anon : t
+  val id : string -> t
+  val unop : Unop.t -> t
+  val binop : Binop.t -> t
+  val nop : Nop.t -> t
+  val print : unit -> t -> string
+
+  include Hashable.S with type t := t
+  include Comparable.S with type t := t
+end
+
 type t [@@deriving sexp, compare, equal, hash]
 
-val anon : t
-val id : string -> t
-val unop : Unop.t -> t
-val binop : Binop.t -> t
-val nop : Nop.t -> t
+val create : Raw.t -> stamp:int -> t
 val is_anon : t -> bool
 val print : unit -> t -> string
 

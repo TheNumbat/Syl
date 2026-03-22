@@ -1,20 +1,11 @@
 open! Core
 open Modes
-
-module Literal : sig
-  type t =
-    | Unit
-    | Bool of bool
-    | Int of int64
-  [@@deriving sexp]
-
-  val print : unit -> t -> string
-end
+module Literal = Cst.Literal
 
 module Expr : sig
   type fun_ =
-    { var : Ident.Raw.t
-    ; arg : Ident.Raw.t
+    { var : Ident.t
+    ; arg : Ident.t
     ; erased : Erasure.t
     ; arg_mode : Modes.Maybe.t
     ; arg_ty : t
@@ -33,7 +24,7 @@ module Expr : sig
         ; loc : Lex.Location.t
         }
     | Let of
-        { var : Ident.Raw.t
+        { var : Ident.t
         ; bind : t
         ; rest : t
         ; loc : Lex.Location.t
@@ -44,7 +35,7 @@ module Expr : sig
         ; loc : Lex.Location.t
         }
     | Lambda of
-        { arg : Ident.Raw.t
+        { arg : Ident.t
         ; erased : Erasure.t
         ; arg_mode : Modes.Maybe.t
         ; arg_ty : t
@@ -56,12 +47,8 @@ module Expr : sig
         ; arg : t
         ; loc : Lex.Location.t
         }
-    | Paren of
-        { expr : t
-        ; loc : Lex.Location.t
-        }
     | Var of
-        { id : Ident.Raw.t
+        { id : Ident.t
         ; loc : Lex.Location.t
         }
     | Literal of
@@ -86,7 +73,7 @@ module Expr : sig
         }
     | Arrow of
         { arg : t
-        ; arg_id : Ident.Raw.t Option.t
+        ; arg_id : Ident.t
         ; arg_mode : Modes.Maybe.t
         ; ret : t
         ; ret_mode : Modes.Maybe.t
@@ -110,14 +97,14 @@ module Expr : sig
         }
   [@@deriving sexp]
 
+  val free_vars : t -> Ident.Set.t
   val loc : t -> Lex.Location.t
-  val print : unit -> t -> string
 end
 
 module Top_level : sig
   type t =
     | Let of
-        { var : Ident.Raw.t
+        { var : Ident.t
         ; bind : Expr.t
         ; loc : Lex.Location.t
         }
@@ -126,25 +113,21 @@ module Top_level : sig
         ; loc : Lex.Location.t
         }
     | External of
-        { var : Ident.Raw.t
+        { var : Ident.t
         ; ty : Expr.t
         ; symbol : string
         ; loc : Lex.Location.t
         }
     | Builtin of
-        { var : Ident.Raw.t
+        { var : Ident.t
         ; name : string
         ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 
   val loc : t -> Lex.Location.t
-  val print : unit -> t -> string
 end
 
 module Program : sig
   type t = Top_level.t list [@@deriving sexp]
-
-  (* Round trips. *)
-  val print : unit -> t -> string
 end

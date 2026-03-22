@@ -1,5 +1,3 @@
-external print_int : int -> unit = sylstd_print_int;;
-external print_bool : bool -> unit = sylstd_print_bool;;
 
 let t = (), true, 1;;
 let t2 = true, false, ();;
@@ -23,3 +21,6 @@ let _ = f ();;
 
 let f = fn (static _ : unit) -> ((), ());;
 let _ = f ();;
+
+let x = 0 @ dynamic;;
+let _ = (let first = x in 1), (let second = x in 2);;

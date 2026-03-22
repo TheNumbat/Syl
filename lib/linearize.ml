@@ -2,19 +2,10 @@ open! Core
 open Lst
 module Key = Tst.Value.Concrete
 
-module Id = struct
-  let if_ = Ident.id "if"
-  let then_ = Ident.id "then"
-  let else_ = Ident.id "else"
-  let temp = Ident.id "$"
-  let lambda = Ident.id "λ"
-  let env = Ident.id "env"
-end
-
 module State = struct
   type scope =
-    { vars : ((Ident.t, int) Hashtbl.t[@sexp.opaque])
-    ; stmts : Stmt.t Vec.t
+    { stmts : Stmt.t Vec.t
+    ; mutable stamp : int
     }
   [@@deriving sexp]
 
@@ -28,7 +19,7 @@ module State = struct
   let create () =
     { path = Path.empty
     ; decls = Vec.create ()
-    ; scopes = Vec.of_array [| { vars = Hashtbl.create (module Ident); stmts = Vec.create () } |]
+    ; scopes = Vec.of_array [| { stmts = Vec.create (); stamp = 0 } |]
     }
   ;;
 
@@ -36,30 +27,40 @@ module State = struct
   let decl t decl = Vec.push_back t.decls decl
   let bind_one t path expr loc = stmt t (Values { exprs = [| path, expr |]; bind = [||]; loc })
 
-  let unique { scopes; _ } path id =
+  let global t ?key id =
+    let path = t.path in
     let path = Path.with_id path id in
-    let top = Vec.peek_back_exn scopes in
-    let n =
-      Hashtbl.update_and_return top.vars id ~f:(function
-        | Some n -> n + 1
-        | None -> 0)
-    in
-    if n = 0 then path else Path.with_shadow path n
+    let path = Option.value_map key ~default:path ~f:(fun key -> Path.with_key path key) in
+    path
   ;;
 
-  let global t id = unique t t.path id
-  let local t id = unique t Path.empty id
-
-  let scope t path ~f =
-    let cur_path = t.path in
-    t.path <- path;
-    Vec.push_back t.scopes { vars = Hashtbl.create (module Ident); stmts = Vec.create () };
+  let scope t ?key id ~f =
+    let path = t.path in
+    t.path <- global t ?key id;
+    let top = Vec.peek_back_exn t.scopes in
+    Vec.push_back t.scopes { stmts = Vec.create (); stamp = top.stamp };
     let res = f () in
-    t.path <- cur_path;
+    t.path <- path;
     res, Vec.to_array (Vec.pop_back_exn t.scopes).stmts
   ;;
 
   let is_top_level t = Vec.length t.scopes = 1
+
+  module Id = struct
+    let fresh t sym =
+      let top = Vec.peek_back_exn t.scopes in
+      let stamp = top.stamp in
+      top.stamp <- stamp + 1;
+      Ident.create (Ident.Raw.id sym) ~stamp
+    ;;
+
+    let if_ t = fresh t "if"
+    let then_ t = fresh t "then"
+    let else_ t = fresh t "else"
+    let temp t = fresh t "$"
+    let lambda t = fresh t "λ"
+    let env t = fresh t "𝒰"
+  end
 end
 
 module Env = struct
@@ -107,7 +108,7 @@ let expand_pack path (expr : Expr.t) =
       Hashtbl.iteri pack ~f:(fun ~key ~data ->
         let path = Path.with_key path key in
         aux (Path.with_key dst key) (Expr.Ident { path; ty = data; loc }) ~f:(thunk ~f))
-    | Builtin { ty; _ } (* TODO poly builtins? *)
+    | Builtin { ty; _ }
     | Make_env { ty; _ }
     | Make_closure { ty; _ }
     | Apply_closure { ty; _ }
@@ -179,7 +180,7 @@ let unarize_env env (fvs : Sst.Ty.t Ident.Map.t) =
   { Lst.Env.entries; size_in_bytes = !offset }, path_to_bind
 ;;
 
-let bind_env state env (fvs : Sst.Ty.t Ident.Map.t) path_to_bind =
+let bind_env env (fvs : Sst.Ty.t Ident.Map.t) path_to_bind =
   let rec unarize path (ty : Ty.t) =
     match ty with
     | Pack pack ->
@@ -190,7 +191,7 @@ let bind_env state env (fvs : Sst.Ty.t Ident.Map.t) path_to_bind =
   let env, binds =
     Map.fold fvs ~init:(env, []) ~f:(fun ~key:id ~data:ty (env, binds) ->
       let ty = linearize_ty ty in
-      let env = Env.bind env id (State.local state id) in
+      let env = Env.bind env id (Path.id id) in
       let bind =
         (* We know all free ids are unique *)
         unarize (Path.with_id Path.empty id) ty
@@ -202,7 +203,7 @@ let bind_env state env (fvs : Sst.Ty.t Ident.Map.t) path_to_bind =
 ;;
 
 let linearize_external state symbol ty loc : Expr.t =
-  let path = Path.with_id (State.global state (Ident.id symbol)) Id.lambda in
+  let path = State.global state (State.Id.fresh state symbol) in
   let arg_ty, ret_ty = linearize_arrow ~loc ty in
   let decl = Decl.External { path; arg_ty; ret_ty; symbol; loc } in
   State.decl state decl;
@@ -230,32 +231,35 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
       ; loc
       }
   | If { cond; then_; else_; ty; loc } ->
-    let path = State.global state Id.if_ in
+    let if_ = State.Id.if_ state in
+    let path = Path.id if_ in
     let cond = linearize_expr state env cond in
     let then_, then_bind =
-      State.scope state (Path.with_id path Id.then_) ~f:(fun () -> linearize_expr state env then_)
+      State.scope state (State.Id.then_ state) ~f:(fun () -> linearize_expr state env then_)
     in
     let else_, else_bind =
-      State.scope state (Path.with_id path Id.else_) ~f:(fun () -> linearize_expr state env else_)
+      State.scope state (State.Id.else_ state) ~f:(fun () -> linearize_expr state env else_)
     in
     let stmt = Stmt.If { path; cond; then_bind; then_; else_bind; else_; loc } in
     State.stmt state stmt;
     Ident { path; ty = linearize_ty ty; loc }
   | Let { var; bind; rest; loc; _ } ->
-    let path = State.global state var in
-    let expr, bind = State.scope state path ~f:(fun () -> linearize_expr state env bind) in
+    let path = Path.id var in
+    let expr, bind = State.scope state var ~f:(fun () -> linearize_expr state env bind) in
     unarize_values state path bind expr loc;
     linearize_expr state (Env.bind env var path) rest
   | Lambda { arg; fvs; ty; body; loc } ->
     let arg_ty, ret_ty = linearize_arrow ~loc ty in
-    let env_path = State.global state Id.env in
+    let env_id = State.Id.env state in
+    let env_path = Path.id env_id in
     let outer_captures, path_to_bind = unarize_env env fvs in
     State.bind_one state env_path (Make_env { captures = outer_captures; ty = Env; loc }) loc;
-    let body_path = State.global state Id.lambda in
+    let body_id = State.Id.lambda state in
+    let body_path = State.global state body_id in
     let (return, arg_path, inner_captures), bind =
-      State.scope state body_path ~f:(fun () ->
-        let arg_path = State.local state arg in
-        let env, inner_captures = bind_env state env fvs path_to_bind in
+      State.scope state body_id ~f:(fun () ->
+        let arg_path = Path.id arg in
+        let env, inner_captures = bind_env env fvs path_to_bind in
         let env = Env.bind env arg arg_path in
         linearize_expr state env body, arg_path, inner_captures)
     in
@@ -277,27 +281,27 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
     let env = Nonempty_list.fold bind ~init:env ~f:(fun env (var, path) -> Env.bind env var path) in
     linearize_expr state env rest
   | Pack { pack; fvs; ty; loc } ->
-    let env_path = State.global state Id.env in
+    let env_id = State.Id.env state in
+    let env_path = Path.id env_id in
     let outer_captures, path_to_bind = unarize_env env fvs in
     State.bind_one state env_path (Make_env { captures = outer_captures; ty = Env; loc }) loc;
-    let body_path = State.global state Id.lambda in
-    linearize_pack ~loc state env body_path pack path_to_bind;
+    let body_id = State.Id.lambda state in
+    let body_path = State.global state body_id in
+    linearize_pack ~loc state env body_id pack path_to_bind;
     Make_closure { body = body_path; env = Some env_path; ty = linearize_ty ty; loc }
 
-and linearize_pack ~loc state env path pack path_to_bind =
+and linearize_pack ~loc state env id pack path_to_bind =
   Hashtbl.iteri pack ~f:(fun ~key ~data:(expr, fvs) ->
-    let path = Path.with_key path key in
     let (return, inner_captures), bind =
-      State.scope state path ~f:(fun () ->
-        let env, inner_captures = bind_env state env fvs path_to_bind in
+      State.scope state ~key id ~f:(fun () ->
+        let env, inner_captures = bind_env env fvs path_to_bind in
         linearize_expr state env expr, inner_captures)
     in
-    unarize_thunks state path inner_captures bind return loc)
+    unarize_thunks state (State.global state ~key id) inner_captures bind return loc)
 
 and linearize_funs ~loc state env fvs (funs : Sst.Expr.fun_ Nonempty_list.t) =
   let binds =
-    Nonempty_list.map funs ~f:(function Mono { var; _ } | Pack { var; _ } ->
-        var, State.global state var)
+    Nonempty_list.map funs ~f:(function Mono { var; _ } | Pack { var; _ } -> var, Path.id var)
   in
   let env = Nonempty_list.fold binds ~init:env ~f:(fun env (var, path) -> Env.bind env var path) in
   let outer_captures, path_to_bind = unarize_env env fvs in
@@ -307,14 +311,15 @@ and linearize_funs ~loc state env fvs (funs : Sst.Expr.fun_ Nonempty_list.t) =
       (Nonempty_list.to_list funs)
       (Nonempty_list.to_list binds)
       ~f:(fun fun_ (_, path) ->
-        let body_path = Path.with_id path Id.lambda in
+        let body_id = State.Id.lambda state in
+        let body_path = State.global state body_id in
         match fun_ with
         | Mono { arg; body; fvs; ty; loc; _ } ->
           let arg_ty, ret_ty = linearize_arrow ~loc ty in
           let (return, arg_path, inner_captures), bind =
-            State.scope state body_path ~f:(fun () ->
-              let arg_path = State.local state arg in
-              let env, inner_captures = bind_env state env fvs path_to_bind in
+            State.scope state body_id ~f:(fun () ->
+              let arg_path = Path.id arg in
+              let env, inner_captures = bind_env env fvs path_to_bind in
               let env = Env.bind env arg arg_path in
               linearize_expr state env body, arg_path, inner_captures)
           in
@@ -331,7 +336,7 @@ and linearize_funs ~loc state env fvs (funs : Sst.Expr.fun_ Nonempty_list.t) =
                });
           Vec.push_back paths (path, Ty.Closure { arg_ty; ret_ty }, body_path)
         | Pack { pack; ty; loc; _ } ->
-          linearize_pack ~loc state env body_path pack path_to_bind;
+          linearize_pack ~loc state env body_id pack path_to_bind;
           let rec unarize_thunks path body_path (ty : Ty.t) ~f =
             match ty with
             | Pack pack ->
@@ -352,33 +357,34 @@ and linearize_funs ~loc state env fvs (funs : Sst.Expr.fun_ Nonempty_list.t) =
   binds
 
 and linearize_path state env (sst : Sst.Expr.t) : Path.t =
-  let expr = linearize_expr state env sst in
+  let id = State.Id.temp state in
+  let expr, bind = State.scope state id ~f:(fun () -> linearize_expr state env sst) in
   match expr with
-  | Ident { path; _ } -> path
-  | expr ->
-    let path = State.local state Id.temp in
+  | Ident { path; _ } when Array.length bind = 0 -> path
+  | _ ->
     let loc = Sst.Expr.loc sst in
-    unarize_values state path [||] expr loc;
+    let path = Path.id id in
+    unarize_values state path bind expr loc;
     path
 ;;
 
 let linearize_top_level state env (sst : Sst.Top_level.t) : Env.t =
   match sst with
   | Let { var; bind; loc } ->
-    let path = State.global state var in
-    let expr, bind = State.scope state path ~f:(fun () -> linearize_expr state env bind) in
+    let path = Path.id var in
+    let expr, bind = State.scope state var ~f:(fun () -> linearize_expr state env bind) in
     unarize_values state path bind expr loc;
     Env.bind env var path
   | Fun { funs; fvs; loc; _ } ->
     let bind = linearize_funs ~loc state env fvs funs in
     Nonempty_list.fold bind ~init:env ~f:(fun env (var, path) -> Env.bind env var path)
   | External { var; symbol; ty; loc } ->
-    let path = State.global state var in
+    let path = Path.id var in
     let expr = linearize_external state symbol ty loc in
     unarize_values state path [||] expr loc;
     Env.bind env var path
   | Builtin { var; builtin; ty; loc } ->
-    let path = State.global state var in
+    let path = Path.id var in
     let expr = Expr.Builtin { builtin; ty = linearize_ty ty; loc } in
     unarize_values state path [||] expr loc;
     Env.bind env var path

@@ -3,7 +3,8 @@ open! Syl
 
 let go ?(print = false) input =
   let cst = Parse.parse_exn input in
-  match Typecheck.typecheck cst with
+  let dst = Desugar.desugar cst in
+  match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;

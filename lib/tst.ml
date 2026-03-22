@@ -31,7 +31,7 @@ and dependent =
       ; arg_ty : value
       ; arg_mode : Modes.t
       ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
-      ; ret_ty : Cst.Expr.t
+      ; ret_ty : Dst.Expr.t
       }
   | Typecheck of
       { env : (env[@sexp.opaque])
@@ -39,7 +39,7 @@ and dependent =
       ; arg_ty : value
       ; arg_mode : Modes.t
       ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
-      ; body : Cst.Expr.t
+      ; body : Dst.Expr.t
       }
 
 and vbool =
@@ -112,6 +112,7 @@ and closure =
   { arg : Ident.t
   ; ty : value
   ; body : expr
+  ; body_cst : Dst.Expr.t
   ; env : (env[@sexp.opaque])
   }
 [@@deriving sexp]
@@ -119,7 +120,7 @@ and closure =
 and binder =
   { arg : Ident.t
   ; ty : value
-  ; body : Cst.Expr.t
+  ; body : Dst.Expr.t
   ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
   ; env : (env[@sexp.opaque])
   }
@@ -155,7 +156,7 @@ and fun_ =
   | Binder of
       { var : Ident.t
       ; arg : Ident.t
-      ; body : Cst.Expr.t
+      ; body : Dst.Expr.t
       ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
       ; ty : value
       ; mode : Modes.t
@@ -186,7 +187,7 @@ and expr =
       }
   | Binder of
       { arg : Ident.t
-      ; body : Cst.Expr.t
+      ; body : Dst.Expr.t
       ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
       ; ty : value
       ; mode : Modes.t
@@ -609,7 +610,7 @@ module Ty = struct
         }
   [@@deriving sexp]
 
-  let of_literal : Cst.Literal.t -> t = function
+  let of_literal : Dst.Literal.t -> t = function
     | Unit -> Unit
     | Bool _ -> Bool
     | Int _ -> Int
@@ -681,11 +682,14 @@ module Value = struct
           | Bottom, else_ -> else_
           | then_, Bottom -> then_
           | then_, else_ -> If { cond; then_; else_ }))
-    | Apply { fn; arg } -> Apply { fn = reduce fn; arg = reduce arg }
+    | Apply { fn; arg } ->
+      (match reduce fn, reduce arg with
+       | Bottom, _ | _, Bottom -> Bottom
+       | fn, arg -> Apply { fn; arg })
     | value -> value
   ;;
 
-  let of_literal : Cst.Literal.t -> t = function
+  let of_literal : Dst.Literal.t -> t = function
     | Unit -> Unit
     | Bool b -> Bool (T b)
     | Int i -> Int (T i)
@@ -708,7 +712,7 @@ module Dependent = struct
         ; arg_ty : value
         ; arg_mode : Modes.t
         ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
-        ; ret_ty : Cst.Expr.t
+        ; ret_ty : Dst.Expr.t
         }
     | Typecheck of
         { env : (env[@sexp.opaque])
@@ -716,7 +720,7 @@ module Dependent = struct
         ; arg_ty : value
         ; arg_mode : Modes.t
         ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
-        ; body : Cst.Expr.t
+        ; body : Dst.Expr.t
         }
   [@@deriving sexp]
 
@@ -750,6 +754,7 @@ module Closure = struct
     { arg : Ident.t
     ; ty : value
     ; body : expr
+    ; body_cst : Dst.Expr.t
     ; env : (env[@sexp.opaque])
     }
   [@@deriving sexp]
@@ -770,7 +775,7 @@ module Binder = struct
   type t = binder =
     { arg : Ident.t
     ; ty : value
-    ; body : Cst.Expr.t
+    ; body : Dst.Expr.t
     ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
     ; env : (env[@sexp.opaque])
     }
@@ -801,7 +806,7 @@ module Expr = struct
         }
     | Binder of
         { arg : Ident.t
-        ; body : Cst.Expr.t
+        ; body : Dst.Expr.t
         ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
         ; ty : value
         ; mode : Modes.t
@@ -883,7 +888,7 @@ module Expr = struct
     | Binder of
         { var : Ident.t
         ; arg : Ident.t
-        ; body : Cst.Expr.t
+        ; body : Dst.Expr.t
         ; mono : ((concrete, mono) Hashtbl.t[@sexp.opaque])
         ; ty : value
         ; mode : Modes.t
@@ -904,7 +909,7 @@ module Expr = struct
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
     | Let { var; bind; rest; _ } -> Set.union (free_vars bind) (Set.remove (free_vars rest) var)
     | Lambda { arg; body; _ } -> Set.remove (free_vars body) arg
-    | Binder { arg; body; _ } -> Set.remove (Cst.Expr.free_vars body) arg
+    | Binder { arg; body; _ } -> Set.remove (Dst.Expr.free_vars body) arg
     | Fun { funs; rest; _ } ->
       let bound_ids =
         Nonempty_list.map funs ~f:(fun (f : fun_) ->
@@ -917,7 +922,7 @@ module Expr = struct
         Nonempty_list.fold funs ~init:Ident.Set.empty ~f:(fun acc (f : fun_) ->
           match f with
           | Lambda { arg; body; _ } -> Set.union acc (Set.remove (free_vars body) arg)
-          | Binder { arg; body; _ } -> Set.union acc (Set.remove (Cst.Expr.free_vars body) arg))
+          | Binder { arg; body; _ } -> Set.union acc (Set.remove (Dst.Expr.free_vars body) arg))
       in
       Set.diff (Set.union fvs_in_funs (free_vars rest)) bound_ids
   ;;

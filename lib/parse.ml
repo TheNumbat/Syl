@@ -1,6 +1,7 @@
 open! Core
 open Lex
 open Cst
+module Ident = Ident.Raw
 
 type t = { tokens : Tokenizer.t }
 
@@ -45,23 +46,23 @@ let expect_ident t =
      | Op op ->
        let id =
          match op with
-         | Tilde_minus -> Ident.(unop Unop.Neg)
-         | Not -> Ident.(unop Unop.Not)
-         | Minus -> Ident.(binop Binop.Sub)
-         | Plus -> Ident.(binop Binop.Add)
-         | Star -> Ident.(binop Binop.Mul)
-         | Slash -> Ident.(binop Binop.Div)
-         | Percent -> Ident.(binop Binop.Mod)
-         | And -> Ident.(binop Binop.And)
-         | Or -> Ident.(binop Binop.Or)
-         | Eq -> Ident.(binop Binop.Eq)
-         | Neq -> Ident.(binop Binop.Neq)
-         | Lt -> Ident.(binop Binop.Lt)
-         | Lte -> Ident.(binop Binop.Lte)
-         | Gt -> Ident.(binop Binop.Gt)
-         | Gte -> Ident.(binop Binop.Gte)
-         | Comma -> Ident.(nop Nop.Comma)
-         | Caret -> Ident.(nop Nop.Caret)
+         | Tilde_minus -> Ident.(unop Neg)
+         | Not -> Ident.(unop Not)
+         | Minus -> Ident.(binop Sub)
+         | Plus -> Ident.(binop Add)
+         | Star -> Ident.(binop Mul)
+         | Slash -> Ident.(binop Div)
+         | Percent -> Ident.(binop Mod)
+         | And -> Ident.(binop And)
+         | Or -> Ident.(binop Or)
+         | Eq -> Ident.(binop Eq)
+         | Neq -> Ident.(binop Neq)
+         | Lt -> Ident.(binop Lt)
+         | Lte -> Ident.(binop Lte)
+         | Gt -> Ident.(binop Gt)
+         | Gte -> Ident.(binop Gte)
+         | Comma -> Ident.(nop Comma)
+         | Caret -> Ident.(nop Caret)
          | op -> Fail.unexpected ~loc (Op op)
        in
        expect t ~kind:Rparen;
