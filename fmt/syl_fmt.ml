@@ -46,10 +46,11 @@ let fmt_static (static : Modes.Staticity.t) =
   match static with
   | Static -> text " static"
   | Dynamic -> nil
+  | Phase -> raise_s [%message "Unexpected phase"]
 ;;
 
-let fmt_modes (mode : Modes.Modes.Maybe.t) =
-  if Modes.Modes.Maybe.is_none mode then nil else text (Modes.Modes.Maybe.print () mode) ^^ text " "
+let fmt_modes (mode : Modes.Maybe.t) =
+  if Modes.Maybe.is_none mode then nil else text (Modes.Maybe.print () mode) ^^ text " "
 ;;
 
 let fmt_literal (literal : Cst.Literal.t) =
@@ -71,8 +72,7 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
   | Literal { value } -> fmt_literal value
   | Var { id } -> fmt_ident id
   | Unreachable -> text "unreachable"
-  | Paren { expr = e } ->
-    group (text "(" ^^ align (fmt_expr cfg e) ^^ text ")")
+  | Paren { expr = e } -> group (text "(" ^^ align (fmt_expr cfg e) ^^ text ")")
   | Unop { op; arg } -> text (Ident.Unop.print () op) ^^ fmt_expr cfg arg
   | Binop { op; lhs; rhs } ->
     group
@@ -111,12 +111,11 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
   | If { cond; then_; else_; static } ->
     fmt_if cfg ~ind ~force_break:force_break_if static cond then_ else_
   | Assert { cond; static } ->
-    group
-      (text "assert" ^^ fmt_static static ^^ nest ind (line ^^ fmt_expr cfg cond))
+    group (text "assert" ^^ fmt_static static ^^ nest ind (line ^^ fmt_expr cfg cond))
   | Type_annotation { expr = e; ty } ->
     group (fmt_expr cfg e ^^ nest ind (line ^^ text ": " ^^ fmt_expr cfg ty))
   | Mode_annotation { expr = e; mode } ->
-    group (fmt_expr cfg e ^^ text " @ " ^^ text (Modes.Modes.Maybe.print () mode))
+    group (fmt_expr cfg e ^^ text " @ " ^^ text (Modes.Maybe.print () mode))
 
 and fmt_apply (cfg : Config.t) (expr : Cst.Expr.t) =
   let ind = cfg.indent in
@@ -151,8 +150,7 @@ and fmt_arrow (cfg : Config.t) (expr : Cst.Expr.t) =
   let arrows = List.map segments ~f:snd in
   let rest_segs = (List.tl_exn segments |> List.map ~f:fst) @ [ fmt_expr cfg last ] in
   let continuation =
-    List.fold2_exn arrows rest_segs ~init:nil ~f:(fun acc arrow seg ->
-      acc ^^ line ^^ arrow ^^ seg)
+    List.fold2_exn arrows rest_segs ~init:nil ~f:(fun acc arrow seg -> acc ^^ line ^^ arrow ^^ seg)
   in
   group (first_seg ^^ nest ind continuation)
 
@@ -171,9 +169,7 @@ and fmt_if cfg ~ind ?(force_break = false) static cond then_ else_ =
     match then_.node with
     | If { cond; then_; else_; static } when nested ->
       text "then " ^^ align (fmt_if cfg ~ind ~force_break:true static cond then_ else_)
-    | _ ->
-      group
-        (text "then" ^^ nest ind (line ^^ fmt_expr ~force_break_if:nested cfg then_))
+    | _ -> group (text "then" ^^ nest ind (line ^^ fmt_expr ~force_break_if:nested cfg then_))
   in
   let else_doc =
     match else_.node with
@@ -199,14 +195,15 @@ and fmt_arg_list cfg args = concat ~sep:line ~f:(fmt_arg cfg) args
 and fmt_fun_header (cfg : Config.t) ~keyword (f : Cst.Expr.fun_) =
   let ind = cfg.indent in
   let ret_mode =
-    if Modes.Modes.Maybe.is_none f.ret_mode
+    if Modes.Maybe.is_none f.ret_mode
     then nil
-    else text " " ^^ text (Modes.Modes.Maybe.print () f.ret_mode)
+    else text " " ^^ text (Modes.Maybe.print () f.ret_mode)
   in
   let name = text keyword ^^ fmt_erased f.erased ^^ text " " ^^ fmt_ident f.var in
   group
     (name
-     ^^ nest ind
+     ^^ nest
+          ind
           (line
            ^^ fmt_arg_list cfg (Nonempty_list.to_list f.args)
            ^^ text " :"

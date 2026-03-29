@@ -1,5 +1,4 @@
 open! Core
-open Modes
 
 module Literal : sig
   type t =
@@ -38,7 +37,7 @@ module Expr : sig
 
   and fun_ =
     { var : Ident.Raw.t
-    ; erased : Erasure.t
+    ; erased : Modes.Erasure.t
     ; args : arg Nonempty_list.t
     ; ret_mode : Modes.Maybe.t
     ; ret_ty : t
@@ -51,11 +50,11 @@ module Expr : sig
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         }
     | Let of
         { var : Ident.Raw.t
-        ; erased : Erasure.t
+        ; erased : Modes.Erasure.t
         ; args : arg list
         ; bind : t
         ; rest : t
@@ -65,7 +64,7 @@ module Expr : sig
         ; rest : t
         }
     | Lambda of
-        { erased : Erasure.t
+        { erased : Modes.Erasure.t
         ; args : arg Nonempty_list.t
         ; body : t
         }
@@ -98,7 +97,7 @@ module Expr : sig
         }
     | Assert of
         { cond : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         }
     | Unreachable
     | Type_annotation of
@@ -120,7 +119,7 @@ module Top_level : sig
   type node =
     | Let of
         { var : Ident.Raw.t
-        ; erased : Erasure.t
+        ; erased : Modes.Erasure.t
         ; args : Expr.arg list
         ; bind : Expr.t
         }

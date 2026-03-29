@@ -1,12 +1,11 @@
 open! Core
-open Modes
 module Literal = Cst.Literal
 
 module Expr : sig
   type fun_ =
     { var : Ident.t
     ; arg : Ident.t
-    ; erased : Erasure.t
+    ; erased : Modes.Erasure.t
     ; arg_mode : Modes.Maybe.t
     ; arg_ty : t
     ; ret_mode : Modes.Maybe.t
@@ -20,7 +19,7 @@ module Expr : sig
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         ; loc : Lex.Location.t
         }
     | Let of
@@ -80,7 +79,7 @@ module Expr : sig
         }
     | Assert of
         { cond : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         ; loc : Lex.Location.t
         }
     | Unreachable of { loc : Lex.Location.t }

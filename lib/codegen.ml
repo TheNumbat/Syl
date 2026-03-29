@@ -106,7 +106,7 @@ end
 let print_static (mode : Modes.Staticity.t) =
   match mode with
   | Static -> "𝒮"
-  | Dynamic -> ""
+  | Dynamic | Phase -> ""
 ;;
 
 let print_erased (mode : Modes.Erasure.t) =
@@ -115,7 +115,7 @@ let print_erased (mode : Modes.Erasure.t) =
   | Unerased -> ""
 ;;
 
-let print_mode (mode : Modes.Modes.t) = print_static mode.staticity ^ print_erased mode.erasure
+let print_mode (mode : Modes.t) = print_static mode.staticity ^ print_erased mode.erasure
 
 let rec print_key (key : Tst.Value.Concrete.t) =
   match key with

@@ -2561,7 +2561,7 @@ let _ = choose false 5 in
 let%expect_test "recursive inlining" =
   go
     {|
-fun f (x : int) : erased int = g x
+fun erased f (x : int) : int = g x
 and g (y : int) : int = let _ = f y in 0;;
 let _ = g 0;;
 |};
@@ -2614,7 +2614,7 @@ let%expect_test "recursive inlining" =
   go
     {|
 fun f (x : int) : int = let _ = g x in 0
-and g (y : int) : erased int = f y;;
+and erased g (y : int) : int = f y;;
 let _ = f 0;;
 |};
   [%expect {| |}]

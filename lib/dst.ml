@@ -1,12 +1,11 @@
 open! Core
-open Modes
 module Literal = Cst.Literal
 
 module Expr = struct
   type fun_ =
     { var : Ident.t
     ; arg : Ident.t
-    ; erased : Erasure.t
+    ; erased : Modes.Erasure.t
     ; arg_mode : Modes.Maybe.t
     ; arg_ty : t
     ; ret_mode : Modes.Maybe.t
@@ -20,7 +19,7 @@ module Expr = struct
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         ; loc : Lex.Location.t
         }
     | Let of
@@ -80,7 +79,7 @@ module Expr = struct
         }
     | Assert of
         { cond : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         ; loc : Lex.Location.t
         }
     | Unreachable of { loc : Lex.Location.t }
@@ -123,9 +122,7 @@ module Expr = struct
           let fv_arg_ty = free_vars f.arg_ty in
           let fv_ret_ty =
             let fv = free_vars f.ret_ty in
-            if Modes.is_static (Modes.annotate (Modes.default ()) f.arg_mode)
-            then Set.remove fv f.arg
-            else fv
+            if Modes.is_static (Modes.annotation f.arg_mode) then Set.remove fv f.arg else fv
           in
           let fv_body = Set.remove (free_vars f.body) f.arg in
           Ident.Set.union_list [ acc; fv_arg_ty; fv_ret_ty; fv_body ])

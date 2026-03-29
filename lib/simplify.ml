@@ -1,5 +1,4 @@
 open! Core
-open Modes
 open Sst
 
 module Env = struct

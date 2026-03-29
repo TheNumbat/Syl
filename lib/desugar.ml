@@ -1,5 +1,4 @@
 open! Core
-open Modes
 
 module Env = struct
   type t =
@@ -27,7 +26,7 @@ let arg_is_static (arg_mode : Modes.Maybe.t) =
   | _ -> false
 ;;
 
-let maybe_erased (erased : Erasure.t) (expr : Dst.Expr.t) loc : Dst.Expr.t =
+let maybe_erased (erased : Modes.Erasure.t) (expr : Dst.Expr.t) loc : Dst.Expr.t =
   match erased with
   | Erased -> Mode_annotation { expr; mode = { staticity = None; erasure = Some Erased }; loc }
   | Unerased -> expr
@@ -114,8 +113,9 @@ and desugar_fun (env : Env.t) (f : Cst.Expr.fun_) (var : Ident.t) : Dst.Expr.fun
   let env', arg = Env.bind env first.var in
   let anon_ret_mode =
     match f.erased with
-    | Erased -> { Modes.Maybe.staticity = Some Staticity.Static; erasure = Some Erasure.Erased }
-    | Unerased -> { Modes.Maybe.staticity = Some Staticity.Static; erasure = None }
+    | Erased ->
+      { Modes.Maybe.staticity = Some Modes.Staticity.Static; erasure = Some Modes.Erasure.Erased }
+    | Unerased -> { Modes.Maybe.staticity = Some Modes.Staticity.Static; erasure = None }
   in
   let ret_ty, ret_mode =
     let env_ret = if arg_is_static first.mode then env' else env in

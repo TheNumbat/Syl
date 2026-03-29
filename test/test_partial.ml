@@ -52,13 +52,13 @@ fun add (x : int) (y : int) : bool = x + y;;
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased)))
           (ret_ty (Type Bool))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -309,13 +309,13 @@ let _ = f : int -> int;;
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
-             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -402,7 +402,7 @@ let _ = f : int -> int -> int;;
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
-             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
           (ret_mode ((staticity Static) (erasure Erased))))))
        (need
         (Type
@@ -413,8 +413,8 @@ let _ = f : int -> int -> int;;
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
-             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -447,7 +447,7 @@ let _ = add : int -> int -> int;;
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
-             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
           (ret_mode ((staticity Static) (erasure Erased))))))
        (need
         (Type
@@ -458,8 +458,8 @@ let _ = add : int -> int -> int;;
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
-             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -492,7 +492,7 @@ let _ = f : int -> int -> int;;
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
-             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
           (ret_mode ((staticity Static) (erasure Erased))))))
        (need
         (Type
@@ -503,8 +503,8 @@ let _ = f : int -> int -> int;;
             (Arrow (arg_ty (Type Int))
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
-             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 

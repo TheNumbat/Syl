@@ -1,5 +1,4 @@
 open! Core
-open Modes
 
 module Literal = struct
   type t =
@@ -37,7 +36,7 @@ module Expr = struct
 
   and fun_ =
     { var : Ident.Raw.t
-    ; erased : Erasure.t
+    ; erased : Modes.Erasure.t
     ; args : arg Nonempty_list.t
     ; ret_mode : Modes.Maybe.t
     ; ret_ty : t
@@ -50,11 +49,11 @@ module Expr = struct
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         }
     | Let of
         { var : Ident.Raw.t
-        ; erased : Erasure.t
+        ; erased : Modes.Erasure.t
         ; args : arg list
         ; bind : t
         ; rest : t
@@ -64,7 +63,7 @@ module Expr = struct
         ; rest : t
         }
     | Lambda of
-        { erased : Erasure.t
+        { erased : Modes.Erasure.t
         ; args : arg Nonempty_list.t
         ; body : t
         }
@@ -97,7 +96,7 @@ module Expr = struct
         }
     | Assert of
         { cond : t
-        ; static : Staticity.t
+        ; static : Modes.Staticity.t
         }
     | Unreachable
     | Type_annotation of
@@ -112,10 +111,7 @@ module Expr = struct
   and t = node With_loc.t [@@deriving sexp]
 
   let loc (t : t) = t.loc
-
-  let strip_comments =
-    List.map ~f:(fun (c : Lex.Comment.t) -> { c with loc = Lex.Location.empty })
-  ;;
+  let strip_comments = List.map ~f:(fun (c : Lex.Comment.t) -> { c with loc = Lex.Location.empty })
 
   let rec strip (e : t) : t =
     { node = strip_node e.node
@@ -160,7 +156,7 @@ module Top_level = struct
   type node =
     | Let of
         { var : Ident.Raw.t
-        ; erased : Erasure.t
+        ; erased : Modes.Erasure.t
         ; args : Expr.arg list
         ; bind : Expr.t
         }
@@ -203,8 +199,6 @@ module Program = struct
   [@@deriving sexp]
 
   let strip (p : t) : t =
-    { items = List.map p.items ~f:Top_level.strip
-    ; after = Expr.strip_comments p.after
-    }
+    { items = List.map p.items ~f:Top_level.strip; after = Expr.strip_comments p.after }
   ;;
 end

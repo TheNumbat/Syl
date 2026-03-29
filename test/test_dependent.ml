@@ -114,7 +114,7 @@ let f = fn (erased ty : type) -> fn (x : ty) -> x;;
     {|
     ((loc ((line 2) (column 33)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -382,7 +382,7 @@ fun f (x : int) : static int = x;;
     {|
     ((loc ((line 2) (column 4)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+      (Mode_mismatch (got ((staticity Phase) (erasure Unerased)))
        (need ((staticity Static) (erasure Unerased))))))
     |}]
 ;;

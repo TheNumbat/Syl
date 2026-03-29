@@ -3,8 +3,8 @@ open! Core
 module Error : sig
   type t =
     | Unexpected of Lex.Token.t
-    | Duplicate_mode of Modes.t
-    | Unexpected_modes of Modes.Modes.Maybe.t
+    | Duplicate_mode of Modes.Axis.t
+    | Unexpected_modes of Modes.Maybe.t
     | Fun_underscore
     | Unterminated_comment
   [@@deriving sexp]

@@ -5,8 +5,8 @@ module Error : sig
   type t =
     | Unbound_ident of Ident.t
     | Mode_mismatch of
-        { got : Modes.Modes.t
-        ; need : Modes.Modes.t
+        { got : Modes.t
+        ; need : Modes.t
         }
     | Type_mismatch of
         { got : Value.t

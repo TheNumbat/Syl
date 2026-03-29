@@ -1,5 +1,4 @@
 open! Core
-open Modes
 
 module rec Ty : sig
   type t =

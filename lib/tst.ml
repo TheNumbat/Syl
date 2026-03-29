@@ -1,5 +1,4 @@
 open! Core
-open Modes
 open Option.Let_syntax
 
 type ty =
@@ -41,6 +40,7 @@ and dependent =
       ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
       ; body : Dst.Expr.t
       }
+[@@deriving sexp]
 
 and vbool =
   | T of bool

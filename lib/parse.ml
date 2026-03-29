@@ -8,8 +8,8 @@ type t = { tokens : Tokenizer.t }
 module Error = struct
   type t =
     | Unexpected of Token.t
-    | Duplicate_mode of Modes.t
-    | Unexpected_modes of Modes.Modes.Maybe.t
+    | Duplicate_mode of Modes.Axis.t
+    | Unexpected_modes of Modes.Maybe.t
     | Fun_underscore
     | Unterminated_comment
   [@@deriving sexp]
@@ -88,28 +88,31 @@ let maybe_static t : Modes.Staticity.t =
   | _ -> Dynamic
 ;;
 
-let maybe_modes ~required t : Modes.Modes.Maybe.t =
-  let open Modes in
+let maybe_modes ~required t : Modes.Maybe.t =
   let loc = Tokenizer.loc t.tokens in
-  let rec aux ?staticity ?erasure axes =
+  let rec aux
+            ?(staticity : Modes.Staticity.t option)
+            ?(erasure : Modes.Erasure.t option)
+            (axes : Modes.Axis.t list)
+    =
     match Tokenizer.peek t.tokens with
     | Static ->
       expect t ~kind:Static;
-      aux ~staticity:Staticity.Static ?erasure (Staticity :: axes)
+      aux ~staticity:Static ?erasure (Staticity :: axes)
     | Dynamic ->
       expect t ~kind:Dynamic;
       aux ~staticity:Dynamic ?erasure (Staticity :: axes)
     | Erased ->
       expect t ~kind:Erased;
-      aux ?staticity ~erasure:Erasure.Erased (Erasure :: axes)
+      aux ?staticity ~erasure:Erased (Erasure :: axes)
     | Unerased ->
       expect t ~kind:Unerased;
-      aux ?staticity ~erasure:Erasure.Unerased (Erasure :: axes)
+      aux ?staticity ~erasure:Unerased (Erasure :: axes)
     | _ -> staticity, erasure, axes
   in
   let staticity, erasure, axes = aux [] in
   if required && List.length axes = 0 then Fail.unexpected ~loc (Tokenizer.peek t.tokens);
-  (match List.find_a_dup axes ~compare with
+  (match List.find_a_dup axes ~compare:Modes.Axis.compare with
    | Some mode -> Fail.duplicate_mode ~loc mode
    | None -> ());
   { staticity; erasure }
@@ -163,12 +166,11 @@ and expr_arrow t : Expr.t =
       let modes = maybe_modes ~required:false t in
       match expr_arrow t with
       | { node = Arrow arrow; _ } ->
-        with_loc ~loc:arg.loc (Arrow { arrow with arg_mode = modes }), Modes.Modes.Maybe.none
+        with_loc ~loc:arg.loc (Arrow { arrow with arg_mode = modes }), Modes.Maybe.none
       | expr -> expr, modes
     in
     with_loc ~loc:arg.loc (Arrow { arg; arg_id; arg_mode; ret; ret_mode })
-  | _ ->
-    if Modes.Modes.Maybe.(equal arg_mode none) then arg else Fail.unexpected_modes ~loc arg_mode
+  | _ -> if Modes.Maybe.(equal arg_mode none) then arg else Fail.unexpected_modes ~loc arg_mode
 
 and expr_comma t : Expr.t =
   let loc = Tokenizer.loc t.tokens in

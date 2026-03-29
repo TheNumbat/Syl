@@ -377,7 +377,7 @@ let%expect_test "fuzz: recursion capturing outer variable" =
   go
     {|
 let offset = 10 @ dynamic;;
-fun add_offset (x : int) : int =
+fun add_offset (x : int) : dynamic int =
   if x == 0 then offset else add_offset (x - 1) + 1;;
 let _ = add_offset 3;;
 |};
@@ -1407,7 +1407,7 @@ let%expect_test "fuzz: recursive capturing multiple dynamic vars" =
     {|
 let a = 1 @ dynamic;;
 let b = 2 @ dynamic;;
-fun f (x : int) : int =
+fun f (x : int) : dynamic int =
   if x <= 0 then a + b else f (x - 1) + 1;;
 let _ = f 3;;
 |};
@@ -1419,9 +1419,9 @@ let%expect_test "fuzz: mutual rec different captured scopes" =
     {|
 let a = 10 @ dynamic;;
 let b = 20 @ dynamic;;
-fun f (x : int) : int =
+fun f (x : int) : dynamic int =
   if x <= 0 then a else g (x - 1)
-and g (x : int) : int =
+and g (x : int) : dynamic int =
   if x <= 0 then b else f (x - 1);;
 let _ = f 3;;
 |};
