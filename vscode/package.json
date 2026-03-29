@@ -1,0 +1,43 @@
+{
+    "name": "syl",
+    "displayName": "Syl",
+    "description": "Language support for Syl",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Programming Languages",
+        "Formatters"
+    ],
+    "main": "./extension.js",
+    "contributes": {
+        "languages": [
+            {
+                "id": "syl",
+                "aliases": [
+                    "Syl"
+                ],
+                "extensions": [
+                    ".syl"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "configuration": {
+            "title": "Syl",
+            "properties": {
+                "syl.formatCommand": {
+                    "type": "string",
+                    "default": "dune exec bin/syl.exe -- fmt",
+                    "description": "Command to format Syl files. Source is piped via stdin."
+                },
+                "syl.checkCommand": {
+                    "type": "string",
+                    "default": "dune exec bin/syl.exe -- check",
+                    "description": "Command to check Syl files for errors. Source is piped via stdin."
+                }
+            }
+        }
+    }
+}

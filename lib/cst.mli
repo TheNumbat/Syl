@@ -11,78 +11,83 @@ module Literal : sig
   val print : unit -> t -> string
 end
 
+module With_loc : sig
+  type 'a t =
+    { node : 'a
+    ; loc : Lex.Location.t
+    ; before : Lex.Comment.t list
+    ; after : Lex.Comment.t list
+    }
+  [@@deriving sexp]
+
+  val create
+    :  ?before:Lex.Comment.t list
+    -> ?after:Lex.Comment.t list
+    -> loc:Lex.Location.t
+    -> 'a
+    -> 'a t
+end
+
 module Expr : sig
-  type fun_ =
+  type arg =
     { var : Ident.Raw.t
-    ; arg : Ident.Raw.t
+    ; mode : Modes.Maybe.t
+    ; ty : t
+    ; loc : Lex.Location.t
+    }
+
+  and fun_ =
+    { var : Ident.Raw.t
     ; erased : Erasure.t
-    ; arg_mode : Modes.Maybe.t
-    ; arg_ty : t
+    ; args : arg Nonempty_list.t
     ; ret_mode : Modes.Maybe.t
     ; ret_ty : t
     ; body : t
     ; loc : Lex.Location.t
     }
 
-  and t =
+  and node =
     | If of
         { cond : t
         ; then_ : t
         ; else_ : t
         ; static : Staticity.t
-        ; loc : Lex.Location.t
         }
     | Let of
         { var : Ident.Raw.t
+        ; erased : Erasure.t
+        ; args : arg list
         ; bind : t
         ; rest : t
-        ; loc : Lex.Location.t
         }
     | Fun of
         { funs : fun_ Nonempty_list.t
         ; rest : t
-        ; loc : Lex.Location.t
         }
     | Lambda of
-        { arg : Ident.Raw.t
-        ; erased : Erasure.t
-        ; arg_mode : Modes.Maybe.t
-        ; arg_ty : t
+        { erased : Erasure.t
+        ; args : arg Nonempty_list.t
         ; body : t
-        ; loc : Lex.Location.t
         }
     | Apply of
         { fn : t
         ; arg : t
-        ; loc : Lex.Location.t
         }
-    | Paren of
-        { expr : t
-        ; loc : Lex.Location.t
-        }
-    | Var of
-        { id : Ident.Raw.t
-        ; loc : Lex.Location.t
-        }
-    | Literal of
-        { value : Literal.t
-        ; loc : Lex.Location.t
-        }
+    | Paren of { expr : t }
+    | Var of { id : Ident.Raw.t }
+    | Literal of { value : Literal.t }
     | Unop of
         { op : Ident.Unop.t
         ; arg : t
-        ; loc : Lex.Location.t
         }
     | Binop of
         { op : Ident.Binop.t
         ; lhs : t
         ; rhs : t
-        ; loc : Lex.Location.t
         }
     | Nop of
         { op : Ident.Nop.t
         ; elts : t list
-        ; loc : Lex.Location.t
         }
     | Arrow of
         { arg : t
@@ -90,61 +95,59 @@ module Expr : sig
         ; arg_mode : Modes.Maybe.t
         ; ret : t
         ; ret_mode : Modes.Maybe.t
-        ; loc : Lex.Location.t
         }
     | Assert of
         { cond : t
         ; static : Staticity.t
-        ; loc : Lex.Location.t
         }
-    | Unreachable of { loc : Lex.Location.t }
+    | Unreachable
     | Type_annotation of
         { expr : t
         ; ty : t
-        ; loc : Lex.Location.t
         }
     | Mode_annotation of
         { expr : t
         ; mode : Modes.Maybe.t
-        ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
 
+  and t = node With_loc.t [@@deriving sexp]
+
+  val strip : t -> t
   val loc : t -> Lex.Location.t
-  val print : unit -> t -> string
 end
 
 module Top_level : sig
-  type t =
+  type node =
     | Let of
         { var : Ident.Raw.t
+        ; erased : Erasure.t
+        ; args : Expr.arg list
         ; bind : Expr.t
-        ; loc : Lex.Location.t
         }
-    | Fun of
-        { funs : Expr.fun_ Nonempty_list.t
-        ; loc : Lex.Location.t
-        }
+    | Fun of { funs : Expr.fun_ Nonempty_list.t }
     | External of
         { var : Ident.Raw.t
         ; ty : Expr.t
         ; symbol : string
-        ; loc : Lex.Location.t
         }
     | Builtin of
         { var : Ident.Raw.t
         ; name : string
-        ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 
+  type t = node With_loc.t [@@deriving sexp]
+
+  val strip : t -> t
   val loc : t -> Lex.Location.t
-  val print : unit -> t -> string
 end
 
 module Program : sig
-  type t = Top_level.t list [@@deriving sexp]
+  type t =
+    { items : Top_level.t list
+    ; after : Lex.Comment.t list
+    }
+  [@@deriving sexp]
 
-  (* Round trips. *)
-  val print : unit -> t -> string
+  val strip : t -> t
 end

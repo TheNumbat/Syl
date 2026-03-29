@@ -867,12 +867,12 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     let env = Env.bind env var bind_desc in
     let rest, rest_desc = typecheck state env rest in
     Let { var; bind; rest; ty = rest_desc.ty; mode = rest_desc.mode; loc }, rest_desc
-  | Lambda { arg; erased; arg_mode; arg_ty; body = body_cst; loc } ->
+  | Lambda { arg; arg_mode; arg_ty; body = body_cst; loc } ->
     let arg_ty_desc = reduce state env arg_ty in
     let arg_ty = require_static_type state ~loc arg_ty_desc in
-    (* TODO allow dynamic on arg to force no static *)
+    let mode = Modes.bottom () in
+    let arg_dyn = Option.value arg_mode.staticity ~default:Static in
     let arg_mode = Modes.annotate (Modes.default ()) arg_mode in
-    let mode = Modes.bottom ~erasure:erased () in
     (match arg_mode.staticity with
      | Dynamic ->
        (* TODO infer ret modality *)
@@ -880,9 +880,10 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
          Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Fail.unreachable [%here] ~loc }
        in
        let body, body_desc = typecheck state env body_cst in
-       let ty =
-         Value.Type (Arrow { arg_ty; arg_mode; ret_ty = body_desc.ty; ret_mode = body_desc.mode })
+       let ret_mode =
+         { body_desc.mode with staticity = Staticity.join arg_dyn body_desc.mode.staticity }
        in
+       let ty = Value.Type (Arrow { arg_ty; arg_mode; ret_ty = body_desc.ty; ret_mode }) in
        let mode = Modes.return mode ~ret:body_desc.mode in
        let static = Lazy.from_val (Value.Closure { arg; ty; body; body_cst; env }) in
        Lambda { arg; ty; body; mode; loc }, { ty; mode; static }
@@ -1080,8 +1081,7 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
           { Dst.Expr.var; arg; erased; arg_ty; arg_mode; ret_mode; ret_ty; body = body_cst; loc }
         ->
         let ty = typecheck_arrow state ~loc env ~arg_id:arg ~arg_ty ~arg_mode ~ret_ty ~ret_mode in
-        (* TODO allow dynamic on arg to force no static *)
-        (* TODO require static if static, weaken if dynamic, infer if unspecified *)
+        (* TODO infer ret modality if unspecified *)
         let ret_mode = Modes.annotate (Modes.default ()) ret_mode in
         let mode = Modes.return (Modes.bottom ~erasure:erased ()) ~ret:ret_mode in
         let static =

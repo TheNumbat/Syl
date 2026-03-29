@@ -399,7 +399,7 @@ let emit_main state (lst : Program.t) =
 let c (lst : Program.t) : string =
   let state = State.create () in
   Buffer.add_string state.buf prelude;
-  Buffer.add_string state.buf Syl_stdlib.runtime;
+  Buffer.add_string state.buf Syl_std.runtime;
   emit_decls state lst;
   emit_procs_and_thunks state lst;
   emit_main state lst;

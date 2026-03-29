@@ -3,51 +3,54 @@
    ----------------------------------------------------- *)
 
 (* Literals and let bindings *)
-
 let u = ();;
+
 let b = true;;
+
 let i = 123;;
 
-let _ =
-  let x = 0 in
-  x + x
-;;
+let _ = let x = 0 in x + x;;
 
 (* Operators and precedence *)
-
 let _ = 1 + 2 * 3;;
+
 let _ = !(true && false) || true;;
 
 (* If expression *)
-
 let _ = if i > 100 then 1 else 0;;
 
 (* Lambdas and application *)
-
 let add = fn (x : int) -> fn (y : int) -> x + y;;
+
 let _ = add 2 3;;
 
 let apply = fn (f : int -> int) -> f 10;;
+
 let _ = apply (fn (x : int) -> x + 1);;
 
 (* Mutally recursive functions *)
+fun f (x : int) : int =
+  x
+;;
 
-fun f (x : int) : int = x;;
-
-fun g (x : int) : int = h x
-and h (y : int) : int = g y;;
+fun g (x : int) : int =
+  h x
+and h (y : int) : int =
+  g y
+;;
 
 (* Type annotations *)
-
 let _ = (1 + 2) : int;;
+
 let _ = (fn (x : int) -> x) : int -> int;;
 
 (* Types are values *)
-
 let int2 = int : type;;
+
 let arrow = int2 -> int2 : type;;
 
 let _ = (1 + 2) : int2;;
+
 let _ = (fn (x : int) -> x) : arrow;;
 
 (* -----------------------------------------------------
@@ -55,102 +58,143 @@ let _ = (fn (x : int) -> x) : arrow;;
    ----------------------------------------------------- *)
 
 (* Mode anontations *)
-
 let _ = 1 @ static;;
+
 let _ = 1 @ dynamic;;
+
 let _ = 1 @ erased;;
+
 let _ = 1 @ dynamic erased;;
+
 let _ = (1 + 2) @ unerased;;
 
 (* Modes on parameters *)
-
 let take_static = fn (static x : int) -> x + 1;;
+
 let take_erased = fn (erased y : int) -> let _ = y in 42;;
+
 let take_static_erased = fn (static erased x : int) -> x;;
 
 (* Modes in arrows types *)
-
 let f_ty = static int -> erased int;;
+
 let g_ty = erased int -> int;;
 
 (* Subtyping *)
-
 let _ = take_static : f_ty;;
+
 let _ = take_erased : g_ty;;
 
 (* If joins types *)
-
 let f = fn (x : int) -> x @ erased;;
+
 let g = fn (static x : int) -> x;;
+
 let _ = (if true then f else g) : static int -> erased int;;
 
 (* Literals are static unerased *)
-
 let _ = take_static 0;;
+
 let _ = (fn (x : int) -> x) @ static unerased;;
 
 (* Types are static erased *)
-
 let _ = int @ static erased;;
+
 let _ = g_ty @ static erased;;
 
 (* Expressions known at compile time are static *)
-
 let _ = (1 + 2) @ static;;
+
 let r = (take_static 0) @ static;;
+
 let _ = (fn (_ : unit) -> r) @ static;;
 
 (* Functions that capture dynamic are _not_ dynamic (i.e. implicit dynamic modality) *)
-
 let d = 0 @ dynamic;;
+
 let _ = (fn (_ : unit) -> d) @ static;;
 
 (* While the function can be erased, inlining the dynamic modalities will fail *)
-
 let _ = (fn (_ : unit) -> d) @ erased;;
 
 (* Functions that capture erased are _not_ erased (i.e. implicit erased modality) *)
-
 let _ = (fn (_ : unit) -> let _ = int in ()) @ unerased;;
 
 (* Functions that _return_ erased are erased *)
-
 let _ = (fn (_ : unit) -> int) @ erased;;
 
 (* Static asserts fail at compile time if the condition is not known to be true. *)
-
 let _ = assert static true;;
 
-(* Dynamic asserts fail at runtime if the condition is false. )
-
+(* Dynamic asserts fail at runtime if the condition is false. *)
 let _ = assert true;;
+
+(* -----------------------------------------------------
+   Currying
+   ----------------------------------------------------- *)
+
+(* Lambdas with multiple arguments desugar to nested lambdas *)
+let add = fn (x : int) (y : int) -> x + y;;
+
+let _ = add 2 3;;
+
+(* So do functions *)
+fun add (x : int) (y : int) : int =
+  x + y
+;;
+
+let _ = add 4 5;;
+
+(* Let bindings can have arguments, which also desugar to lambdas *)
+let add (x : int) (y : int) = x + y;;
+
+let _ = add 2 3;;
+
+(* Modes on arguments are preserved *)
+let add (static x : int) (static y : int) = x + y;;
+
+let _ = add 1 2;;
+
+(* Let erased desugars to an erased annotation *)
+let erased square (x : int) = x * x;;
+
+let _ = square 5;;
+
+(* Writing erased after fn or fun erases all partial applications *)
+let add = fn erased (x : int) (y : int) -> x + y;;
+
+(* Partial application with a static arg is static *)
+let _ = (add 1 @ static);;
 
 (* -----------------------------------------------------
    Inlining with erasure
    ----------------------------------------------------- *)
 
 (* Erased expressions are reduced to literals, so must be static *)
-
 let _ = (1 + 2) @ erased;;
 
 (* Erased expressions of function type are inlined *)
-
 let square = fn (x : int) -> x * x;;
+
 let _ = (square @ erased) 5;;
 
 (* Functions that return erased are always inlined *)
+fun ret_erased (_ : int) : erased int =
+  0 @ erased
+;;
 
-fun ret_erased (_ : int) : erased int = 0 @ erased;;
 let _ = ret_erased 0;;
 
 (* Functions declared as erased are always inlined *)
+fun erased always_erased (_ : int) : int =
+  0
+;;
 
-fun erased always_erased (_ : int) : int = 0;;
 let _ = always_erased 0;;
 
 (* Functions of erased parameters are not necessarily inlined *)
-
 let ignore = fn (erased _ : int) -> 0;;
+
 let _ = ignore (1 + 2);;
 
 (* -----------------------------------------------------
@@ -158,28 +202,31 @@ let _ = ignore (1 + 2);;
    ----------------------------------------------------- *)
 
 (* Functions of static arguments are monomorphized *)
-
 let literal = fn (static x : int) -> x;;
+
 let _ = (literal 0) @ static;;
+
 let _ = (literal 1) @ static;;
 
 (* Polymorphism is monomorphized *)
-
 let identity = fn (static erased t : type) -> fn (x : t) -> x;;
+
 let _ = identity int 0;;
+
 let _ = identity bool true;;
 
 (* Type annotations accept any static expression of type type *)
-
 let _ = 0 : if true then int else bool;;
+
 let _ = 1 : (fn (static erased x : type) -> x) int;;
 
 (* Polymorphic functions have dependent types *)
-
 let poly_ident = static erased type \ t -> static (t -> t);;
+
 let _ = identity : poly_ident;;
 
 let wrap = fn (static f : poly_ident) -> f;;
+
 let _ = wrap identity int 10;;
 
 (* -----------------------------------------------------
@@ -187,64 +234,59 @@ let _ = wrap identity int 10;;
    ----------------------------------------------------- *)
 
 (* If static splits types *)
-
 let f = fn (x : int) -> x @ erased;;
+
 let g = fn (static x : int) -> x;;
 
 let _ = (if static true then f else g) : int -> erased int;;
+
 let _ = (if static false then f else g) : static int -> int;;
 
 (* Unless the condition is abstract *)
-
-let _ = fn (static b : bool) ->
-  (if static b then f else g) : static int -> erased int
-;;
+let _ = fn (static b : bool) -> (if static b then f else g) : static int -> erased int;;
 
 (* Simple reductions happen automatically. *)
-
-let _ = fn (static b : bool) ->
-  assert static (b || !b)
-;;
+let _ = fn (static b : bool) -> assert static (b || !b);;
 
 (* Branches can fail at compile time with unreachable. It's an error to emit an
    unreachable branch as runtime code. *)
-
-let needs_true = fn (static b : bool) ->
-  if static b then 0 else unreachable
-;;
+let needs_true = fn (static b : bool) -> if static b then 0 else unreachable;;
 
 (* Dependent functions can have branching types *)
-
 let choose = fn (static x : bool) -> if static x then 0 else false;;
 
 let _ = choose : static bool \ x -> if x then int else bool;;
+
 let _ = choose true : int;;
+
 let _ = choose false : bool;;
 
 (* Conditions are reduced and compared structurally *)
-
 let mk_four = fn (static _ : unit) -> (2 * 2 * 2) / 2;;
 
 let f = fn (static x : int) -> if static x * 2 < 0 then 0 else false;;
+
 let g = fn (static x : int) -> if static x * (1 + 1) < (4 - mk_four ()) then 0 else false;;
 
 let _ = f : static int \ a -> if a * 2 < 0 then int else bool;;
+
 let _ = g : static int \ b -> if b * 2 < 0 then int else bool;;
+
 let _ = if true then f else g;;
 
 (* Branching values can also be used as annotations *)
-
 let _ = f : static int \ c -> if static c * 2 < 0 then int else bool;;
 
 (* Dependent functions can have application types *)
-
-fun mk_ident (static erased pick_t : static unit -> static erased type) : static (pick_t () -> pick_t ()) =
+fun mk_ident
+  (static erased pick_t : static unit -> static erased type) : static (pick_t () -> pick_t ()) =
   fn (x : pick_t ()) -> x
 ;;
 
 let _ = mk_ident : static erased (static unit -> static erased type) \ f -> static (f () -> f ());;
 
 let _ = mk_ident (fn (static _ : unit) -> int) 0;;
+
 let _ = mk_ident (fn (static _ : unit) -> if 1 + 1 == 2 then bool else unit) true;;
 
 (* -----------------------------------------------------
@@ -252,58 +294,59 @@ let _ = mk_ident (fn (static _ : unit) -> if 1 + 1 == 2 then bool else unit) tru
    ----------------------------------------------------- *)
 
 (* Monomorphization can be recursive, up to a limit *)
-
 fun static_fib (static x : int) : static int =
   if static x <= 1 then x else static_fib (x - 1) + static_fib (x - 2)
 ;;
 
 (* We can use the result statically *)
-
 let _ = (if static static_fib 5 == 5 then 0 else false) : int;;
 
 (* Mutual recursion also works *)
-
 fun f (static erased x : int) : static int =
   if static x == 1
   then 0
   else if static x % 2 == 0
        then g x
        else h x
-and g (static erased x : int) : static int = 1 + f (x / 2)
-and h (static erased x : int) : static int = 1 + f (3 * x + 1);;
+and g (static erased x : int) : static int =
+  1 + f (x / 2)
+and h (static erased x : int) : static int =
+  1 + f (3 * x + 1)
+;;
 
 let _ = f 10;;
 
 (* Not all mutually recursive functions have to be monomorphized *)
-
 fun f (static erased x : int) : int =
-  if static x == 0
-  then g x
-  else 2
-and g (erased x : int) : int = f 3;;
+  if static x == 0 then g x else 2
+and g (erased x : int) : int =
+  f 3
+;;
 
 let _ = f 5;;
+
 let _ = g 0;;
 
 (* We can inline one step of a recursive function *)
+fun f (x : int) : int =
+  f x
+;;
 
-fun f (x : int) : int = f x;;
 let _ = (f @ erased);;
 
 (* We can mix inlining and always-inlining functions *)
-
 fun erased f (static x : int) : int =
-  if static x == 0
-  then (g @ erased) x
-  else g 1
-and g (x : int) : int = x;;
+  if static x == 0 then (g @ erased) x else g 1
+and g (x : int) : int =
+  x
+;;
 
 let _ = f 5;;
 
 fun f (static x : int) : int =
-  if static x == 0
-  then g x
-  else g 1
-and erased g (x : int) : int = x + 1;;
+  if static x == 0 then g x else g 1
+and erased g (x : int) : int =
+  x + 1
+;;
 
 let _ = f 5;;

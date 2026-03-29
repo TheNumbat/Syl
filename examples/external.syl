@@ -1,10 +1,9 @@
-
 let _ = (print_int @ erased) 0;;
 
-let print = fn (static x : int) ->
-  let _ = print_int x in
-  fn (static y : int) -> print_int y;;
+let print = fn (static x : int) -> let _ = print_int x in fn (static y : int) -> print_int y;;
 
 let _ = print 0 1;;
+
 let _ = print 1 2;;
+
 let _ = print 1 3;;

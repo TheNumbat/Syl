@@ -388,7 +388,7 @@ let _ = id : static type \ t -> erased t -> t;;
            (Typecheck (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
             (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
             (body
-             (Lambda (arg ((Id x) <opaque>)) (erased Unerased)
+             (Lambda (arg ((Id x) <opaque>))
               (arg_mode ((staticity ()) (erasure ())))
               (arg_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 41)))))
               (body (Var (id ((Id x) <opaque>)) (loc ((line 2) (column 47)))))
@@ -408,7 +408,7 @@ let _ = id : static type \ t -> erased t -> t;;
               (arg_mode ((staticity ()) (erasure (Erased))))
               (ret (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 44)))))
               (ret_mode ((staticity ()) (erasure ())))
-              (loc ((line 3) (column 41)))))))
+              (loc ((line 3) (column 20)))))))
           (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
     |}]
 ;;

@@ -278,6 +278,16 @@ module Location = struct
   let empty = { line = 1; column = 0 }
 end
 
+module Comment = struct
+  type t =
+    { text : string
+    ; loc : Location.t
+    }
+  [@@deriving sexp]
+end
+
+exception Unterminated_comment of Location.t [@@deriving sexp]
+
 module Tokenizer = struct
   open Token
 
@@ -285,6 +295,7 @@ module Tokenizer = struct
     { mutable idx : int
     ; mutable line : int
     ; mutable column : int
+    ; mutable comments : Comment.t list
     }
 
   type t =
@@ -292,13 +303,17 @@ module Tokenizer = struct
     ; state : state
     }
 
-  let create input = { input; state = { idx = 0; column = 0; line = 1 } }
-  let save t = { idx = t.state.idx; column = t.state.column; line = t.state.line }
+  let create input = { input; state = { idx = 0; column = 0; line = 1; comments = [] } }
 
-  let restore t state =
-    t.state.idx <- state.idx;
-    t.state.column <- state.column;
-    t.state.line <- state.line
+  let save t =
+    { idx = t.state.idx; column = t.state.column; line = t.state.line; comments = t.state.comments }
+  ;;
+
+  let restore t s =
+    t.state.idx <- s.idx;
+    t.state.column <- s.column;
+    t.state.line <- s.line;
+    t.state.comments <- s.comments
   ;;
 
   let advance t =
@@ -369,18 +384,20 @@ module Tokenizer = struct
     | None -> Eof
   ;;
 
-  let rec finish_comment t =
+  let rec finish_comment ~loc t =
     match current t with
     | Some '*' ->
       advance t;
       (match current t with
        | Some ')' -> advance t
-       | _ ->
+       | Some _ ->
          advance t;
-         finish_comment t)
-    | _ ->
+         finish_comment ~loc t
+       | None -> raise (Unterminated_comment loc))
+    | Some _ ->
       advance t;
-      finish_comment t
+      finish_comment ~loc t
+    | None -> raise (Unterminated_comment loc)
   ;;
 
   let rec skip_whitespace_and_comments t =
@@ -390,15 +407,28 @@ module Tokenizer = struct
       && Char.(String.get t.input t.state.idx = '(')
       && Char.(String.get t.input (t.state.idx + 1) = '*')
     then (
+      let loc = Location.{ line = t.state.line; column = t.state.column } in
       advance t;
       advance t;
-      finish_comment t;
+      let text_start = t.state.idx in
+      finish_comment ~loc t;
+      let text_end = t.state.idx - 2 in
+      let text = String.sub t.input ~pos:text_start ~len:(text_end - text_start) in
+      let text = String.strip text in
+      t.state.comments <- { Comment.text; loc } :: t.state.comments;
       skip_whitespace_and_comments t)
   ;;
 
   let loc t =
     skip_whitespace_and_comments t;
     Location.{ line = t.state.line; column = t.state.column }
+  ;;
+
+  let comments t =
+    let l = loc t in
+    let result = List.rev t.state.comments in
+    t.state.comments <- [];
+    l, result
   ;;
 
   let op_lparen t =

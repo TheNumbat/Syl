@@ -4,34 +4,42 @@ open! Syl
 let go ?(print = false) input =
   match Parse.parse input with
   | Ok cst ->
-    print_endline (sprintf "%a" Cst.Program.print cst);
+    print_string (Syl_fmt.to_string cst);
     if print then print_s [%message (cst : Cst.Program.t)]
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Parse.Error.t)]
 ;;
 
 let%expect_test "arrow" =
   go "let _ = t -> static t -> t;;";
-  [%expect {| let _ = t -> statict -> t;; |}];
+  [%expect {| let _ = t -> static t -> t;; |}];
   go "let _ = t -> (static t -> t);;";
-  [%expect {| let _ = t -> (statict -> t);; |}];
+  [%expect {| let _ = t -> (static t -> t);; |}];
   go "let _ = t -> static (t -> t);;";
-  [%expect {| let _ = t -> static(t -> t);; |}];
+  [%expect {| let _ = t -> static (t -> t);; |}];
   go "let _ = t -> static (static t -> t);;";
-  [%expect {| let _ = t -> static(statict -> t);; |}];
+  [%expect {| let _ = t -> static (static t -> t);; |}];
   go "let _ = t -> static static t -> t;;";
   [%expect {| ((loc ((line 1) (column 13))) (reason (Duplicate_mode Staticity))) |}];
   go "let _ = t -> static t;;";
-  [%expect {| let _ = t -> statict;; |}]
+  [%expect {| let _ = t -> static t;; |}]
 ;;
 
 let%expect_test "arrow" =
   go "let _ = (int : type) \\ name -> static (erased type -> static name);;";
-  [%expect {| let _ = (int : type) \ name -> static(erasedtype -> staticname);; |}]
+  [%expect {| let _ = (int : type) \ name -> static (erased type -> static name);; |}]
 ;;
 
 let%expect_test "funs" =
   go "let _ = fun x (_ : unit) : unit = () in x;;";
-  [%expect {| let _ = fun x ( _ : unit) : unit = (); x;; |}]
+  [%expect
+    {|
+    let _ =
+      fun x (_ : unit) : unit =
+        ()
+      in
+      x
+    ;;
+    |}]
 ;;
 
 let%expect_test "bad modes" =
@@ -53,22 +61,22 @@ let%expect_test "arrow" =
   go "let _ = x -> y;;";
   [%expect {| let _ = x -> y;; |}];
   go "let _ = erased static x -> y;;";
-  [%expect {| let _ = static erasedx -> y;; |}];
+  [%expect {| let _ = static erased x -> y;; |}];
   go "let _ = static x -> erased y;;";
-  [%expect {| let _ = staticx -> erasedy;; |}];
+  [%expect {| let _ = static x -> erased y;; |}];
   go "let _ = static x -> (erased y -> z);;";
-  [%expect {| let _ = staticx -> (erasedy -> z);; |}];
+  [%expect {| let _ = static x -> (erased y -> z);; |}];
   go "let _ = (static x -> erased y) -> z;;";
-  [%expect {| let _ = (staticx -> erasedy) -> z;; |}];
+  [%expect {| let _ = (static x -> erased y) -> z;; |}];
   go "let _ = static x -> (y -> z);;";
-  [%expect {| let _ = staticx -> (y -> z);; |}];
+  [%expect {| let _ = static x -> (y -> z);; |}];
   go "let _ = static x -> erased y -> z;;";
-  [%expect {| let _ = staticx -> erasedy -> z;; |}]
+  [%expect {| let _ = static x -> erased y -> z;; |}]
 ;;
 
 let%expect_test "static" =
   go "let _ = fn (static x : int @ static) -> ();;";
-  [%expect {| let _ = fn (staticx : int @ static) -> ();; |}];
+  [%expect {| let _ = fn (static x : int @ static) -> ();; |}];
   go "let _ = fn (x : (int)) -> ();;";
   [%expect {| let _ = fn (x : (int)) -> ();; |}];
   go "let _ = fn (x : int @ static static) -> ();;";
@@ -198,7 +206,10 @@ let _ = first true;;
 |};
   [%expect
     {|
-    fun first ( x : bool -> bool) : bool = if x then first false else false;;
+    fun first (x : bool -> bool) : bool =
+      if x then first false else false
+    ;;
+
     let _ = first true;;
     |}]
 ;;
@@ -211,7 +222,10 @@ let _ = first;;
 |};
   [%expect
     {|
-    fun first ( x : bool) : bool -> (bool -> bool) = x;;
+    fun first (x : bool) : bool -> (bool -> bool) =
+      x
+    ;;
+
     let _ = first;;
     |}]
 ;;
@@ -224,7 +238,10 @@ let _ = first;;
 |};
   [%expect
     {|
-    fun first ( x : bool) : (bool -> bool) -> bool = x;;
+    fun first (x : bool) : (bool -> bool) -> bool =
+      x
+    ;;
+
     let _ = first;;
     |}]
 ;;
@@ -237,7 +254,10 @@ let _ = first;;
 |};
   [%expect
     {|
-    fun first ( x : bool) : bool -> bool -> bool = x;;
+    fun first (x : bool) : bool -> bool -> bool =
+      x
+    ;;
+
     let _ = first;;
     |}]
 ;;
@@ -252,7 +272,15 @@ let%expect_test _ =
     aux 1
   ;;
 |};
-  [%expect {| let _ = fun aux ( x : int) : int = (x); aux 1;; |}]
+  [%expect
+    {|
+    let _ =
+      fun aux (x : int) : int =
+        (x)
+      in
+      aux 1
+    ;;
+    |}]
 ;;
 
 let%expect_test _ =
@@ -269,7 +297,15 @@ let%expect_test _ =
   ;;
 |};
   [%expect
-    {| let _ = let capture = 10 in fun aux ( x : int) : int = (if x > 0 then aux (x - 1) else capture); print_int (aux 5);; |}]
+    {|
+    let _ =
+      let capture = 10 in
+      fun aux (x : int) : int =
+        (if x > 0 then aux (x - 1) else capture)
+      in
+      print_int (aux 5)
+    ;;
+    |}]
 ;;
 
 let%expect_test "mutual" =
@@ -282,8 +318,12 @@ let _ = print_int (f 0);;
   |};
   [%expect
     {|
-    fun f ( x : int) : int = g x
-    and g ( x : int) : int = f x;;
+    fun f (x : int) : int =
+      g x
+    and g (x : int) : int =
+      f x
+    ;;
+
     let _ = print_int (f 0);;
     |}]
 ;;
@@ -302,8 +342,12 @@ let _ = print_int (f 10 ());;
   |};
   [%expect
     {|
-    fun f ( x : int) : (unit -> int) = if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + g (x - 1) ())
-    and g ( x : int) : (unit -> int) = if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + f (x - 1) ());;
+    fun f (x : int) : (unit -> int) =
+      if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + g (x - 1) ())
+    and g (x : int) : (unit -> int) =
+      if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + f (x - 1) ())
+    ;;
+
     let _ = print_int (f 10 ());;
     |}]
 ;;
@@ -318,7 +362,16 @@ let _ =
 ;;
   |};
   [%expect
-    {| let _ = fun f ( x : int) : int = g x and g ( x : int) : int = f x; print_int (f 0);; |}]
+    {|
+    let _ =
+      fun f (x : int) : int =
+        g x
+      and g (x : int) : int =
+        f x
+      in
+      print_int (f 0)
+    ;;
+    |}]
 ;;
 
 let%expect_test "mutual2 inner" =
@@ -335,7 +388,16 @@ let _ =
 ;;
   |};
   [%expect
-    {| let _ = fun f ( x : int) : (unit -> int) = if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + g (x - 1) ()) and g ( x : int) : (unit -> int) = if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + f (x - 1) ()); print_int (f 10 ());; |}]
+    {|
+    let _ =
+      fun f (x : int) : (unit -> int) =
+        if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + g (x - 1) ())
+      and g (x : int) : (unit -> int) =
+        if x == 0 then (fn (_ : unit) -> 0) else (fn (_ : unit) -> 1 + f (x - 1) ())
+      in
+      print_int (f 10 ())
+    ;;
+    |}]
 ;;
 
 let%expect_test "comment" =
@@ -343,7 +405,7 @@ let%expect_test "comment" =
     {|
 let _ = (* hello *) 0;;
   |};
-  [%expect {| let _ = 0;; |}]
+  [%expect {| let _ = (* hello *) 0;; |}]
 ;;
 
 let%expect_test "comment" =
@@ -351,7 +413,7 @@ let%expect_test "comment" =
     {|
 (* hello *)
   |};
-  [%expect {| |}]
+  [%expect {| (* hello *) |}]
 ;;
 
 let%expect_test "comment" =
@@ -359,7 +421,7 @@ let%expect_test "comment" =
     {|
 (* (* *)
   |};
-  [%expect {| |}]
+  [%expect {| (* (* *) |}]
 ;;
 
 let%expect_test "comment" =
@@ -375,7 +437,39 @@ let%expect_test "comment" =
     {|
 (* *) fun (* *) erased (* *) f (* *) ((* *) static (* *) erased (* *) x (* *) : (* *) int (* *)) (* *) : (* *) static (* *) erased (* *) int (* *) = (* *) x (* *);;(* *)
   |};
-  [%expect {| fun f (static erased x : int) : static erasedint = x;; |}]
+  [%expect
+    {|
+    (* *)
+    fun erased f
+      (static erased x : (* *)
+
+      (* *)
+
+      (* *)
+
+      (* *)
+
+      (* *)
+
+      (* *)
+
+      (* *)
+
+      (* *)
+      int (* *)) : static erased (* *)
+
+      (* *)
+
+      (* *)
+
+      (* *)
+      int (* *) =
+      (* *)
+      x (* *)
+    ;;
+
+    (* *)
+    |}]
 ;;
 
 let%expect_test "assert" =
@@ -558,4 +652,114 @@ let%expect_test "let in tuple" =
 let%expect_test "let in tuple" =
   go "let _ = (let first = x in 1), (let second = x in 2);;";
   [%expect {| let _ = (let first = x in 1), (let second = x in 2);; |}]
+;;
+
+let%expect_test "multi-arg fn" =
+  go "let _ = fn (x : int) (y : bool) -> x;;";
+  [%expect {| let _ = fn (x : int) (y : bool) -> x;; |}]
+;;
+
+let%expect_test "multi-arg fn 3" =
+  go "let _ = fn (x : int) (y : bool) (z : unit) -> x;;";
+  [%expect {| let _ = fn (x : int) (y : bool) (z : unit) -> x;; |}]
+;;
+
+let%expect_test "multi-arg fn with modes" =
+  go "let _ = fn (static x : type) (y : x) -> y;;";
+  [%expect {| let _ = fn (static x : type) (y : x) -> y;; |}]
+;;
+
+let%expect_test "multi-arg fn erased" =
+  go "let _ = fn erased (static x : type) (y : x) -> y;;";
+  [%expect {| let _ = fn erased (static x : type) (y : x) -> y;; |}]
+;;
+
+let%expect_test "multi-arg fun" =
+  go "fun add (x : int) (y : int) : int = x + y;;";
+  [%expect
+    {|
+    fun add (x : int) (y : int) : int =
+      x + y
+    ;;
+    |}]
+;;
+
+let%expect_test "multi-arg fun 3" =
+  go "fun f (a : int) (b : bool) (c : unit) : int = a;;";
+  [%expect
+    {|
+    fun f (a : int) (b : bool) (c : unit) : int =
+      a
+    ;;
+    |}]
+;;
+
+let%expect_test "multi-arg fun with modes" =
+  go "fun id (static erased t : type) (x : t) : t = x;;";
+  [%expect
+    {|
+    fun id (static erased t : type) (x : t) : t =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "multi-arg fun mutual" =
+  go
+    {|
+fun f (x : int) (y : int) : int = g x y
+and g (a : int) (b : int) : int = f a b
+;;
+|};
+  [%expect
+    {|
+    fun f (x : int) (y : int) : int =
+      g x y
+    and g (a : int) (b : int) : int =
+      f a b
+    ;;
+    |}]
+;;
+
+let%expect_test "multi-arg fun inner" =
+  go "let _ = fun f (x : int) (y : int) : int = x + y in f 1 2;;";
+  [%expect
+    {|
+    let _ =
+      fun f (x : int) (y : int) : int =
+        x + y
+      in
+      f 1 2
+    ;;
+    |}]
+;;
+
+let%expect_test "let with args" =
+  go "let add (x : int) (y : int) = x + y;;";
+  [%expect {| let add (x : int) (y : int) = x + y;; |}]
+;;
+
+let%expect_test "let with one arg" =
+  go "let f (x : int) = x;;";
+  [%expect {| let f (x : int) = x;; |}]
+;;
+
+let%expect_test "let with args inner" =
+  go "let _ = let add (x : int) (y : int) = x + y in add 1 2;;";
+  [%expect {| let _ = let add (x : int) (y : int) = x + y in add 1 2;; |}]
+;;
+
+let%expect_test "let no args unchanged" =
+  go "let x = 42;;";
+  [%expect {| let x = 42;; |}]
+;;
+
+let%expect_test "let with modes in args" =
+  go "let id (static erased t : type) (x : t) = x;;";
+  [%expect {| let id (static erased t : type) (x : t) = x;; |}]
+;;
+
+let%expect_test "unterminated comment" =
+  go "(* unterminated";
+  [%expect {| ((loc ((line 1) (column 0))) (reason Unterminated_comment)) |}]
 ;;

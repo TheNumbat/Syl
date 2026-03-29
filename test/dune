@@ -1,6 +1,6 @@
 (library
- (name test_syl)
+ (name syl_test)
  (inline_tests)
- (libraries syl core core_unix)
+ (libraries syl syl_fmt core core_unix)
  (preprocess
   (pps ppx_jane)))

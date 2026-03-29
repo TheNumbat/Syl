@@ -1,0 +1,5 @@
+(library
+ (name syl_fmt)
+ (libraries core syl)
+ (preprocess
+  (pps ppx_jane)))

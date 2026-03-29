@@ -18,6 +18,16 @@ let dump_cst =
        unwrap (Syl.to_cst contents) ~f:(fun cst -> print_s [%message (cst : Syl.Cst.Program.t)]))
 ;;
 
+let dump_dst =
+  let open Command.Let_syntax in
+  Command.basic
+    ~summary:"print the desugared IR"
+    (let%map_open file = anon ("file" %: string) in
+     fun () ->
+       let contents = In_channel.read_all file in
+       unwrap (Syl.to_dst contents) ~f:(fun dst -> print_s [%message (dst : Syl.Dst.Program.t)]))
+;;
+
 let dump_tst =
   let open Command.Let_syntax in
   Command.basic
@@ -48,10 +58,10 @@ let dump_lst =
        unwrap (Syl.to_lst contents) ~f:(fun ir -> print_s [%message (ir : Syl.Lst.Program.t)]))
 ;;
 
-let dump_c =
+let dump_cpp =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the C output"
+    ~summary:"print the C++ output"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -61,7 +71,13 @@ let dump_c =
 let dump =
   Command.group
     ~summary:"print an IR"
-    [ "cst", dump_cst; "tst", dump_tst; "sst", dump_sst; "lst", dump_lst; "c", dump_c ]
+    [ "cst", dump_cst
+    ; "dst", dump_dst
+    ; "tst", dump_tst
+    ; "sst", dump_sst
+    ; "lst", dump_lst
+    ; "cpp", dump_cpp
+    ]
 ;;
 
 let default_output file = Filename.basename (Filename.chop_extension file) ^ ".exe"
@@ -106,7 +122,57 @@ let run =
        | Error (`Signal signal) -> print_s [%message "Program killed" (signal : Signal.t)])
 ;;
 
+let error_json ~(loc : Syl.Lex.Location.t) reason =
+  eprintf "{\"line\":%d,\"column\":%d,\"reason\":\"%s\"}\n" loc.line loc.column reason;
+  exit 1
+;;
+
+let read_input file =
+  match file with
+  | Some file -> In_channel.read_all file
+  | None -> In_channel.input_all In_channel.stdin
+;;
+
+let fmt =
+  let open Command.Let_syntax in
+  Command.basic
+    ~summary:"format a Syl source file"
+    (let%map_open file = anon (maybe ("file" %: string))
+     and inplace = flag "-i" no_arg ~doc:"format file in place" in
+     fun () ->
+       let contents = read_input file in
+       match Syl.Parse.parse contents with
+       | Ok cst ->
+         let output = Syl_fmt.to_string cst in
+         if inplace
+         then (
+           match file with
+           | Some file -> Out_channel.write_all file ~data:output
+           | None -> eprintf "error: -i requires a file argument\n")
+         else print_string output
+       | Error { loc; reason } ->
+         error_json ~loc (Sexp.to_string [%sexp (reason : Syl.Parse.Error.t)]))
+;;
+
+let check =
+  let open Command.Let_syntax in
+  Command.basic
+    ~summary:"check a Syl source file for errors"
+    (let%map_open file = anon (maybe ("file" %: string)) in
+     fun () ->
+       let contents = read_input file in
+       let open Syl in
+       match to_tst contents with
+       | Ok _ -> ()
+       | Parse_error { loc; reason } ->
+         error_json ~loc (Sexp.to_string [%sexp (reason : Parse.Error.t)])
+       | Type_error { loc; reason } ->
+         error_json ~loc (Sexp.to_string [%sexp (reason : Typecheck.Error.t)]))
+;;
+
 let () =
   Command_unix.run
-    (Command.group ~summary:"Syl Compiler" [ "dump", dump; "build", build; "run", run ])
+    (Command.group
+       ~summary:"Syl Compiler"
+       [ "dump", dump; "build", build; "run", run; "fmt", fmt; "check", check ])
 ;;

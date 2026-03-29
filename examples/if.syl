@@ -1,18 +1,13 @@
-
 let c = true @ dynamic;;
 
-let _ =
-  if c
-  then fn (x : int) -> print_int x
-  else fn (y : int) -> print_int y
-;;
+let _ = if c then fn (x : int) -> print_int x else fn (y : int) -> print_int y;;
 
 let _ =
   if c
   then if c
-    then 0
-    else 1
+       then 0
+       else 1
   else if c
-    then 2
-    else 3
+       then 2
+       else 3
 ;;

@@ -1,33 +1,19 @@
-
 fun first (x : bool) : bool =
-    let id = fn (y : bool) -> y in
-    if x
-    then first false
-    else id false
+  let id = fn (y : bool) -> y in if x then first false else id false
 ;;
 
 fun second (x : bool) : bool =
-  let f = first in
-  f x
+  let f = first in f x
 ;;
 
-let ok =
-  let not_ok = let x = true in x in
-  not_ok
-;;
+let ok = let not_ok = let x = true in x in not_ok;;
 
 let _ = print_bool (second true);;
 
-let _ =
-  let f = fn (x : bool) -> fn (y : bool) -> print_bool x in
-  let g = f false in
-  g true
-;;
+let _ = let f = fn (x : bool) -> fn (y : bool) -> print_bool x in let g = f false in g true;;
 
 fun recur (x : int) : int =
-  if x > 0
-  then recur (x - 1)
-  else x
+  if x > 0 then recur (x - 1) else x
 ;;
 
 let _ = print_int (recur 10);;
@@ -40,6 +26,8 @@ let _ = print_int (capture 10 ());;
 
 let i = 20;;
 
-fun capture2 (x : unit) : int = i;;
+fun capture2 (x : unit) : int =
+  i
+;;
 
 let _ = print_int (capture2 ());;

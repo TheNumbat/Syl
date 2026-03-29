@@ -37,7 +37,7 @@ let compile_and_run c =
 ;;
 
 let strip_prelude c =
-  let c_preamble_end = "//SYL_STDLIB_END" in
+  let c_preamble_end = "//SYL_STD_END" in
   match String.substr_index c ~pattern:c_preamble_end with
   | None -> c
   | Some i ->

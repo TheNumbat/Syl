@@ -2320,7 +2320,7 @@ let f = 0 -> int;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 10)))
+    ((loc ((line 2) (column 8)))
      (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
     |}]
 ;;
@@ -2332,7 +2332,7 @@ let f = int -> 0;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 12)))
+    ((loc ((line 2) (column 8)))
      (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
     |}]
 ;;
@@ -2345,7 +2345,7 @@ let f = int -> x;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 12)))
+    ((loc ((line 3) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
@@ -2360,7 +2360,7 @@ let f = x -> int;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 10)))
+    ((loc ((line 3) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
@@ -2374,7 +2374,7 @@ let f = static type \ t -> (t @ dynamic);;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 24)))
+    ((loc ((line 2) (column 15)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
@@ -2388,7 +2388,7 @@ let f = static int \ t -> t;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 23)))
+    ((loc ((line 2) (column 15)))
      (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
     |}]
 ;;

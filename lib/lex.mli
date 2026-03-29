@@ -108,6 +108,16 @@ module Location : sig
   val empty : t
 end
 
+module Comment : sig
+  type t =
+    { text : string
+    ; loc : Location.t
+    }
+  [@@deriving sexp]
+end
+
+exception Unterminated_comment of Location.t [@@deriving sexp]
+
 module Tokenizer : sig
   type t
 
@@ -116,4 +126,5 @@ module Tokenizer : sig
   val next : t -> Token.t
   val peek : t -> Token.t
   val skip : t -> unit
+  val comments : t -> Location.t * Comment.t list
 end

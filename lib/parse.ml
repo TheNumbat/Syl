@@ -11,6 +11,7 @@ module Error = struct
     | Duplicate_mode of Modes.t
     | Unexpected_modes of Modes.Modes.Maybe.t
     | Fun_underscore
+    | Unterminated_comment
   [@@deriving sexp]
 end
 
@@ -114,31 +115,39 @@ let maybe_modes ~required t : Modes.Modes.Maybe.t =
   { staticity; erasure }
 ;;
 
+let with_loc ~loc ?(before = []) node : Expr.t = With_loc.create ~before ~loc node
+let leading t = Tokenizer.comments t.tokens
+
+let trailing t (expr : Expr.t) : Expr.t =
+  let _, comments = Tokenizer.comments t.tokens in
+  if List.is_empty comments then expr else { expr with after = expr.after @ comments }
+;;
+
 let rec expr t : Expr.t = expr_mode_annot t
 
 and expr_mode_annot t : Expr.t =
-  let expr = expr_ty_annot t in
+  let expr = trailing t (expr_ty_annot t) in
   match Tokenizer.peek t.tokens with
   | At ->
     let loc = Tokenizer.loc t.tokens in
     expect t ~kind:At;
     let mode = maybe_modes ~required:true t in
-    Mode_annotation { expr; mode; loc }
+    with_loc ~loc (Mode_annotation { expr; mode })
   | _ -> expr
 
 and expr_ty_annot t : Expr.t =
-  let expr = expr_arrow t in
+  let expr = trailing t (expr_arrow t) in
   let loc = Tokenizer.loc t.tokens in
   match Tokenizer.peek t.tokens with
   | Colon ->
     Tokenizer.skip t.tokens;
     let ty = expr_arrow t in
-    Type_annotation { expr; ty; loc }
+    with_loc ~loc (Type_annotation { expr; ty })
   | _ -> expr
 
 and expr_arrow t : Expr.t =
   let arg_mode = maybe_modes ~required:false t in
-  let arg = expr_comma t in
+  let arg = trailing t (expr_comma t) in
   let arg_id =
     match Tokenizer.peek t.tokens with
     | Op Backslash ->
@@ -153,52 +162,58 @@ and expr_arrow t : Expr.t =
     let ret, ret_mode =
       let modes = maybe_modes ~required:false t in
       match expr_arrow t with
-      | Arrow arrow -> Expr.Arrow { arrow with arg_mode = modes }, Modes.Modes.Maybe.none
+      | { node = Arrow arrow; _ } ->
+        with_loc ~loc:arg.loc (Arrow { arrow with arg_mode = modes }), Modes.Modes.Maybe.none
       | expr -> expr, modes
     in
-    Arrow { arg; arg_id; arg_mode; ret; ret_mode; loc }
+    with_loc ~loc:arg.loc (Arrow { arg; arg_id; arg_mode; ret; ret_mode })
   | _ ->
     if Modes.Modes.Maybe.(equal arg_mode none) then arg else Fail.unexpected_modes ~loc arg_mode
 
 and expr_comma t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
   let first = expr_caret t in
+  let first = trailing t first in
   match Tokenizer.peek t.tokens with
   | Op Comma ->
     let rec aux acc =
       match Tokenizer.peek t.tokens with
       | Op Comma ->
         Tokenizer.skip t.tokens;
-        aux (expr_caret t :: acc)
+        let e = expr_caret t in
+        aux (trailing t e :: acc)
       | _ -> List.rev acc
     in
-    Expr.Nop { op = Comma; elts = aux [ first ]; loc }
+    with_loc ~loc (Nop { op = Comma; elts = aux [ first ] })
   | _ -> first
 
 and expr_caret t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
   let first = expr_lor t in
+  let first = trailing t first in
   match Tokenizer.peek t.tokens with
   | Op Caret ->
     let rec aux acc =
       match Tokenizer.peek t.tokens with
       | Op Caret ->
         Tokenizer.skip t.tokens;
-        aux (expr_lor t :: acc)
+        let e = expr_lor t in
+        aux (trailing t e :: acc)
       | _ -> List.rev acc
     in
-    Expr.Nop { op = Caret; elts = aux [ first ]; loc }
+    with_loc ~loc (Nop { op = Caret; elts = aux [ first ] })
   | _ -> first
 
 and expr_lor t : Expr.t =
   let first = expr_land t in
   let rec aux lhs =
+    let lhs = trailing t lhs in
     let loc = Tokenizer.loc t.tokens in
     match Tokenizer.peek t.tokens with
     | Op Or ->
       Tokenizer.skip t.tokens;
       let rhs = expr_land t in
-      aux (Expr.Binop { op = Or; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Or; lhs; rhs }))
     | _ -> lhs
   in
   aux first
@@ -206,12 +221,13 @@ and expr_lor t : Expr.t =
 and expr_land t : Expr.t =
   let first = expr_eq_neq t in
   let rec aux lhs =
+    let lhs = trailing t lhs in
     let loc = Tokenizer.loc t.tokens in
     match Tokenizer.peek t.tokens with
     | Op And ->
       Tokenizer.skip t.tokens;
       let rhs = expr_eq_neq t in
-      aux (Expr.Binop { op = And; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = And; lhs; rhs }))
     | _ -> lhs
   in
   aux first
@@ -219,16 +235,17 @@ and expr_land t : Expr.t =
 and expr_eq_neq t : Expr.t =
   let first = expr_cmp t in
   let rec aux lhs =
+    let lhs = trailing t lhs in
     let loc = Tokenizer.loc t.tokens in
     match Tokenizer.peek t.tokens with
     | Op Eq ->
       Tokenizer.skip t.tokens;
       let rhs = expr_cmp t in
-      aux (Expr.Binop { op = Eq; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Eq; lhs; rhs }))
     | Op Neq ->
       Tokenizer.skip t.tokens;
       let rhs = expr_cmp t in
-      aux (Expr.Binop { op = Neq; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Neq; lhs; rhs }))
     | _ -> lhs
   in
   aux first
@@ -236,24 +253,25 @@ and expr_eq_neq t : Expr.t =
 and expr_cmp t : Expr.t =
   let first = expr_add_sub t in
   let rec aux lhs =
+    let lhs = trailing t lhs in
     let loc = Tokenizer.loc t.tokens in
     match Tokenizer.peek t.tokens with
     | Op Lt ->
       Tokenizer.skip t.tokens;
       let rhs = expr_add_sub t in
-      aux (Expr.Binop { op = Lt; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Lt; lhs; rhs }))
     | Op Gt ->
       Tokenizer.skip t.tokens;
       let rhs = expr_add_sub t in
-      aux (Expr.Binop { op = Gt; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Gt; lhs; rhs }))
     | Op Lte ->
       Tokenizer.skip t.tokens;
       let rhs = expr_add_sub t in
-      aux (Expr.Binop { op = Lte; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Lte; lhs; rhs }))
     | Op Gte ->
       Tokenizer.skip t.tokens;
       let rhs = expr_add_sub t in
-      aux (Expr.Binop { op = Gte; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Gte; lhs; rhs }))
     | _ -> lhs
   in
   aux first
@@ -261,16 +279,17 @@ and expr_cmp t : Expr.t =
 and expr_add_sub t : Expr.t =
   let first = expr_mul_div_mod t in
   let rec aux lhs =
+    let lhs = trailing t lhs in
     let loc = Tokenizer.loc t.tokens in
     match Tokenizer.peek t.tokens with
     | Op Plus ->
       Tokenizer.skip t.tokens;
       let rhs = expr_mul_div_mod t in
-      aux (Expr.Binop { op = Add; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Add; lhs; rhs }))
     | Op Minus ->
       Tokenizer.skip t.tokens;
       let rhs = expr_mul_div_mod t in
-      aux (Expr.Binop { op = Sub; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Sub; lhs; rhs }))
     | _ -> lhs
   in
   aux first
@@ -278,32 +297,35 @@ and expr_add_sub t : Expr.t =
 and expr_mul_div_mod t : Expr.t =
   let first = expr_neg t in
   let rec aux lhs =
+    let lhs = trailing t lhs in
     let loc = Tokenizer.loc t.tokens in
     match Tokenizer.peek t.tokens with
     | Op Star ->
       Tokenizer.skip t.tokens;
       let rhs = expr_neg t in
-      aux (Expr.Binop { op = Mul; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Mul; lhs; rhs }))
     | Op Slash ->
       Tokenizer.skip t.tokens;
       let rhs = expr_neg t in
-      aux (Expr.Binop { op = Div; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Div; lhs; rhs }))
     | Op Percent ->
       Tokenizer.skip t.tokens;
       let rhs = expr_neg t in
-      aux (Expr.Binop { op = Mod; lhs; rhs; loc })
+      aux (with_loc ~loc (Binop { op = Mod; lhs; rhs }))
     | _ -> lhs
   in
   aux first
 
 and expr_neg t : Expr.t =
-  let loc = Tokenizer.loc t.tokens in
+  let loc, comments = leading t in
   match Tokenizer.peek t.tokens with
   | Op Minus ->
     Tokenizer.skip t.tokens;
     let arg = expr_app t in
-    Unop { op = Neg; arg; loc }
-  | _ -> expr_app t
+    with_loc ~loc ~before:comments (Unop { op = Neg; arg })
+  | _ ->
+    let expr = expr_app t in
+    if List.is_empty comments then expr else { expr with before = comments @ expr.before }
 
 and can_start_atom t =
   match Tokenizer.peek t.tokens with
@@ -313,67 +335,92 @@ and can_start_atom t =
 
 and expr_app t : Expr.t =
   let first = expr_lnot t in
-  let rec aux acc = if can_start_atom t then aux (expr_lnot t :: acc) else acc in
+  let rec aux acc = if can_start_atom t then aux (trailing t (expr_lnot t) :: acc) else acc in
   let args = aux [] in
-  List.fold_right args ~init:first ~f:(fun exp acc ->
-    Expr.Apply { fn = acc; arg = exp; loc = Expr.loc acc })
+  List.fold_right args ~init:(trailing t first) ~f:(fun exp (acc : _ With_loc.t) ->
+    with_loc ~loc:acc.loc (Apply { fn = acc; arg = exp }))
 
 and expr_lnot t : Expr.t =
-  let loc = Tokenizer.loc t.tokens in
+  let loc, comments = leading t in
   match Tokenizer.peek t.tokens with
   | Op Not ->
     Tokenizer.skip t.tokens;
     let arg = expr_primary t in
-    Unop { op = Not; arg; loc }
-  | _ -> expr_primary t
+    with_loc ~loc ~before:comments (Unop { op = Not; arg })
+  | _ ->
+    let expr = expr_primary t in
+    if List.is_empty comments then expr else { expr with before = comments @ expr.before }
+
+and parse_arg t : Expr.arg =
+  let loc = Tokenizer.loc t.tokens in
+  expect t ~kind:Lparen;
+  let mode = maybe_modes ~required:false t in
+  let var = expect_ident t in
+  expect t ~kind:Colon;
+  let ty = expr t in
+  expect t ~kind:Rparen;
+  { var; mode; ty; loc }
+
+and require_args t : Expr.arg Nonempty_list.t =
+  let first = parse_arg t in
+  let rest = parse_args t in
+  Nonempty_list.create first rest
+
+and parse_args t : Expr.arg list =
+  let rec aux acc =
+    match Tokenizer.peek t.tokens with
+    | Lparen -> aux (parse_arg t :: acc)
+    | _ -> List.rev acc
+  in
+  aux []
 
 and expr_primary t : Expr.t =
-  let loc = Tokenizer.loc t.tokens in
-  match Tokenizer.next t.tokens with
-  | Unreachable -> Unreachable { loc }
-  | Assert ->
-    let static = maybe_static t in
-    let cond = expr_lnot t in
-    Assert { cond; static; loc }
-  | If ->
-    let static = maybe_static t in
-    let cond = expr t in
-    expect t ~kind:Then;
-    let then_ = expr t in
-    expect t ~kind:Else;
-    let else_ = expr t in
-    If { cond; then_; else_; static; loc }
-  | Fun ->
-    let funs = expr_funs ~loc t [] in
-    let rest = expr t in
-    Fun { funs; rest; loc }
-  | Fn ->
-    let erased = maybe_erased t in
-    expect t ~kind:Lparen;
-    let arg_mode = maybe_modes ~required:false t in
-    let arg = expect_ident t in
-    expect t ~kind:Colon;
-    let arg_ty = expr t in
-    expect t ~kind:Rparen;
-    expect_op t ~op:Arrow;
-    let body = expr t in
-    Lambda { arg; erased; arg_mode; arg_ty; body; loc }
-  | Let ->
-    let var = expect_ident t in
-    expect t ~kind:Asn;
-    let bind = expr t in
-    expect t ~kind:In;
-    let rest = expr t in
-    Let { var; bind; rest; loc }
-  | Lparen ->
-    let exp = expr t in
-    expect t ~kind:Rparen;
-    Paren { expr = exp; loc }
-  | Unit -> Literal { value = Unit; loc }
-  | Bool value -> Literal { value = Bool value; loc }
-  | Int value -> Literal { value = Int value; loc }
-  | Ident id -> Var { id = Ident.id id; loc }
-  | tok -> Fail.unexpected ~loc tok
+  let loc, comments = leading t in
+  let node =
+    match Tokenizer.next t.tokens with
+    | Unreachable -> Expr.Unreachable
+    | Assert ->
+      let static = maybe_static t in
+      let cond = expr_lnot t in
+      Assert { cond; static }
+    | If ->
+      let static = maybe_static t in
+      let cond = expr t in
+      expect t ~kind:Then;
+      let then_ = expr t in
+      expect t ~kind:Else;
+      let else_ = expr t in
+      If { cond; then_; else_; static }
+    | Fun ->
+      let funs = expr_funs ~loc t [] in
+      let rest = expr t in
+      Fun { funs; rest }
+    | Fn ->
+      let erased = maybe_erased t in
+      let args = require_args t in
+      expect_op t ~op:Arrow;
+      let body = expr t in
+      Lambda { erased; args; body }
+    | Let ->
+      let erased = maybe_erased t in
+      let var = expect_ident t in
+      let args = parse_args t in
+      expect t ~kind:Asn;
+      let bind = expr t in
+      expect t ~kind:In;
+      let rest = expr t in
+      Let { var; erased; args; bind; rest }
+    | Lparen ->
+      let exp = expr t in
+      expect t ~kind:Rparen;
+      Paren { expr = exp }
+    | Unit -> Literal { value = Unit }
+    | Bool value -> Literal { value = Bool value }
+    | Int value -> Literal { value = Int value }
+    | Ident id -> Var { id = Ident.id id }
+    | tok -> Fail.unexpected ~loc tok
+  in
+  with_loc ~loc ~before:comments node
 
 and expr_fun t : Expr.fun_ =
   let loc = Tokenizer.loc t.tokens in
@@ -382,18 +429,13 @@ and expr_fun t : Expr.fun_ =
     let name = expect t ~kind:Ident in
     if String.equal name "_" then Fail.fun_underscore ~loc else Ident.id name
   in
-  expect t ~kind:Lparen;
-  let arg_mode = maybe_modes ~required:false t in
-  let arg = expect_ident t in
-  expect t ~kind:Colon;
-  let arg_ty = expr t in
-  expect t ~kind:Rparen;
+  let args = require_args t in
   expect t ~kind:Colon;
   let ret_mode = maybe_modes ~required:false t in
   let ret_ty = expr t in
   expect t ~kind:Asn;
   let body = expr t in
-  { var; arg; erased; arg_mode; arg_ty; ret_mode; ret_ty; body; loc }
+  { var; erased; args; ret_mode; ret_ty; body; loc }
 
 and expr_funs ~loc t fs : Expr.fun_ Nonempty_list.t =
   let f = expr_fun t in
@@ -407,41 +449,49 @@ let rec top_level_funs ~loc t fs : Top_level.t =
   let f = expr_fun t in
   match Tokenizer.next t.tokens with
   | And -> top_level_funs ~loc t (f :: fs)
-  | Double_semicolon -> Fun { funs = Nonempty_list.reverse (f :: fs); loc }
+  | Double_semicolon ->
+    With_loc.create ~loc (Top_level.Fun { funs = Nonempty_list.reverse (f :: fs) })
   | tok -> Fail.unexpected ~loc tok
 ;;
 
 let top_level t : Top_level.t =
-  let loc = Tokenizer.loc t.tokens in
-  match Tokenizer.next t.tokens with
-  | Fun -> top_level_funs ~loc t []
-  | Let ->
-    let var = expect_ident t in
-    expect t ~kind:Asn;
-    let bind = expr t in
-    expect t ~kind:Double_semicolon;
-    Let { var; bind; loc }
-  | External ->
-    let var = expect_ident t in
-    expect t ~kind:Colon;
-    let ty = expr t in
-    expect t ~kind:Asn;
-    let symbol = expect t ~kind:Ident in
-    expect t ~kind:Double_semicolon;
-    External { var; symbol; ty; loc }
-  | Builtin ->
-    let var = expect_ident t in
-    expect t ~kind:Asn;
-    let name = expect t ~kind:Ident in
-    expect t ~kind:Double_semicolon;
-    Builtin { var; name; loc }
-  | tok -> Fail.unexpected ~loc tok
+  let loc, comments = leading t in
+  let tl =
+    match Tokenizer.next t.tokens with
+    | Fun -> top_level_funs ~loc t []
+    | Let ->
+      let erased = maybe_erased t in
+      let var = expect_ident t in
+      let args = parse_args t in
+      expect t ~kind:Asn;
+      let bind = expr t in
+      expect t ~kind:Double_semicolon;
+      With_loc.create ~loc (Top_level.Let { var; erased; args; bind })
+    | External ->
+      let var = expect_ident t in
+      expect t ~kind:Colon;
+      let ty = expr t in
+      expect t ~kind:Asn;
+      let symbol = expect t ~kind:Ident in
+      expect t ~kind:Double_semicolon;
+      With_loc.create ~loc (Top_level.External { var; symbol; ty })
+    | Builtin ->
+      let var = expect_ident t in
+      expect t ~kind:Asn;
+      let name = expect t ~kind:Ident in
+      expect t ~kind:Double_semicolon;
+      With_loc.create ~loc (Top_level.Builtin { var; name })
+    | tok -> Fail.unexpected ~loc tok
+  in
+  if List.is_empty comments then tl else { tl with before = comments }
 ;;
 
-let top_level_list t : Top_level.t list =
+let top_level_list t : Program.t =
   let rec aux acc =
     match Tokenizer.peek t.tokens with
-    | Eof -> List.rev acc
+    | Eof ->
+      let _, after = Tokenizer.comments t.tokens in
+      { Program.items = List.rev acc; after }
     | _ -> aux (top_level t :: acc)
   in
   aux []
@@ -455,4 +505,5 @@ let parse_exn input : Program.t =
 let parse input =
   try Ok (parse_exn input) with
   | Error err -> Error err
+  | Lex.Unterminated_comment loc -> Error { loc; reason = Unterminated_comment }
 ;;

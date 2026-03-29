@@ -6,6 +6,7 @@ module Error : sig
     | Duplicate_mode of Modes.t
     | Unexpected_modes of Modes.Modes.Maybe.t
     | Fun_underscore
+    | Unterminated_comment
   [@@deriving sexp]
 end
 

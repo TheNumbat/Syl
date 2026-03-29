@@ -36,7 +36,6 @@ module Expr : sig
         }
     | Lambda of
         { arg : Ident.t
-        ; erased : Erasure.t
         ; arg_mode : Modes.Maybe.t
         ; arg_ty : t
         ; body : t

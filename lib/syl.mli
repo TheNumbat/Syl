@@ -1,4 +1,6 @@
 open! Core
+module Modes = Modes
+module Ident = Ident
 module Cst = Cst
 module Dst = Dst
 module Tst = Tst

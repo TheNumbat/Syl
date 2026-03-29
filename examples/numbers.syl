@@ -1,28 +1,29 @@
-
 fun f (x : int) : unit =
   if x < 10
   then print_int 1
   else if x <= 27
-  then print_int (-2)
-  else print_int 3
+       then print_int (-2)
+       else print_int 3
 ;;
 
 fun g (x : int) : unit =
   if x > 123
   then print_int 1
   else if x >= 27
-  then print_int (-2)
-  else print_int 3
+       then print_int (-2)
+       else print_int 3
 ;;
 
 fun h (x : int) : unit =
   if x != 27
   then print_int 1
   else if x == 27
-  then print_int (-2)
-  else print_int 3
+       then print_int (-2)
+       else print_int 3
 ;;
 
 let _ = f (20 + 7);;
+
 let _ = g (30 - 3);;
+
 let _ = h (10 * 2 + 14 / 2);;

@@ -1,0 +1,18 @@
+{
+    "comments": {
+        "blockComment": [
+            "(*",
+            "*)"
+        ]
+    },
+    "autoClosingPairs": [
+        {
+            "open": "(",
+            "close": ")"
+        },
+        {
+            "open": "(*",
+            "close": "*)"
+        }
+    ]
+}

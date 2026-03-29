@@ -1,13 +1,14 @@
-
 let t = (), true, 1;;
+
 let t2 = true, false, ();;
 
 let _ = fn (x : unit) -> let _ = t in let _ = t2 in ();;
 
 fun f (x : unit) : unit =
-  let _ = t in
-  ()
-and g (y : unit) : unit = f ();;
+  let _ = t in ()
+and g (y : unit) : unit =
+  f ()
+;;
 
 let _ = f ();;
 
@@ -16,11 +17,13 @@ let p = fn (_ : unit) -> print_int 1;;
 let _ = (p (), p ());;
 
 let f = fn (_ : unit) -> ((), ());;
+
 let _ = f ();;
 
-
 let f = fn (static _ : unit) -> ((), ());;
+
 let _ = f ();;
 
 let x = 0 @ dynamic;;
+
 let _ = (let first = x in 1), (let second = x in 2);;
