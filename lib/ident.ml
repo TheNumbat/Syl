@@ -119,3 +119,31 @@ let print () (raw, stamp) =
   | 0 -> Raw.print () raw
   | _ -> Raw.print () raw ^ "ˢ" ^ Int.to_string stamp
 ;;
+
+let name () ((raw, stamp) : t) =
+  let name =
+    match raw with
+    | Anon -> "_"
+    | Unop Neg -> "neg"
+    | Unop Not -> "not"
+    | Binop Add -> "add"
+    | Binop Sub -> "sub"
+    | Binop Mul -> "mul"
+    | Binop Div -> "div"
+    | Binop Mod -> "mod"
+    | Binop And -> "and"
+    | Binop Or -> "or"
+    | Binop Eq -> "eq"
+    | Binop Neq -> "neq"
+    | Binop Lt -> "lt"
+    | Binop Lte -> "lte"
+    | Binop Gt -> "gt"
+    | Binop Gte -> "gte"
+    | Nop Comma -> "comma"
+    | Nop Caret -> "caret"
+    | Id id -> id
+  in
+  match stamp with
+  | 0 -> name
+  | _ -> name ^ "ˢ" ^ Int.to_string stamp
+;;

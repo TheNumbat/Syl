@@ -108,14 +108,11 @@ let expand_pack path (expr : Expr.t) =
       Hashtbl.iteri pack ~f:(fun ~key ~data ->
         let path = Path.with_key path key in
         aux (Path.with_key dst key) (Expr.Ident { path; ty = data; loc }) ~f:(thunk ~f))
-    | Builtin { ty; _ }
     | Make_env { ty; _ }
     | Make_closure { ty; _ }
     | Apply_closure { ty; _ }
     | Apply_thunk { ty; _ }
     | Scalar { ty; _ }
-    | Unop { ty; _ }
-    | Binop { ty; _ }
     | Make_tuple { ty; _ }
     | Ident { ty; _ } ->
       (match ty with
@@ -212,16 +209,9 @@ let linearize_external state symbol ty loc : Expr.t =
 
 let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
   match sst with
-  | Builtin { builtin; ty; loc } -> Builtin { builtin; ty = linearize_ty ty; loc }
   | External { symbol; ty; loc } -> linearize_external state symbol ty loc
   | Scalar { value; ty; loc } -> Scalar { value; ty = linearize_ty ty; loc }
   | Var { id; ty; loc } -> Ident { path = Env.find env id; ty = linearize_ty ty; loc }
-  | Unop { op; arg; ty; loc } ->
-    Unop { op; arg = linearize_path state env arg; ty = linearize_ty ty; loc }
-  | Binop { op; lhs; rhs; ty; loc } ->
-    let lhs = linearize_path state env lhs in
-    let rhs = linearize_path state env rhs in
-    Binop { op; lhs; rhs; ty = linearize_ty ty; loc }
   | Tuple { elts; ty; loc } ->
     Make_tuple
       { elts =
@@ -381,11 +371,6 @@ let linearize_top_level state env (sst : Sst.Top_level.t) : Env.t =
   | External { var; symbol; ty; loc } ->
     let path = Path.id var in
     let expr = linearize_external state symbol ty loc in
-    unarize_values state path [||] expr loc;
-    Env.bind env var path
-  | Builtin { var; builtin; ty; loc } ->
-    let path = Path.id var in
-    let expr = Expr.Builtin { builtin; ty = linearize_ty ty; loc } in
     unarize_values state path [||] expr loc;
     Env.bind env var path
 ;;

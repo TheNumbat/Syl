@@ -18,6 +18,7 @@ module rec Ty : sig
         ; ret_ty : Dependent.t
         ; ret_mode : Modes.t
         }
+    | Tuple of Value.t list
   [@@deriving sexp]
 
   val of_literal : Dst.Literal.t -> t
@@ -140,17 +141,14 @@ and Value : sig
       | Bool of bool
       | Int of int64
       | Closure of int
-      | Tuple of t list
-      | UnitT
-      | BoolT
-      | IntT
-      | TypeT
-      | ArrowT of
+      | Arrow of
           { arg : t
           ; arg_mode : Modes.t
           ; ret : t
           ; ret_mode : Modes.t
           }
+      | Tuple of t list
+      | Scalar of Builtin0.Type.t
     [@@deriving sexp, hash, compare, equal]
 
     include Comparable.S with type t := t
@@ -180,6 +178,7 @@ and Value : sig
         { symbol : string
         ; ty : t
         }
+    | Prim of Builtin0.Prim.t
   [@@deriving sexp]
 
   val reduce : t -> t
@@ -268,21 +267,6 @@ and Expr : sig
         { var : Ident.t
         ; bind : t
         ; rest : t
-        ; ty : Value.t
-        ; mode : Modes.t
-        ; loc : Lex.Location.t
-        }
-    | Unop of
-        { op : Ident.Unop.t
-        ; arg : t
-        ; ty : Value.t
-        ; mode : Modes.t
-        ; loc : Lex.Location.t
-        }
-    | Binop of
-        { op : Ident.Binop.t
-        ; lhs : t
-        ; rhs : t
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t

@@ -5,5 +5,7 @@ include sig
   include module type of Builtin0
 end
 
+exception Divide_by_zero of Int.t
+
 val desc : t -> Desc.t
-val is_erased : t -> bool
+val eval : Prim.t -> Value.t -> Value.t

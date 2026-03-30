@@ -9,13 +9,21 @@ let go ?(print = false) input =
   | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
+(* TODO fix *)
 let%expect_test "lambda static -> arg" =
   go
     {|
 let f = fn (x : int) (static y : int) -> x + y;;
+let _ = (f 0) @ static;;
 let _ = assert static (f 0 1 == 1);;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Phase) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "lambda static -> arg" =

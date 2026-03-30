@@ -91,9 +91,17 @@ let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
   | Paren { expr } -> desugar_expr env expr
   | Var { id } -> Var { id = Env.find env id; loc }
   | Literal { value } -> Literal { value; loc }
-  | Unop { op; arg } -> Unop { op; arg = desugar_expr env arg; loc }
+  | Unop { op; arg } ->
+    Apply
+      { fn = Var { id = Env.find env (Ident.Raw.unop op); loc }; arg = desugar_expr env arg; loc }
   | Binop { op; lhs; rhs } ->
-    Binop { op; lhs = desugar_expr env lhs; rhs = desugar_expr env rhs; loc }
+    let lhs = desugar_expr env lhs in
+    let rhs = desugar_expr env rhs in
+    Apply
+      { fn = Var { id = Env.find env (Ident.Raw.binop op); loc }
+      ; arg = Nop { op = Comma; elts = [ lhs; rhs ]; loc }
+      ; loc
+      }
   | Nop { op; elts } -> Nop { op; elts = List.map elts ~f:(desugar_expr env); loc }
   | Arrow { arg; arg_id; arg_mode; ret; ret_mode } ->
     let arg = desugar_expr env arg in

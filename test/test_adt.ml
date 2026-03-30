@@ -45,8 +45,8 @@ let t = (1, 2) : int ^ bool;;
     {|
     ((loc ((line 2) (column 15)))
      (reason
-      (Type_mismatch (got (Tuple ((Type Int) (Type Int))))
-       (need (Tuple ((Type Int) (Type Bool)))))))
+      (Type_mismatch (got (Type (Tuple ((Type Int) (Type Int)))))
+       (need (Type (Tuple ((Type Int) (Type Bool))))))))
     |}]
 ;;
 
@@ -59,8 +59,8 @@ let t = (1, 2, 3) : int ^ int;;
     {|
     ((loc ((line 2) (column 18)))
      (reason
-      (Type_mismatch (got (Tuple ((Type Int) (Type Int) (Type Int))))
-       (need (Tuple ((Type Int) (Type Int)))))))
+      (Type_mismatch (got (Type (Tuple ((Type Int) (Type Int) (Type Int)))))
+       (need (Type (Tuple ((Type Int) (Type Int))))))))
     |}]
 ;;
 
@@ -83,8 +83,8 @@ let _ = f (1, 2);;
     {|
     ((loc ((line 3) (column 8)))
      (reason
-      (Type_mismatch (got (Tuple ((Type Int) (Type Int))))
-       (need (Tuple ((Type Int) (Type Bool)))))))
+      (Type_mismatch (got (Type (Tuple ((Type Int) (Type Int)))))
+       (need (Type (Tuple ((Type Int) (Type Bool))))))))
     |}]
 ;;
 

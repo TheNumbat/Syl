@@ -23,7 +23,6 @@ module Error : sig
     | Static_assert of Value.t
     | Divide_by_zero of Int.t
     | Unreachable_reached
-    | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
   [@@deriving sexp]
 end
 

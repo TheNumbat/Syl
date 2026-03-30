@@ -89,26 +89,8 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-    | Unop of
-        { op : Ident.Unop.t
-        ; arg : Path.t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
-    | Binop of
-        { op : Ident.Binop.t
-        ; lhs : Path.t
-        ; rhs : Path.t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
     | Ident of
         { path : Path.t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
-    | Builtin of
-        { builtin : Builtin.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

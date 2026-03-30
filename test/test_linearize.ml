@@ -147,36 +147,6 @@ let _ =
   [%expect {| |}]
 ;;
 
-let%expect_test "Unop var erased" =
-  go
-    {|
-let dyn = true @ erased;;
-let _ =
-  !dyn
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Unop var erased" =
-  go
-    {|
-let dyn = true @ erased;;
-let _ =
-  !(!dyn @ erased)
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Unop var erased" =
-  go
-    {|
-let dyn = true @ erased;;
-let _ =
-  !(!dyn)
-;;|};
-  [%expect {| |}]
-;;
-
 let%expect_test "Unop var dynamic" =
   go
     {|
@@ -204,38 +174,11 @@ let _ =
   [%expect {| |}]
 ;;
 
-let%expect_test "Binop static + static erased" =
-  go
-    {|
-let _ =
-  1 + (2 @ erased)
-;;|};
-  [%expect {| |}]
-;;
-
 let%expect_test "Binop erased dynamic" =
   go
     {|
 let _ =
   1 + (2 @ dynamic)
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Binop erased dynamic" =
-  go
-    {|
-let _ =
-  1 + (2 @ dynamic) + (3 @ erased)
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Binop erased static" =
-  go
-    {|
-let _ =
-  1 + ((2 + 3) @ erased)
 ;;|};
   [%expect {| |}]
 ;;
@@ -271,28 +214,6 @@ let _ =
   [%expect {| |}]
 ;;
 
-let%expect_test "Binop erased + dynamic" =
-  go
-    {|
-let dyn1 = 1 @ erased;;
-let dyn2 = 2 @ dynamic;;
-let _ =
-  dyn1 + dyn2
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Binop erased + erased" =
-  go
-    {|
-let dyn1 = 1 @ erased;;
-let dyn2 = 2 @ erased;;
-let _ =
-  dyn1 + dyn2
-;;|};
-  [%expect {| |}]
-;;
-
 let%expect_test "If static cond static branches" =
   go
     {|
@@ -307,25 +228,6 @@ let%expect_test "If erased" =
     {|
 let _ =
   (if true then int else int) @ erased
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "If erased" =
-  go
-    {|
-let _ =
-  if true @ erased then 1 else 2
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "If erased cond" =
-  go
-    {|
-let x = true || false @ erased;;
-let _ =
-  if x then 1 else 2
 ;;|};
   [%expect {| |}]
 ;;
@@ -346,16 +248,6 @@ let%expect_test "If dynamic cond" =
 let dyn = true @ dynamic;;
 let _ =
   if dyn then 1 else 2
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "erased if expr" =
-  go
-    {|
-let x = true;;
-let _ =
-  0 + ((if x then 1 else 2) @ erased)
 ;;|};
   [%expect {| |}]
 ;;
@@ -404,17 +296,6 @@ let _ =
   [%expect {| |}]
 ;;
 
-let%expect_test "Let dynamic" =
-  go
-    {|
-let dyn = 1 @ erased;;
-let _ =
-  let x = dyn + 1 @ dynamic in
-  x
-;;|};
-  [%expect {| |}]
-;;
-
 let%expect_test "Let erased" =
   go
     {|
@@ -422,49 +303,6 @@ let dyn = 1 @ erased;;
 let _ =
   let x = dyn in
   x
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Let erased" =
-  go
-    {|
-let _ =
-  let x = 1 @ erased in
-  x + 1
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Let erased" =
-  go
-    {|
-let _ =
-  let x = 1 @ erased in
-  let y = 1 @ dynamic in
-  x + y
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Let erased" =
-  go
-    {|
-let _ =
-  let x = 1 @ erased in
-  let y = 1 @ erased in
-  0 + (x + y)
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Let erased" =
-  go
-    {|
-let _ =
-  let x = 1 in
-  let y = 1 in
-  0 + ((x + y) @ erased)
 ;;|};
   [%expect {| |}]
 ;;

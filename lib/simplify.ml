@@ -19,8 +19,19 @@ let rec simplify_ty ~loc (ty : Tst.Value.t) : Ty.t =
   | Type Type -> Unit
   | Type (Arrow { arg_ty; ret_ty; _ }) ->
     Arrow { arg_ty = simplify_ty ~loc arg_ty; ret_ty = simplify_ty ~loc ret_ty }
-  | Tuple elts -> Tuple (List.map elts ~f:(simplify_ty ~loc))
-  | Bottom | Unit | Bool _ | Int _ | Closure _ | Binder _ | Var _ | If _ | Apply _ | External _
+  | Type (Tuple elts) -> Tuple (List.map elts ~f:(simplify_ty ~loc))
+  | Bottom
+  | Unit
+  | Bool _
+  | Int _
+  | Closure _
+  | Binder _
+  | Var _
+  | If _
+  | Apply _
+  | External _
+  | Prim _
+  | Tuple _
   | Type (Pi _) ->
     raise_s [%message "Cannot simplify type" (ty : Tst.Value.t) (loc : Lex.Location.t)]
 ;;
@@ -57,7 +68,9 @@ let rec union_ty (ty1 : Ty.t) (ty2 : Ty.t) : Ty.t =
         | Some ty2 -> union_ty ty1 ty2
         | None -> ty1));
     Pack merge
-  | _ -> raise_s [%message "Cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]
+  | Tuple a, Tuple b -> Tuple (List.map2_exn a b ~f:union_ty)
+  | (Unit | Bool | Int | Arrow _ | Pack _ | Tuple _), _ ->
+    raise_s [%message "Cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]
 ;;
 
 let collect_free_keys env free_keys =
@@ -89,6 +102,9 @@ let rec simplify_value ~loc env (value : Tst.Value.t) : Expr.t =
     let pack, fvs, ty = simplify_mono ~loc env b.mono in
     Pack { pack; fvs; ty; loc }
   | External { symbol; ty; _ } -> External { symbol; ty = simplify_ty ~loc ty; loc }
+  | Prim prim ->
+    let desc = Builtin.desc (Prim prim) in
+    External { symbol = Builtin.Prim.symbol prim; ty = simplify_ty ~loc desc.ty; loc }
   | Tuple elts ->
     let elts = List.map elts ~f:(simplify_value ~loc env) in
     Tuple { elts; ty = Tuple (List.map elts ~f:Expr.ty); loc }
@@ -131,20 +147,17 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
        let rest = simplify env rest in
        Fun { funs; fvs; rest; ty = Expr.ty rest; loc }
      | None -> simplify env rest)
-  | Lambda { arg; body; ty; mode; loc } ->
-    assert (not (Modes.is_erased mode));
+  | Lambda { arg; body; ty; loc; _ } ->
     let arg_ty, ret_ty = simplify_arrow ~loc ty in
     let body = simplify (Env.bind env arg arg_ty) body in
     let fvs = free_vars env arg body in
     Lambda { arg; fvs; ty = Arrow { arg_ty; ret_ty }; body; loc }
-  | Apply { fn; arg; mode; loc; _ } ->
-    assert (not (Modes.is_erased mode));
+  | Apply { fn; arg; loc; _ } ->
     let arg = simplify env arg in
     (match simplify env fn with
      | Lambda { arg = var; body; _ } -> Let { var; bind = arg; rest = body; ty = Expr.ty body; loc }
      | fn -> Apply { fn; arg; ty = Ty.ret (Expr.ty fn); loc })
-  | Symbol { fn; key; mode; loc; _ } ->
-    assert (not (Modes.is_erased mode));
+  | Symbol { fn; key; loc; _ } ->
     (match simplify env fn with
      | Pack { pack; _ } -> fst (Hashtbl.find_exn pack key)
      | fn ->
@@ -160,51 +173,10 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
       let bind = simplify env bind in
       let rest = simplify (Env.bind env var (Expr.ty bind)) rest in
       Let { var; bind; rest; ty = Expr.ty rest; loc })
-  | Unop { op; arg; ty; mode; loc } ->
-    assert (not (Modes.is_erased mode));
-    let arg = simplify env arg in
-    (match op, arg with
-     | Neg, Scalar { value = Int i; _ } -> Scalar { value = Int (Int64.neg i); ty = Int; loc }
-     | Not, Scalar { value = Bool b; _ } -> Scalar { value = Bool (not b); ty = Bool; loc }
-     | _ -> Unop { op; arg; ty = simplify_ty ~loc ty; loc })
-  | Binop { op; lhs; rhs; ty; mode; loc } ->
-    assert (not (Modes.is_erased mode));
-    let lhs = simplify env lhs in
-    let rhs = simplify env rhs in
-    (match op, lhs, rhs with
-     | Add, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Int (Int64.( + ) l r); ty = Int; loc }
-     | Sub, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Int (Int64.( - ) l r); ty = Int; loc }
-     | Mul, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Int (Int64.( * ) l r); ty = Int; loc }
-     | Div, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Int (Int64.( / ) l r); ty = Int; loc }
-     | Mod, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Int (Int64.( % ) l r); ty = Int; loc }
-     | And, Scalar { value = Bool l; _ }, Scalar { value = Bool r; _ } ->
-       Scalar { value = Bool (l && r); ty = Bool; loc }
-     | Or, Scalar { value = Bool l; _ }, Scalar { value = Bool r; _ } ->
-       Scalar { value = Bool (l || r); ty = Bool; loc }
-     | Eq, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Bool (Int64.( = ) l r); ty = Bool; loc }
-     | Neq, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Bool (Int64.( <> ) l r); ty = Bool; loc }
-     | Lt, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Bool (Int64.( < ) l r); ty = Bool; loc }
-     | Lte, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Bool (Int64.( <= ) l r); ty = Bool; loc }
-     | Gt, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Bool (Int64.( > ) l r); ty = Bool; loc }
-     | Gte, Scalar { value = Int l; _ }, Scalar { value = Int r; _ } ->
-       Scalar { value = Bool (Int64.( >= ) l r); ty = Bool; loc }
-     | _ -> Binop { op; lhs; rhs; ty = simplify_ty ~loc ty; loc })
-  | Tuple { elts; ty; mode; loc } ->
-    assert (not (Modes.is_erased mode));
+  | Tuple { elts; ty; loc; _ } ->
     let elts = List.map elts ~f:(simplify env) in
     Tuple { elts; ty = simplify_ty ~loc ty; loc }
-  | If { cond; then_; else_; mode; loc; _ } ->
-    assert (not (Modes.is_erased mode));
+  | If { cond; then_; else_; loc; _ } ->
     let cond = simplify env cond in
     (match cond with
      | Scalar { value = Bool b; _ } -> if b then simplify env then_ else simplify env else_
@@ -212,11 +184,8 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
        let then_ = simplify env then_ in
        let else_ = simplify env else_ in
        If { cond; then_; else_; ty = Expr.ty then_; loc })
-  | Var { id; mode; loc; _ } ->
-    assert (not (Modes.is_erased mode));
-    Var { id; ty = Env.find env id; loc }
-  | Binder { mono; mode; loc; _ } ->
-    assert (not (Modes.is_erased mode));
+  | Var { id; loc; _ } -> Var { id; ty = Env.find env id; loc }
+  | Binder { mono; loc; _ } ->
     let pack, fvs, ty = simplify_mono ~loc env mono in
     Pack { pack; fvs; ty; loc }
   | Erased { loc; _ } -> raise_s [%message "Erased expression" (loc : Lex.Location.t)]
@@ -292,11 +261,11 @@ let simplify_top_level env (tst : Tst.Top_level.t) : Env.t * Top_level.t Option.
     let ty = simplify_ty ~loc ty in
     Env.bind env var ty, Some (External { var; symbol; ty; loc })
   | Builtin { var; builtin; ty; loc } ->
-    if Builtin.is_erased builtin
-    then env, None
-    else (
-      let ty = simplify_ty ~loc ty in
-      Env.bind env var ty, Some (Builtin { var; builtin; ty; loc }))
+    (match builtin with
+     | Type _ -> env, None
+     | Prim prim ->
+       let ty = simplify_ty ~loc ty in
+       Env.bind env var ty, Some (External { var; symbol = Builtin.Prim.symbol prim; ty; loc }))
 ;;
 
 let simplify (tst : Tst.Program.t) =

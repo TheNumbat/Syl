@@ -25,7 +25,9 @@ let _ = fn (x : int) (y : bool) -> x + y;;
   [%expect
     {|
     ((loc ((line 2) (column 37)))
-     (reason (Type_mismatch (got (Type Bool)) (need (Type Int)))))
+     (reason
+      (Type_mismatch (got (Type (Tuple ((Type Int) (Type Bool)))))
+       (need (Type (Tuple ((Type Int) (Type Int))))))))
     |}]
 ;;
 
@@ -203,7 +205,9 @@ let add (x : int) (y : bool) = x + y;;
   [%expect
     {|
     ((loc ((line 2) (column 33)))
-     (reason (Type_mismatch (got (Type Bool)) (need (Type Int)))))
+     (reason
+      (Type_mismatch (got (Type (Tuple ((Type Int) (Type Bool)))))
+       (need (Type (Tuple ((Type Int) (Type Int))))))))
     |}]
 ;;
 

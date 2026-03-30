@@ -53,17 +53,6 @@ module Expr = struct
         { value : Literal.t
         ; loc : Lex.Location.t
         }
-    | Unop of
-        { op : Ident.Unop.t
-        ; arg : t
-        ; loc : Lex.Location.t
-        }
-    | Binop of
-        { op : Ident.Binop.t
-        ; lhs : t
-        ; rhs : t
-        ; loc : Lex.Location.t
-        }
     | Nop of
         { op : Ident.Nop.t
         ; elts : t list
@@ -104,8 +93,6 @@ module Expr = struct
     | Type_annotation { expr; ty; _ } -> Set.union (free_vars expr) (free_vars ty)
     | Nop { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
     | Unreachable _ | Literal _ -> Ident.Set.empty
-    | Unop { arg; _ } -> free_vars arg
-    | Binop { lhs; rhs; _ } -> Set.union (free_vars lhs) (free_vars rhs)
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
     | Let { var; bind; rest; _ } -> Set.union (free_vars bind) (Set.remove (free_vars rest) var)
@@ -138,8 +125,6 @@ module Expr = struct
     | Apply { loc; _ }
     | Var { loc; _ }
     | Literal { loc; _ }
-    | Unop { loc; _ }
-    | Binop { loc; _ }
     | Arrow { loc; _ }
     | Assert { loc; _ }
     | Unreachable { loc; _ }

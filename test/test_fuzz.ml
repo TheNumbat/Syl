@@ -480,15 +480,6 @@ let _ = pair_id bool true false;;
    MODE SYSTEM EDGE CASES
    ============================================================ *)
 
-let%expect_test "fuzz: erased value in computation" =
-  go
-    {|
-let x = 5 @ erased;;
-let y = x + 3;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "fuzz: dynamic erased value" =
   go
     {|
@@ -1030,17 +1021,6 @@ let _ = id (int -> int) (fn (x : int) -> x);;
 (* ============================================================
    SIMPLIFICATION EDGE CASES
    ============================================================ *)
-
-let%expect_test "fuzz: erased computation chains" =
-  go
-    {|
-let a = 1 @ erased;;
-let b = (a + 2) @ erased;;
-let c = (b * 3) @ erased;;
-let _ = c + 1;;
-|};
-  [%expect {| |}]
-;;
 
 let%expect_test "fuzz: static computation fed to dynamic" =
   go

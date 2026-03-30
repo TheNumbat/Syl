@@ -24,7 +24,6 @@ module Error = struct
     | Static_assert of Value.t
     | Divide_by_zero of Int.t
     | Unreachable_reached
-    | Dynamic_erased (* Can get rid of this once we have mode polymorphism *)
   [@@deriving sexp]
 end
 
@@ -34,7 +33,6 @@ module Fail = struct
   let mode_mismatch ~loc got need = raise (Error { loc; reason = Mode_mismatch { got; need } })
   let type_mismatch ~loc got need = raise (Error { loc; reason = Type_mismatch { got; need } })
   let cannot_unify ~loc lhs rhs = raise (Error { loc; reason = Cannot_unify { lhs; rhs } })
-  let dynamic_erased ~loc = raise (Error { loc; reason = Dynamic_erased })
   let unbound_ident ~loc id = raise (Error { loc; reason = Unbound_ident id })
   let recursion_limit ~loc limit = raise (Error { loc; reason = Recursion_limit limit })
   let inline_self ~loc id = raise (Error { loc; reason = Inline_self id })
@@ -96,19 +94,22 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
   | Unit -> Some Unit
   | Bool (T b) -> Some (Bool b)
   | Int (T i) -> Some (Int i)
-  | Type Unit -> Some UnitT
-  | Type Bool -> Some BoolT
-  | Type Int -> Some IntT
-  | Type Type -> Some TypeT
-  | Closure _ | Binder _ -> Some (Closure (State.fresh_id state))
   | Tuple elts ->
     let elts = List.map elts ~f:(concrete state) in
     Option.map (Option.all elts) ~f:(fun elts -> Value.Concrete.Tuple elts)
+  | Closure _ | Binder _ | Prim _ -> Some (Closure (State.fresh_id state))
+  | Type Unit -> Some (Scalar Unit)
+  | Type Bool -> Some (Scalar Bool)
+  | Type Int -> Some (Scalar Int)
+  | Type Type -> Some (Scalar Type)
   | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
   | Type (Pi { arg_ty; arg_mode; ret_ty = T ret_ty; ret_mode }) ->
     let%map arg = concrete state arg_ty
     and ret = concrete state ret_ty in
-    Value.Concrete.ArrowT { arg; arg_mode; ret; ret_mode }
+    Value.Concrete.Arrow { arg; arg_mode; ret; ret_mode }
+  | Type (Tuple elts) ->
+    let%map elts = Option.all (List.map elts ~f:(concrete state)) in
+    Value.Concrete.Tuple elts
   | Bottom | Bool _ | Int _ | Var _ | If _ | Apply _ | External _ | Type (Pi _) -> None
 ;;
 
@@ -130,48 +131,6 @@ let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~m
   Expr.with_ expr ~ty:dst_ty ~mode:dst_mode, { Desc.ty = dst_ty; mode = dst_mode; static }
 ;;
 
-let bind_unop ~(op : Ident.Unop.t) v =
-  match op with
-  | Neg -> Lazy.map v ~f:(fun v -> Int.reduce (Neg v))
-  | Not -> Lazy.map v ~f:(fun v -> Bool.reduce (Not v))
-;;
-
-let bind_binop ~loc ~(op : Ident.Binop.t) (lhs : Value.t Lazy.t) (rhs : Value.t Lazy.t) =
-  let open Lazy.Let_syntax in
-  let int_op (f : Value.t -> Value.t -> Int.t) =
-    let%map lhs = lhs
-    and rhs = rhs in
-    Int.reduce (f lhs rhs)
-  in
-  let bool_op (f : Value.t -> Value.t -> Bool.t) =
-    let%map lhs = lhs
-    and rhs = rhs in
-    Bool.reduce (f lhs rhs)
-  in
-  match op with
-  | Add -> int_op (fun x y -> Add (x, y))
-  | Sub -> int_op (fun x y -> Sub (x, y))
-  | Mul -> int_op (fun x y -> Mul (x, y))
-  | Div ->
-    int_op (fun x y ->
-      match y with
-      | Int (T 0L) -> Fail.divide_by_zero ~loc (Div (x, y))
-      | _ -> Div (x, y))
-  | Mod ->
-    int_op (fun x y ->
-      match y with
-      | Int (T 0L) -> Fail.divide_by_zero ~loc (Mod (x, y))
-      | _ -> Mod (x, y))
-  | Eq -> bool_op (fun x y -> Eq (x, y))
-  | Neq -> bool_op (fun x y -> Neq (x, y))
-  | Lt -> bool_op (fun x y -> Lt (x, y))
-  | Lte -> bool_op (fun x y -> Lte (x, y))
-  | Gt -> bool_op (fun x y -> Gt (x, y))
-  | Gte -> bool_op (fun x y -> Gte (x, y))
-  | And -> bool_op (fun x y -> And (x, y))
-  | Or -> bool_op (fun x y -> Or (x, y))
-;;
-
 let require_mode ~loc src dst = if not (Modes.leq src dst) then Fail.mode_mismatch ~loc src dst
 
 let require_dynamic_arrow ~loc var sym (ty : Value.t) =
@@ -185,8 +144,8 @@ let require_static ~loc (desc : Desc.t) =
   require_mode ~loc desc.mode (Modes.top ~staticity:Static ())
 ;;
 
-let require_exists ~loc mode =
-  if Modes.is_erased mode && not (Modes.is_static mode) then Fail.dynamic_erased ~loc
+let require_unerased ~loc (desc : Desc.t) =
+  require_mode ~loc desc.mode (Modes.top ~erasure:Unerased ())
 ;;
 
 let require_var ~loc env id =
@@ -279,6 +238,7 @@ and leq_value state (a : Value.t) (b : Value.t) =
   | Closure a, Closure b -> leq_closure a b
   | Binder a, Binder b -> leq_binder a b
   | Var a, Var b -> Ident.equal a b
+  | Prim a, Prim b -> Builtin.Prim.equal a b
   | Tuple a_elts, Tuple b_elts ->
     (match List.for_all2 a_elts b_elts ~f:(leq_value state) with
      | Ok leq -> leq
@@ -300,7 +260,8 @@ and leq_value state (a : Value.t) (b : Value.t) =
       | Var _
       | Apply _
       | External _
-      | Tuple _ )
+      | Tuple _
+      | Prim _ )
     , _ ) -> false
 
 and geq_value state (a : Value.t) (b : Value.t) =
@@ -314,6 +275,7 @@ and geq_value state (a : Value.t) (b : Value.t) =
   | Closure a, Closure b -> geq_closure a b
   | Binder a, Binder b -> geq_binder a b
   | Var a, Var b -> Ident.equal a b
+  | Prim a, Prim b -> Builtin.Prim.equal a b
   | Tuple a_elts, Tuple b_elts ->
     (match List.for_all2 a_elts b_elts ~f:(geq_value state) with
      | Ok leq -> leq
@@ -335,7 +297,8 @@ and geq_value state (a : Value.t) (b : Value.t) =
       | Var _
       | Apply _
       | External _
-      | Tuple _ )
+      | Tuple _
+      | Prim _ )
     , _ ) -> false
 
 and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
@@ -349,9 +312,10 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Closure a, Closure b -> Option.map (join_closure a b) ~f:(fun c : Value.t -> Closure c)
   | Binder a, Binder b -> Option.map (join_binder a b) ~f:(fun p : Value.t -> Binder p)
   | Var a, Var b when Ident.equal a b -> Some (Var a)
+  | Prim a, Prim b when Builtin.Prim.equal a b -> Some (Prim a)
   | Tuple a_elts, Tuple b_elts ->
     (match List.map2 a_elts b_elts ~f:(join_value state) with
-     | Ok elts -> Option.bind (Option.all elts) ~f:(fun elts -> Some (Value.Tuple elts))
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Value.Tuple elts)
      | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
@@ -381,7 +345,8 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | Var _
       | Apply _
       | External _
-      | Tuple _ )
+      | Tuple _
+      | Prim _ )
     , _ ) -> None
 
 and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
@@ -394,9 +359,10 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Closure a, Closure b -> Option.map (meet_closure a b) ~f:(fun c : Value.t -> Closure c)
   | Binder a, Binder b -> Option.map (meet_binder a b) ~f:(fun p : Value.t -> Binder p)
   | Var a, Var b when Ident.equal a b -> Some (Var a)
+  | Prim a, Prim b when Builtin.Prim.equal a b -> Some (Prim a)
   | Tuple a_elts, Tuple b_elts ->
     (match List.map2 a_elts b_elts ~f:(meet_value state) with
-     | Ok elts -> Option.bind (Option.all elts) ~f:(fun elts -> Some (Value.Tuple elts))
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Value.Tuple elts)
      | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
@@ -426,7 +392,8 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | Var _
       | Apply _
       | External _
-      | Tuple _ )
+      | Tuple _
+      | Prim _ )
     , _ ) -> None
 
 and leq_closure _ _ = false
@@ -520,6 +487,10 @@ and meet_int state a b = join_int state a b
 and leq_ty state a b =
   match a, b with
   | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.for_all2 a_elts b_elts ~f:(leq_value state) with
+     | Ok leq -> leq
+     | Unequal_lengths -> false)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
@@ -548,11 +519,15 @@ and leq_ty state a b =
     && Modes.leq a_ret_mode b_ret_mode
     && geq_value state a_arg_ty b_arg_ty
     && leq_value state (eval state a_ret_ty (State.fresh_var state)) b_ret_ty
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _), _ -> false
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> false
 
 and geq_ty state a b =
   match a, b with
   | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.for_all2 a_elts b_elts ~f:(geq_value state) with
+     | Ok leq -> leq
+     | Unequal_lengths -> false)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
@@ -581,7 +556,7 @@ and geq_ty state a b =
     && Modes.geq a_ret_mode b_ret_mode
     && leq_value state a_arg_ty b_arg_ty
     && geq_value state (eval state a_ret_ty (State.fresh_var state)) b_ret_ty
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _), _ -> false
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> false
 
 and join_ty state a b =
   match a, b with
@@ -589,6 +564,10 @@ and join_ty state a b =
   | Bool, Bool -> Some Bool
   | Int, Int -> Some Int
   | Type, Type -> Some Type
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:(join_value state) with
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Ty.Tuple elts)
+     | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
@@ -632,7 +611,7 @@ and join_ty state a b =
       ; ret_ty = Dependent.join a_ret_ty (T b_ret_ty)
       ; ret_mode = Modes.join a_ret_mode b_ret_mode
       }
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _), _ -> None
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
 
 and meet_ty state a b =
   match a, b with
@@ -640,6 +619,10 @@ and meet_ty state a b =
   | Bool, Bool -> Some Bool
   | Int, Int -> Some Int
   | Type, Type -> Some Type
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:(meet_value state) with
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Ty.Tuple elts)
+     | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
@@ -683,7 +666,7 @@ and meet_ty state a b =
       ; ret_ty
       ; ret_mode = Modes.meet a_ret_mode b_ret_mode
       }
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _), _ -> None
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
 
 and reduce state env (expr : Dst.Expr.t) : Desc.t =
   let _expr, expr_desc = typecheck state env expr in
@@ -705,7 +688,6 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
       Literal { value; ty; mode; loc }, { Desc.ty; mode; static = Lazy.from_val value })
   | Assert { cond; static; loc } ->
     let cond, cond_desc = typecheck state env cond in
-    require_exists ~loc cond_desc.mode;
     require_leq state ~loc cond_desc.ty (Type Bool);
     (match static with
      | Static ->
@@ -714,6 +696,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
         | Bool (T true) -> typecheck state env (Literal { value = Unit; loc })
         | expr -> Fail.static_assert ~loc expr)
      | Dynamic | Phase ->
+       require_unerased ~loc cond_desc;
        if Modes.is_static cond_desc.mode && Value.is_true (Lazy.force cond_desc.static)
        then typecheck state env (Literal { value = Unit; loc })
        else (
@@ -745,46 +728,6 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
        Literal { value = Lazy.force desc.static; ty = desc.ty; mode = desc.mode; loc }, desc
      | Dynamic, Erased -> Erased { ty = desc.ty; mode = desc.mode; loc }, desc
      | _ -> Var { id; ty = desc.ty; mode = desc.mode; loc }, desc)
-  | Unop { op; arg; loc } ->
-    (* TODO replace with apply *)
-    let arg, desc = typecheck state env arg in
-    require_exists ~loc desc.mode;
-    let mode = { desc.mode with erasure = Unerased } in
-    let ty : Value.t =
-      match op with
-      | Neg ->
-        require_leq state ~loc desc.ty (Type Int);
-        Type Int
-      | Not ->
-        require_leq state ~loc desc.ty (Type Bool);
-        Type Bool
-    in
-    let static = bind_unop ~op desc.static in
-    Unop { op; arg; ty; mode; loc }, { ty; mode; static }
-  | Binop { op; lhs; rhs; loc } ->
-    (* TODO replace with apply *)
-    let lhs, lhs_desc = typecheck state env lhs in
-    let rhs, rhs_desc = typecheck state env rhs in
-    require_exists ~loc lhs_desc.mode;
-    require_exists ~loc rhs_desc.mode;
-    let mode = { (Modes.join lhs_desc.mode rhs_desc.mode) with erasure = Unerased } in
-    let ty : Value.t =
-      match op with
-      | Add | Sub | Mul | Div | Mod ->
-        require_leq state ~loc lhs_desc.ty (Type Int);
-        require_leq state ~loc rhs_desc.ty (Type Int);
-        Type Int
-      | Eq | Neq | Lt | Lte | Gt | Gte ->
-        require_leq state ~loc lhs_desc.ty (Type Int);
-        require_leq state ~loc rhs_desc.ty (Type Int);
-        Type Bool
-      | And | Or ->
-        require_leq state ~loc lhs_desc.ty (Type Bool);
-        require_leq state ~loc rhs_desc.ty (Type Bool);
-        Type Bool
-    in
-    let static = bind_binop ~loc ~op lhs_desc.static rhs_desc.static in
-    Binop { op; lhs; rhs; ty; mode; loc }, { ty; mode; static }
   | Nop { op; elts; loc } ->
     (* TODO replace with apply *)
     (match op with
@@ -796,14 +739,14 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
            let elt_desc = reduce state env elt in
            require_static_type state ~loc elt_desc)
        in
-       let value = Value.Tuple elts in
+       let value = Value.Type (Tuple elts) in
        Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
      | Comma ->
        let elts, descs = List.map elts ~f:(fun elt -> typecheck state env elt) |> List.unzip in
        let mode =
          List.fold descs ~init:(Modes.bottom ()) ~f:(fun acc desc -> Modes.join acc desc.mode)
        in
-       let ty = Value.Tuple (List.map descs ~f:(fun desc -> desc.ty)) in
+       let ty = Value.Type (Tuple (List.map descs ~f:(fun desc -> desc.ty))) in
        let static =
          List.map descs ~f:(fun desc -> desc.static)
          |> Lazy.all
@@ -812,7 +755,6 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
        Tuple { elts; ty; mode; loc }, { ty; mode; static })
   | If { cond; then_; else_; static; loc } ->
     let cond, cond_desc = typecheck state env cond in
-    require_exists ~loc cond_desc.mode;
     require_leq state ~loc cond_desc.ty (Type Bool);
     (match static with
      | Static ->
@@ -847,6 +789,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
           let ty = Value.reduce (If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty }) in
           If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
      | Dynamic | Phase ->
+       require_unerased ~loc cond_desc;
        let then_, then_desc = typecheck state env then_ in
        let else_, else_desc = typecheck state env else_ in
        let mode = Modes.cond ~cond:cond_desc.mode then_desc.mode else_desc.mode in
@@ -907,7 +850,6 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
   | Apply { fn; arg; loc } ->
     let fn, fn_desc = typecheck state env fn in
     let arg, arg_desc = typecheck state env arg in
-    require_exists ~loc fn_desc.mode;
     (match fn_desc.ty with
      | Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode }) ->
        require_static ~loc fn_desc;
@@ -915,7 +857,6 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
        require_leq state ~loc arg_desc.ty arg_ty;
        let arg_val = Lazy.force arg_desc.static in
        let ret_ty = eval state ret_ty arg_val in
-       let ret_mode = { ret_mode with staticity = Modes.Staticity.resolve ret_mode.staticity } in
        (match Lazy.force fn_desc.static with
         | Binder binder ->
           (match concrete state arg_val with
@@ -974,6 +915,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
             ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
             , { ty = ret_ty; mode = ret_mode; static } )
         | _ ->
+          (* If we have monomorphized prims, they need to be implemented here. *)
           let static =
             if Modes.is_static ret_mode
             then (
@@ -985,12 +927,15 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
           ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
           , { ty = ret_ty; mode = ret_mode; static } ))
      | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode }) ->
+       if Modes.is_dynamic fn_desc.mode then require_unerased ~loc fn_desc;
+       if Modes.is_dynamic arg_desc.mode then require_unerased ~loc arg_desc;
        require_mode ~loc arg_desc.mode arg_mode;
        require_leq state ~loc arg_desc.ty arg_ty;
        let ret_mode =
          let staticity = Modes.Staticity.join fn_desc.mode.staticity arg_desc.mode.staticity in
          let staticity = Modes.Staticity.join staticity ret_mode.staticity in
-         { ret_mode with staticity = Modes.Staticity.resolve staticity }
+         (* TODO the result should be static *)
+         { ret_mode with staticity }
        in
        let static =
          if Modes.is_static ret_mode
@@ -1001,6 +946,10 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
              let env = Env.bind closure.env closure.arg arg_desc in
              let desc = reduce state env closure.body_cst in
              desc.static
+           | Prim prim ->
+             Lazy.map arg_desc.static ~f:(fun arg ->
+               try Builtin.eval prim arg with
+               | Builtin.Divide_by_zero expr -> Fail.divide_by_zero ~loc expr)
            | _ -> Lazy.map arg_desc.static ~f:(fun arg -> Value.reduce (Apply { fn; arg })))
          else Fail.unreachable [%here] ~loc
        in
@@ -1020,6 +969,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
            let body = inline ~loc ~env:closure.env ~arg_id:closure.arg ~arg ~arg_mode body in
            body, { body_desc with mode = ret_mode }
          | _ ->
+           (* If we have inlined prims, they need to be implemented here. *)
            ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
            , { ty = ret_ty; mode = ret_mode; static } ))
        else (

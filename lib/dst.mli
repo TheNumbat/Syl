@@ -53,17 +53,6 @@ module Expr : sig
         { value : Literal.t
         ; loc : Lex.Location.t
         }
-    | Unop of
-        { op : Ident.Unop.t
-        ; arg : t
-        ; loc : Lex.Location.t
-        }
-    | Binop of
-        { op : Ident.Binop.t
-        ; lhs : t
-        ; rhs : t
-        ; loc : Lex.Location.t
-        }
     | Nop of
         { op : Ident.Nop.t
         ; elts : t list

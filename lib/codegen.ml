@@ -73,9 +73,9 @@ static syl_env syl_capture(Env... captures) {
 static syl_unit syl_assert(syl_bool cond) {
   assert(cond);
 }
-
-//SYL_PRELUDE_END
 |}
+  ^ Builtin.prelude
+  ^ "//SYL_PRELUDE_END"
 ;;
 
 module State = struct
@@ -119,19 +119,19 @@ let print_mode (mode : Modes.t) = print_static mode.staticity ^ print_erased mod
 
 let rec print_key (key : Tst.Value.Concrete.t) =
   match key with
+  | Scalar Unit -> "𝕌"
+  | Scalar Bool -> "𝔹"
+  | Scalar Int -> "𝕀"
+  | Scalar Type -> "𝕋"
   | Unit -> "ø"
   | Bool true -> "T"
   | Bool false -> "F"
   | Int i -> Int64.to_string i
   | Closure i -> "λ" ^ Int.to_string i
-  | UnitT -> "𝕌"
-  | BoolT -> "𝔹"
-  | IntT -> "𝕀"
-  | TypeT -> "𝕋"
   | Tuple elts ->
     let elts = List.map elts ~f:print_key in
     String.concat elts ~sep:"ₓ"
-  | ArrowT { arg; arg_mode; ret; ret_mode } ->
+  | Arrow { arg; arg_mode; ret; ret_mode } ->
     let arg = print_key arg in
     let ret = print_key ret in
     let arg_mode = print_mode arg_mode in
@@ -141,7 +141,7 @@ let rec print_key (key : Tst.Value.Concrete.t) =
 
 let print_path (path : Path.t) =
   List.concat_map path ~f:(function
-    | Id id -> [ Ident.print () id; "·" ]
+    | Id id -> [ Ident.name () id; "·" ]
     | Key k -> [ print_key k; "ₒ" ])
   |> List.rev
   |> List.tl_exn
@@ -163,32 +163,8 @@ let rec print_ty (ty : Ty.t) =
 
 and print_ty_or_void (ty : Ty.t) = if Ty.is_zero_size ty then "void" else print_ty ty
 
-let print_unop (op : Ident.Unop.t) =
-  match op with
-  | Not -> "!"
-  | Neg -> "-"
-;;
-
-let print_binop (op : Ident.Binop.t) =
-  match op with
-  | Add -> "+"
-  | Sub -> "-"
-  | Mul -> "*"
-  | Div -> "/"
-  | Mod -> "%"
-  | And -> "&&"
-  | Or -> "||"
-  | Eq -> "=="
-  | Neq -> "!="
-  | Lt -> "<"
-  | Lte -> "<="
-  | Gt -> ">"
-  | Gte -> ">="
-;;
-
 let print_expr_nonzero (expr : Expr.t) =
   match expr with
-  | Builtin _ -> assert false (* TODO *)
   | Scalar { value = Unit; _ } -> assert false
   | Scalar { value = Bool true; _ } -> "true"
   | Scalar { value = Bool false; _ } -> "false"
@@ -208,9 +184,6 @@ let print_expr_nonzero (expr : Expr.t) =
     then Printf.sprintf "%s()" (print_path fn)
     else Printf.sprintf "%s(%s)" (print_path fn) (print_path arg)
   | Apply_thunk { fn; _ } -> Printf.sprintf "%s()" (print_path fn)
-  | Unop { op; arg; _ } -> Printf.sprintf "%s%s" (print_unop op) (print_path arg)
-  | Binop { op; lhs; rhs; _ } ->
-    Printf.sprintf "%s %s %s" (print_path lhs) (print_binop op) (print_path rhs)
   | Make_tuple { elts; ty; _ } ->
     let paths =
       Array.filter_map elts ~f:(fun (path, ty) ->
@@ -222,7 +195,6 @@ let print_expr_nonzero (expr : Expr.t) =
 
 let print_expr_zero (expr : Expr.t) =
   match expr with
-  | Builtin _ -> assert false (* TODO *)
   | Scalar { value = Unit; _ } | Ident _ | Make_tuple _ -> ""
   | Apply_closure { fn; arg; arg_ty; _ } ->
     if Ty.is_zero_size arg_ty

@@ -18,6 +18,7 @@ type ty =
       ; ret_ty : dependent
       ; ret_mode : Modes.t
       }
+  | Tuple of value list
 [@@deriving sexp]
 
 and dependent =
@@ -88,6 +89,7 @@ and value =
       { symbol : string
       ; ty : value
       }
+  | Prim of Builtin0.Prim.t
 [@@deriving sexp]
 
 and concrete =
@@ -95,17 +97,14 @@ and concrete =
   | Bool of bool
   | Int of int64
   | Closure of int
-  | Tuple of concrete list
-  | UnitT
-  | BoolT
-  | IntT
-  | TypeT
-  | ArrowT of
+  | Arrow of
       { arg : concrete
       ; arg_mode : Modes.t
       ; ret : concrete
       ; ret_mode : Modes.t
       }
+  | Tuple of concrete list
+  | Scalar of Builtin0.Type.t
 [@@deriving sexp]
 
 and closure =
@@ -208,21 +207,6 @@ and expr =
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
-  | Unop of
-      { op : Ident.Unop.t
-      ; arg : expr
-      ; ty : value
-      ; mode : Modes.t
-      ; loc : Lex.Location.t
-      }
-  | Binop of
-      { op : Ident.Binop.t
-      ; lhs : expr
-      ; rhs : expr
-      ; ty : value
-      ; mode : Modes.t
-      ; loc : Lex.Location.t
-      }
   | Tuple of
       { elts : expr list
       ; ty : value
@@ -258,7 +242,7 @@ and expr =
 [@@deriving sexp]
 
 let rec is_concrete_value : value -> _ = function
-  | Unit | Closure _ | Binder _ | External _ -> true
+  | Unit | Closure _ | Binder _ | External _ | Prim _ -> true
   | Bool b -> is_concrete_bool b
   | Int i -> is_concrete_int i
   | Type ty -> is_concrete_ty ty
@@ -275,6 +259,7 @@ and is_concrete_int : vint -> _ = function
 
 and is_concrete_ty : ty -> _ = function
   | Unit | Bool | Int | Type -> true
+  | Tuple elts -> List.for_all elts ~f:is_concrete_value
   | Arrow { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_value ret_ty
   | Pi { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_dependent ret_ty
 
@@ -289,6 +274,10 @@ let rec join_concrete_ty (a : ty) (b : ty) : ty option =
   | Bool, Bool -> Some Bool
   | Int, Int -> Some Int
   | Type, Type -> Some Type
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:join_concrete_value with
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Tuple elts)
+     | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
@@ -319,7 +308,7 @@ let rec join_concrete_ty (a : ty) (b : ty) : ty option =
     let%map arg_ty = meet_concrete_value a_arg_ty b_arg_ty
     and ret_ty = join_concrete_dependent a_ret_ty b_ret_ty in
     Pi { arg_ty; arg_mode; ret_ty = T ret_ty; ret_mode }
-  | _ -> None
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
 
 and meet_concrete_ty (a : ty) (b : ty) : ty option =
   match a, b with
@@ -327,6 +316,10 @@ and meet_concrete_ty (a : ty) (b : ty) : ty option =
   | Bool, Bool -> Some Bool
   | Int, Int -> Some Int
   | Type, Type -> Some Type
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:meet_concrete_value with
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Tuple elts)
+     | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
@@ -357,7 +350,7 @@ and meet_concrete_ty (a : ty) (b : ty) : ty option =
     let%map arg_ty = join_concrete_value a_arg_ty b_arg_ty
     and ret_ty = meet_concrete_dependent a_ret_ty b_ret_ty in
     Pi { arg_ty; arg_mode; ret_ty = T ret_ty; ret_mode }
-  | _ -> None
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
 
 and join_concrete_bool (a : vbool) (b : vbool) : vbool option =
   match a, b with
@@ -375,6 +368,7 @@ and meet_concrete_int a b = join_concrete_int a b
 
 and join_concrete_value (a : value) (b : value) : value option =
   match a, b with
+  | Bottom, _ | _, Bottom -> Some Bottom
   | Unit, Unit -> Some Unit
   | Bool a, Bool b ->
     let%map b = join_concrete_bool a b in
@@ -396,10 +390,30 @@ and join_concrete_value (a : value) (b : value) : value option =
     and arg = join_concrete_value a_arg b_arg in
     Apply { fn; arg }
   | Var a, Var b when Ident.equal a b -> Some (Var a)
-  | _ -> None
+  | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
+  | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:join_concrete_value with
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts : value -> Tuple elts)
+     | Unequal_lengths -> None)
+  | ( ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | If _
+      | Apply _
+      | Var _
+      | Tuple _
+      | Closure _
+      | Binder _
+      | External _
+      | Prim _ )
+    , _ ) -> None
 
 and meet_concrete_value (a : value) (b : value) : value option =
   match a, b with
+  | a, Bottom -> Some a
+  | Bottom, b -> Some b
   | Unit, Unit -> Some Unit
   | Bool a, Bool b ->
     let%map b = meet_concrete_bool a b in
@@ -421,7 +435,25 @@ and meet_concrete_value (a : value) (b : value) : value option =
     and arg = meet_concrete_value a_arg b_arg in
     Apply { fn; arg }
   | Var a, Var b when Ident.equal a b -> Some (Var a)
-  | _ -> None
+  | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
+  | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
+  | Tuple a_elts, Tuple b_elts ->
+    (match List.map2 a_elts b_elts ~f:meet_concrete_value with
+     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts : value -> Tuple elts)
+     | Unequal_lengths -> None)
+  | ( ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | If _
+      | Apply _
+      | Var _
+      | Tuple _
+      | Closure _
+      | Binder _
+      | External _
+      | Prim _ )
+    , _ ) -> None
 
 and join_concrete_dependent (a : dependent) (b : dependent) : value option =
   match a, b with
@@ -608,6 +640,7 @@ module Ty = struct
         ; ret_ty : dependent
         ; ret_mode : Modes.t
         }
+    | Tuple of value list
   [@@deriving sexp]
 
   let of_literal : Dst.Literal.t -> t = function
@@ -625,17 +658,14 @@ module Value = struct
         | Bool of bool
         | Int of int64
         | Closure of int
-        | Tuple of t list
-        | UnitT
-        | BoolT
-        | IntT
-        | TypeT
-        | ArrowT of
+        | Arrow of
             { arg : t
             ; arg_mode : Modes.t
             ; ret : t
             ; ret_mode : Modes.t
             }
+        | Tuple of t list
+        | Scalar of Builtin0.Type.t
       [@@deriving sexp, hash, compare, equal]
     end
 
@@ -667,6 +697,7 @@ module Value = struct
         { symbol : string
         ; ty : t
         }
+    | Prim of Builtin0.Prim.t
   [@@deriving sexp]
 
   (* Only does rewrites that remove terms. *)
@@ -827,21 +858,6 @@ module Expr = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-    | Unop of
-        { op : Ident.Unop.t
-        ; arg : t
-        ; ty : value
-        ; mode : Modes.t
-        ; loc : Lex.Location.t
-        }
-    | Binop of
-        { op : Ident.Binop.t
-        ; lhs : t
-        ; rhs : t
-        ; ty : value
-        ; mode : Modes.t
-        ; loc : Lex.Location.t
-        }
     | Tuple of
         { elts : t list
         ; ty : value
@@ -901,8 +917,6 @@ module Expr = struct
     | Literal _ | Erased _ -> Ident.Set.empty
     | Var { id; _ } -> Ident.Set.singleton id
     | Symbol { fn; _ } -> free_vars fn
-    | Unop { arg; _ } -> free_vars arg
-    | Binop { lhs; rhs; _ } -> Set.union (free_vars lhs) (free_vars rhs)
     | Tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
     | Apply { fn; arg; _ } -> Set.union (free_vars fn) (free_vars arg)
     | If { cond; then_; else_; _ } ->
@@ -930,8 +944,6 @@ module Expr = struct
   let ty = function
     | Literal { ty; _ }
     | Apply { ty; _ }
-    | Unop { ty; _ }
-    | Binop { ty; _ }
     | Tuple { ty; _ }
     | If { ty; _ }
     | Var { ty; _ }
@@ -946,8 +958,6 @@ module Expr = struct
   let mode = function
     | Literal { mode; _ }
     | Apply { mode; _ }
-    | Unop { mode; _ }
-    | Binop { mode; _ }
     | Tuple { mode; _ }
     | If { mode; _ }
     | Var { mode; _ }
@@ -962,8 +972,6 @@ module Expr = struct
   let loc = function
     | Literal { loc; _ }
     | Apply { loc; _ }
-    | Unop { loc; _ }
-    | Binop { loc; _ }
     | Tuple { loc; _ }
     | If { loc; _ }
     | Var { loc; _ }
@@ -981,8 +989,6 @@ module Expr = struct
     match t with
     | Literal t -> Literal { t with ty; mode }
     | Apply t -> Apply { t with ty; mode }
-    | Unop t -> Unop { t with ty; mode }
-    | Binop t -> Binop { t with ty; mode }
     | Tuple t -> Tuple { t with ty; mode }
     | If t -> If { t with ty; mode }
     | Var t -> Var { t with ty; mode }
@@ -998,8 +1004,6 @@ module Expr = struct
     match t with
     | Literal t -> Literal { t with ty }
     | Apply t -> Apply { t with ty }
-    | Unop t -> Unop { t with ty }
-    | Binop t -> Binop { t with ty }
     | Tuple t -> Tuple { t with ty }
     | If t -> If { t with ty }
     | Var t -> Var { t with ty }
@@ -1015,8 +1019,6 @@ module Expr = struct
     match t with
     | Literal t -> Literal { t with mode }
     | Apply t -> Apply { t with mode }
-    | Unop t -> Unop { t with mode }
-    | Binop t -> Binop { t with mode }
     | Tuple t -> Tuple { t with mode }
     | If t -> If { t with mode }
     | Var t -> Var { t with mode }

@@ -441,9 +441,15 @@ let _ = if true then f else g;;
             (body
              (If
               (cond
-               (Binop (op Eq)
-                (lhs (Var (id ((Id x) <opaque>)) (loc ((line 2) (column 41)))))
-                (rhs (Literal (value (Int 0)) (loc ((line 2) (column 46)))))
+               (Apply
+                (fn
+                 (Var (id ((Binop Eq) <opaque>)) (loc ((line 2) (column 43)))))
+                (arg
+                 (Nop (op Comma)
+                  (elts
+                   ((Var (id ((Id x) <opaque>)) (loc ((line 2) (column 41))))
+                    (Literal (value (Int 0)) (loc ((line 2) (column 46))))))
+                  (loc ((line 2) (column 43)))))
                 (loc ((line 2) (column 43)))))
               (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
               (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
@@ -459,9 +465,15 @@ let _ = if true then f else g;;
             (body
              (If
               (cond
-               (Binop (op Eq)
-                (lhs (Var (id ((Id x) <opaque>)) (loc ((line 3) (column 41)))))
-                (rhs (Literal (value (Int 0)) (loc ((line 3) (column 46)))))
+               (Apply
+                (fn
+                 (Var (id ((Binop Eq) <opaque>)) (loc ((line 3) (column 43)))))
+                (arg
+                 (Nop (op Comma)
+                  (elts
+                   ((Var (id ((Id x) <opaque>)) (loc ((line 3) (column 41))))
+                    (Literal (value (Int 0)) (loc ((line 3) (column 46))))))
+                  (loc ((line 3) (column 43)))))
                 (loc ((line 3) (column 43)))))
               (then_ (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
               (else_ (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
@@ -659,7 +671,12 @@ let%expect_test "cannot use dynamic erased as condition" =
 let x = true @ dynamic erased;;
 let _ = if x then 1 else 2;;
 |};
-  [%expect {| ((loc ((line 3) (column 8))) (reason Dynamic_erased)) |}]
+  [%expect {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "inline case 1: binder with captured static var" =
@@ -907,6 +924,30 @@ let _ = fn (static x : int) ->
 ;;
   |};
   [%expect {| |}]
+;;
+
+let%expect_test "static div by zero" =
+  go
+    {|
+let _ = assert static (0 / 0 == 0);;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 25)))
+     (reason (Divide_by_zero (Div (Int (T 0)) (Int (T 0))))))
+    |}]
+;;
+
+let%expect_test "static mod by zero" =
+  go
+    {|
+let _ = assert static (0 % 0 == 0);;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 25)))
+     (reason (Divide_by_zero (Mod (Int (T 0)) (Int (T 0))))))
+    |}]
 ;;
 
 let%expect_test "static div by zero" =

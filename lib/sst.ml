@@ -92,19 +92,6 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-    | Unop of
-        { op : Ident.Unop.t
-        ; arg : t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
-    | Binop of
-        { op : Ident.Binop.t
-        ; lhs : t
-        ; rhs : t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
     | Tuple of
         { elts : t list
         ; ty : Ty.t
@@ -139,11 +126,6 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-    | Builtin of
-        { builtin : Builtin.t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
   [@@deriving sexp]
 
   let ty : t -> Ty.t = function
@@ -152,15 +134,12 @@ module Expr = struct
     | Lambda { ty; _ }
     | Apply { ty; _ }
     | Let { ty; _ }
-    | Unop { ty; _ }
-    | Binop { ty; _ }
     | Tuple { ty; _ }
     | If { ty; _ }
     | Var { ty; _ }
     | Pack { ty; _ }
     | Symbol { ty; _ }
-    | External { ty; _ }
-    | Builtin { ty; _ } -> ty
+    | External { ty; _ } -> ty
   ;;
 
   let with_ty t ty =
@@ -170,15 +149,12 @@ module Expr = struct
     | Lambda expr -> Lambda { expr with ty }
     | Apply expr -> Apply { expr with ty }
     | Let expr -> Let { expr with ty }
-    | Unop expr -> Unop { expr with ty }
-    | Binop expr -> Binop { expr with ty }
     | Tuple expr -> Tuple { expr with ty }
     | If expr -> If { expr with ty }
     | Var expr -> Var { expr with ty }
     | Pack expr -> Pack { expr with ty }
     | Symbol expr -> Symbol { expr with ty }
     | External expr -> External { expr with ty }
-    | Builtin expr -> Builtin { expr with ty }
   ;;
 
   let loc : t -> Lex.Location.t = function
@@ -187,24 +163,18 @@ module Expr = struct
     | Lambda { loc; _ }
     | Apply { loc; _ }
     | Let { loc; _ }
-    | Unop { loc; _ }
-    | Binop { loc; _ }
     | Tuple { loc; _ }
     | If { loc; _ }
     | Var { loc; _ }
     | Pack { loc; _ }
     | Symbol { loc; _ }
-    | External { loc; _ }
-    | Builtin { loc; _ } -> loc
+    | External { loc; _ } -> loc
   ;;
 
   let rec free_keys : t -> Tst.Value.Concrete.Set.t Ident.Map.t = function
-    | Scalar _ | External _ | Builtin _ -> Ident.Map.empty
+    | Scalar _ | External _ -> Ident.Map.empty
     | Var { id; _ } -> Ident.Map.singleton id Tst.Value.Concrete.Set.empty
     | Symbol { fn; arg; _ } -> Ident.Map.map (free_keys fn) ~f:(fun keys -> Set.add keys arg)
-    | Unop { arg; _ } -> free_keys arg
-    | Binop { lhs; rhs; _ } ->
-      Map.merge_skewed (free_keys lhs) (free_keys rhs) ~combine:(fun ~key:_ -> Set.union)
     | Tuple { elts; _ } ->
       List.map elts ~f:free_keys
       |> List.fold ~init:Ident.Map.empty ~f:(Map.merge_skewed ~combine:(fun ~key:_ -> Set.union))
@@ -266,12 +236,6 @@ module Top_level = struct
     | External of
         { var : Ident.t
         ; symbol : string
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
-    | Builtin of
-        { var : Ident.t
-        ; builtin : Builtin.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

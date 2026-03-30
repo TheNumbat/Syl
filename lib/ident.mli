@@ -57,6 +57,7 @@ type t [@@deriving sexp, compare, equal, hash]
 
 val create : Raw.t -> stamp:int -> t
 val is_anon : t -> bool
+val name : unit -> t -> string
 val print : unit -> t -> string
 
 include Hashable.S with type t := t

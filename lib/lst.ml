@@ -126,26 +126,8 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-    | Unop of
-        { op : Ident.Unop.t
-        ; arg : Path.t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
-    | Binop of
-        { op : Ident.Binop.t
-        ; lhs : Path.t
-        ; rhs : Path.t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
     | Ident of
         { path : Path.t
-        ; ty : Ty.t
-        ; loc : Lex.Location.t
-        }
-    | Builtin of
-        { builtin : Builtin.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -157,11 +139,8 @@ module Expr = struct
     | Apply_closure { ty; _ }
     | Apply_thunk { ty; _ }
     | Scalar { ty; _ }
-    | Unop { ty; _ }
-    | Binop { ty; _ }
     | Make_tuple { ty; _ }
-    | Ident { ty; _ }
-    | Builtin { ty; _ } -> ty
+    | Ident { ty; _ } -> ty
   ;;
 
   let with_ty t ty =
@@ -171,11 +150,8 @@ module Expr = struct
     | Apply_closure expr -> Apply_closure { expr with ty }
     | Apply_thunk expr -> Apply_thunk { expr with ty }
     | Scalar expr -> Scalar { expr with ty }
-    | Unop expr -> Unop { expr with ty }
-    | Binop expr -> Binop { expr with ty }
     | Make_tuple expr -> Make_tuple { expr with ty }
     | Ident expr -> Ident { expr with ty }
-    | Builtin expr -> Builtin { expr with ty }
   ;;
 end
 
