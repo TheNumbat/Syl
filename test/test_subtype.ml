@@ -295,7 +295,7 @@ let _ = f : static int -> int;;
          (Pi (arg_ty (Type Int))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty (T (Type Int)))
-          (ret_mode ((staticity Static) (erasure Unerased)))))))))
+          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -409,7 +409,7 @@ let _ = id : static type \ t -> erased t -> t;;
               (ret (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 44)))))
               (ret_mode ((staticity ()) (erasure ())))
               (loc ((line 3) (column 20)))))))
-          (ret_mode ((staticity Static) (erasure Unerased)))))))))
+          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
     |}]
 ;;
 

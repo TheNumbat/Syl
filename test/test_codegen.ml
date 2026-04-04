@@ -2174,7 +2174,7 @@ let _ = f 0;;
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 let print = fn (static x : int) -> print_int x;;
 let _ = print 0;;
 let _ = print 0;;
@@ -2186,7 +2186,7 @@ let _ = print 1;;
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 let _ =
 let print = fn (static x : int) -> print_int x in
 let _ = print 0 in
@@ -2200,7 +2200,7 @@ let _ = print 1 in
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 let print = fn (static x : int) ->
   let _ = print_int x in
   fn (static y : int) -> print_int y;;
@@ -2409,7 +2409,7 @@ let%expect_test "recursive inlining" =
   go
     {|
 fun erased f (x : int) : int = g x
-and g (y : int) : int = let _ = f y in 0;;
+and g (y : int) : int = let _ = if y < 0 then f y else 0 in 0;;
 let _ = g 0;;
 |};
   [%expect {| |}]
@@ -2460,7 +2460,7 @@ and g (y : int) : int = let _ = a in let _ = c in f y;;
 let%expect_test "recursive inlining" =
   go
     {|
-fun f (x : int) : int = let _ = g x in 0
+fun f (x : int) : int = let _ = if x < 0 then g x else 0 in 0
 and erased g (y : int) : int = f y;;
 let _ = f 0;;
 |};
@@ -2773,7 +2773,7 @@ let _ = outer 5;;
 let%expect_test "monomorphizing side effects" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 fun print (static _ : unit) : unit = print_int 0;;
 let _ = print ();;
 |};
@@ -2783,7 +2783,7 @@ let _ = print ();;
 let%expect_test "external" =
   go
     {|
-external f : int -> unit = sylstd_print_int;;
+external f : int -> unit = syl_std_print_int;;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -2792,7 +2792,7 @@ let _ = f 0;;
 let%expect_test "external" =
   go
     {|
-external f : int -> unit = sylstd_print_int;;
+external f : int -> unit = syl_std_print_int;;
 let _ = (f @ erased) 0;;
 |};
   [%expect {| |}]
@@ -2801,7 +2801,7 @@ let _ = (f @ erased) 0;;
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 let print = fn (static x : int) -> print_int x;;
 let _ = print 0;;
 let _ = print 1;;
@@ -2845,7 +2845,7 @@ let _ = mk_ident (fn (static _ : unit) -> 1) true;;
 let%expect_test "static lambda effects are thunked" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 
 fun mk_ident (static pick_t : static unit -> static int) : static (let t = if pick_t () == 0 then int else bool in t -> t) =
   let _ = pick_t () in
@@ -2861,7 +2861,7 @@ let _ = mk_ident (fn (static _ : unit) -> let _ = print_int 10 in 1) true;;
 let%expect_test "external" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 |};
   [%expect {| |}]
 ;;

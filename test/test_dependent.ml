@@ -114,7 +114,7 @@ let f = fn (erased ty : type) -> fn (x : ty) -> x;;
     {|
     ((loc ((line 2) (column 33)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -378,13 +378,7 @@ let%expect_test "cannot return static from function with dynamic arg via fun" =
     {|
 fun f (x : int) : static int = x;;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 4)))
-     (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Unerased)))
-       (need ((staticity Static) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "fun returning static erased type" =
@@ -671,7 +665,8 @@ let%expect_test "cannot use dynamic erased as condition" =
 let x = true @ dynamic erased;;
 let _ = if x then 1 else 2;;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 3) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))

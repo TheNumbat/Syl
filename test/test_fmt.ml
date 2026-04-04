@@ -209,8 +209,8 @@ let%expect_test "assert static" =
 ;;
 
 let%expect_test "external" =
-  fmt "external print_int : int -> unit = sylstd_print_int;;";
-  [%expect {| external print_int : int -> unit = sylstd_print_int;; |}]
+  fmt "external print_int : int -> unit = syl_std_print_int;;";
+  [%expect {| external print_int : int -> unit = syl_std_print_int;; |}]
 ;;
 
 let%expect_test "builtin" =

@@ -109,7 +109,9 @@ module Expr = struct
           let fv_arg_ty = free_vars f.arg_ty in
           let fv_ret_ty =
             let fv = free_vars f.ret_ty in
-            if Modes.is_static (Modes.annotation f.arg_mode) then Set.remove fv f.arg else fv
+            match f.arg_mode.staticity with
+            | Some Static -> Set.remove fv f.arg
+            | _ -> fv
           in
           let fv_body = Set.remove (free_vars f.body) f.arg in
           Ident.Set.union_list [ acc; fv_arg_ty; fv_ret_ty; fv_body ])

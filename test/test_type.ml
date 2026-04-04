@@ -686,8 +686,8 @@ let _ = (f @ erased) 0;;|};
     {|
     ((loc ((line 4) (column 8)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -752,6 +752,30 @@ let _ = f (fn (x : int) -> 0 @ erased);;
 let%expect_test "erased closure arg" =
   go
     {|
+let f = fn (erased g : int -> erased int) -> let _ = g 1 in 2;;
+let _ = f (fn (x : int) -> 0 @ erased);;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 53)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
+;;
+
+let%expect_test "erased closure arg" =
+  go
+    {|
+let f = fn (static erased g : int -> erased int) -> let _ = g 1 in 2;;
+let _ = f (fn (x : int) -> 0 @ erased);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "erased closure arg" =
+  go
+    {|
 let f = fn (erased x : int -> int) -> 1;;
 let _ = f ((fn (x : int) -> x + 1) @ erased);;
 |};
@@ -768,7 +792,7 @@ let g = fn (erased x : int) -> f x;;
     {|
     ((loc ((line 3) (column 31)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
@@ -908,7 +932,7 @@ let _ = g f;;
     {|
     ((loc ((line 3) (column 38)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -940,7 +964,7 @@ let _ = g f1;;
     {|
     ((loc ((line 3) (column 39)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -1486,7 +1510,7 @@ let f = fn (erased ty : type) -> fn (x : ty) -> x;;
     {|
     ((loc ((line 2) (column 33)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -1625,7 +1649,7 @@ let _ = f (fn (static x : int) -> 0);;
     {|
     ((loc ((line 2) (column 38)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Unerased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -1655,7 +1679,7 @@ let _ = f (fn (x : int) -> 0);;
     {|
     ((loc ((line 2) (column 38)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Unerased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -1688,7 +1712,7 @@ let _ = f (fn (x : int) -> 0);;
     {|
     ((loc ((line 2) (column 45)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -1792,7 +1816,7 @@ let%expect_test "arrow typechecking" =
     {|
     ((loc ((line 2) (column 40)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Unerased)))
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
@@ -2192,8 +2216,8 @@ let y = (f 0) @ unerased;;
     {|
     ((loc ((line 2) (column 4)))
      (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Erased)))
-       (need ((staticity Phase) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -2490,13 +2514,7 @@ let%expect_test "fun" =
     {|
 fun f (x : int) : static int = x;;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 4)))
-     (reason
-      (Mode_mismatch (got ((staticity Phase) (erasure Unerased)))
-       (need ((staticity Static) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "fun" =
@@ -2668,22 +2686,8 @@ let _ = assert static (f 0 == 0);;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Static_assert
-       (Bool
-        (Eq
-         (Apply
-          (fn
-           (External (symbol asdf)
-            (ty
-             (Type
-              (Arrow (arg_ty (Type Int))
-               (arg_mode ((staticity Dynamic) (erasure Unerased)))
-               (ret_ty (Type Int))
-               (ret_mode ((staticity Static) (erasure Unerased))))))))
-          (arg (Int (T 0))))
-         (Int (T 0)))))))
+    ((loc ((line 2) (column 0)))
+     (reason (Static_external ((Id f) <opaque>) asdf)))
     |}]
 ;;
 

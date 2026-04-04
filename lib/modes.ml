@@ -40,11 +40,7 @@ module Erasure = struct
     | Erased, Unerased -> false
   ;;
 
-  let geq t1 t2 =
-    match t1, t2 with
-    | Erased, Erased | Erased, Unerased | Unerased, Unerased -> true
-    | Unerased, Erased -> false
-  ;;
+  let geq t1 t2 = leq t2 t1
 
   let print = function
     | Unerased -> "unerased"
@@ -56,61 +52,54 @@ module Staticity = struct
   (*
      Dynamic
      |
-     Phase
+     Parametric
      |
      Static
   *)
   type t =
     | Dynamic
-    | Phase
+    | Parametric
     | Static
   [@@deriving sexp, compare, equal, hash]
 
   let top = Dynamic
   let bottom = Static
-  let default = Phase
-
-  let resolve = function
-    | Static | Phase -> Static
-    | Dynamic -> Dynamic
-  ;;
+  let default = Dynamic
 
   let join t1 t2 =
     match t1, t2 with
-    | Dynamic, _ | _, Dynamic -> Dynamic
-    | Phase, _ | _, Phase -> Phase
     | Static, Static -> Static
+    | Dynamic, _ | _, Dynamic -> Dynamic
+    | Parametric, _ | _, Parametric -> Parametric
   ;;
 
   let meet t1 t2 =
     match t1, t2 with
-    | Static, _ | _, Static -> Static
-    | Phase, _ | _, Phase -> Phase
     | Dynamic, Dynamic -> Dynamic
+    | Static, _ | _, Static -> Static
+    | Parametric, _ | _, Parametric -> Parametric
   ;;
 
   let leq t1 t2 =
     match t1, t2 with
     | Static, _ -> true
-    | Phase, Static -> false
-    | Phase, (Phase | Dynamic) -> true
-    | Dynamic, (Phase | Static) -> false
+    | Parametric, (Parametric | Dynamic) -> true
     | Dynamic, Dynamic -> true
+    | (Parametric | Dynamic), Static -> false
+    | Dynamic, Parametric -> false
   ;;
 
-  let geq t1 t2 =
-    match t1, t2 with
-    | Dynamic, _ -> true
-    | Phase, Dynamic -> false
-    | Phase, (Phase | Static) -> true
-    | Static, (Phase | Dynamic) -> false
-    | Static, Static -> true
+  let geq t1 t2 = leq t2 t1
+
+  let resolve = function
+    | Parametric -> Static
+    | other -> other
   ;;
 
   let print = function
-    | Dynamic -> "dynamic"
-    | Phase -> "phase"
     | Static -> "static"
+    | Parametric -> "parametric"
+    | Dynamic -> "dynamic"
   ;;
 end
 
@@ -179,13 +168,7 @@ let default ?(staticity = Staticity.default) ?(erasure = Erasure.default) () =
   { staticity; erasure }
 ;;
 
-let annotation (maybe : Maybe.t) =
-  let staticity = Option.value maybe.staticity ~default:Staticity.default in
-  let erasure = Option.value maybe.erasure ~default:Erasure.default in
-  { staticity; erasure }
-;;
-
-let with_ t (maybe : Maybe.t) =
+let annotate t (maybe : Maybe.t) =
   let staticity = Option.value maybe.staticity ~default:t.staticity in
   let erasure = Option.value maybe.erasure ~default:t.erasure in
   { staticity; erasure }
@@ -193,6 +176,7 @@ let with_ t (maybe : Maybe.t) =
 
 let create ~staticity ~erasure = { staticity; erasure }
 let return t ~ret = { t with erasure = Erasure.join t.erasure ret.erasure }
+let capture t ~fv = { t with staticity = Staticity.join t.staticity fv.staticity }
 
 let cond ~cond then_ else_ =
   let t = join then_ else_ in
@@ -201,11 +185,6 @@ let cond ~cond then_ else_ =
 
 let is_static = function
   | { staticity = Static; _ } -> true
-  | _ -> false
-;;
-
-let is_phase = function
-  | { staticity = Phase; _ } -> true
   | _ -> false
 ;;
 

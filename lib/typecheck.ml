@@ -7,7 +7,7 @@ module Error = struct
     | Unbound_ident of Ident.t
     | Mode_mismatch of
         { got : Modes.t
-        ; need : Modes.t
+        ; need : Modes.t (* TODO why *)
         }
     | Type_mismatch of
         { got : Value.t
@@ -115,7 +115,7 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
 
 let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
   let expr : Expr.t =
-    if (not (Modes.is_erased src_mode)) && Modes.is_erased dst_mode
+    if Modes.is_unerased src_mode && Modes.is_erased dst_mode
     then (
       let loc = Expr.loc expr in
       if Modes.is_static dst_mode
@@ -124,7 +124,7 @@ let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~m
     else expr
   in
   let static =
-    if (not (Modes.is_dynamic src_mode)) && Modes.is_dynamic dst_mode
+    if Modes.is_static src_mode && Modes.is_dynamic dst_mode
     then Fail.unreachable [%here] ~loc
     else static
   in
@@ -135,8 +135,8 @@ let require_mode ~loc src dst = if not (Modes.leq src dst) then Fail.mode_mismat
 
 let require_dynamic_arrow ~loc var sym (ty : Value.t) =
   match ty with
-  | Type (Arrow { arg_mode; _ } | Pi { arg_mode; _ }) ->
-    if Modes.is_static arg_mode then Fail.static_external ~loc var sym
+  | Type (Arrow { arg_mode; ret_mode; _ } | Pi { arg_mode; ret_mode; _ }) ->
+    if Modes.is_static arg_mode || Modes.is_static ret_mode then Fail.static_external ~loc var sym
   | _ -> Fail.static_external ~loc var sym
 ;;
 
@@ -166,6 +166,7 @@ let inline ~loc ~(env : Env.t) ~arg_id ~arg ~arg_mode body =
   Set.fold fvs ~init:body ~f:(fun acc id ->
     match Map.find env id with
     | Some (desc : Desc.t) when not (Modes.is_erased desc.mode) ->
+      (* TODO allow inlining with dynamics if they're in scope at the call site *)
       require_static ~loc desc;
       (try
          let value = Lazy.force desc.static in
@@ -695,14 +696,16 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
        (match Lazy.force cond_desc.static with
         | Bool (T true) -> typecheck state env (Literal { value = Unit; loc })
         | expr -> Fail.static_assert ~loc expr)
-     | Dynamic | Phase ->
+     | Dynamic | Parametric ->
        require_unerased ~loc cond_desc;
+       (* TODO don't force here *)
        if Modes.is_static cond_desc.mode && Value.is_true (Lazy.force cond_desc.static)
        then typecheck state env (Literal { value = Unit; loc })
        else (
          let mode = Modes.create ~staticity:Static ~erasure:Unerased in
          let ty =
-           let mode = Modes.create ~staticity:Dynamic ~erasure:Unerased in
+           (* TODO swap to builtin *)
+           let mode = Modes.create ~staticity:Dynamic ~erasure:Erased in
            Value.Type
              (Arrow { arg_ty = Type Bool; arg_mode = mode; ret_ty = Type Unit; ret_mode = mode })
          in
@@ -726,7 +729,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     (match desc.mode.staticity, desc.mode.erasure with
      | Static, Erased ->
        Literal { value = Lazy.force desc.static; ty = desc.ty; mode = desc.mode; loc }, desc
-     | Dynamic, Erased -> Erased { ty = desc.ty; mode = desc.mode; loc }, desc
+     | (Dynamic | Parametric), Erased -> Erased { ty = desc.ty; mode = desc.mode; loc }, desc
      | _ -> Var { id; ty = desc.ty; mode = desc.mode; loc }, desc)
   | Nop { op; elts; loc } ->
     (* TODO replace with apply *)
@@ -788,7 +791,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
           in
           let ty = Value.reduce (If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty }) in
           If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
-     | Dynamic | Phase ->
+     | Dynamic | Parametric ->
        require_unerased ~loc cond_desc;
        let then_, then_desc = typecheck state env then_ in
        let else_, else_desc = typecheck state env else_ in
@@ -815,23 +818,38 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
   | Lambda { arg; arg_mode; arg_ty; body = body_cst; loc } ->
     let arg_ty_desc = reduce state env arg_ty in
     let arg_ty = require_static_type state ~loc arg_ty_desc in
-    let mode = Modes.bottom () in
-    let arg_mode = Modes.annotation arg_mode in
-    (match arg_mode.staticity with
-     | Dynamic | Phase ->
-       let env =
-         Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Fail.unreachable [%here] ~loc }
+    let arg_static = arg_mode.staticity in
+    let arg_mode = Modes.annotate (Modes.default ()) arg_mode in
+    (match arg_static with
+     | Some (Dynamic | Parametric) | None ->
+       let is_unannotated = Option.is_none arg_static in
+       let arg_mode =
+         if is_unannotated then { arg_mode with staticity = Parametric } else arg_mode
        in
-       let body, body_desc = typecheck state env body_cst in
-       let ret_mode =
-         { body_desc.mode with staticity = Modes.Staticity.resolve body_desc.mode.staticity }
+       let body, body_desc =
+         let env =
+           Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Fail.unreachable [%here] ~loc }
+         in
+         typecheck state env body_cst
        in
        let arg_mode = { arg_mode with staticity = Dynamic } in
+       let ret_mode =
+         if is_unannotated
+         then { body_desc.mode with staticity = Modes.Staticity.resolve body_desc.mode.staticity }
+         else body_desc.mode
+       in
        let ty = Value.Type (Arrow { arg_ty; arg_mode; ret_ty = body_desc.ty; ret_mode }) in
-       let mode = Modes.return mode ~ret:body_desc.mode in
+       let mode =
+         Set.remove (Expr.free_vars body) arg
+         |> Set.fold ~init:(Modes.bottom ()) ~f:(fun acc id ->
+           match Env.find env id with
+           | Some desc -> Modes.capture acc ~fv:desc.mode
+           | None -> acc)
+         |> Modes.return ~ret:body_desc.mode
+       in
        let static = Lazy.from_val (Value.Closure { arg; ty; body; body_cst; env }) in
-       Lambda { arg; ty; body; mode; loc }, { ty; mode; static }
-     | Static ->
+       Expr.Lambda { arg; ty; body; mode; loc }, { Desc.ty; mode; static }
+     | Some Static ->
        let body_desc =
          let env =
            Env.bind
@@ -842,8 +860,11 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
          reduce state env body_cst
        in
        let ret_ty = Dependent.typecheck body_desc.ty ~env ~arg ~arg_ty ~arg_mode ~body:body_cst in
-       let ty = Value.Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode = body_desc.mode }) in
-       let mode = Modes.return mode ~ret:body_desc.mode in
+       let ret_mode =
+         { body_desc.mode with staticity = Modes.Staticity.resolve body_desc.mode.staticity }
+       in
+       let ty = Value.Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode }) in
+       let mode = Modes.return (Modes.bottom ()) ~ret:body_desc.mode in
        let mono = Hashtbl.create (module Value.Concrete) in
        let static = Lazy.from_val (Value.Binder { arg; ty; body = body_cst; mono; env }) in
        Binder { arg; ty; body = body_cst; mono; mode; loc }, { ty; mode; static })
@@ -933,9 +954,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
        require_leq state ~loc arg_desc.ty arg_ty;
        let ret_mode =
          let staticity = Modes.Staticity.join fn_desc.mode.staticity arg_desc.mode.staticity in
-         let staticity = Modes.Staticity.join staticity ret_mode.staticity in
-         (* TODO the result should be static *)
-         { ret_mode with staticity }
+         { ret_mode with staticity = Modes.Staticity.join staticity ret_mode.staticity }
        in
        let static =
          if Modes.is_static ret_mode
@@ -978,7 +997,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
      | ty -> raise_s [%message "Expected function type" (loc : Lex.Location.t) (ty : Value.t)])
   | Mode_annotation { expr; mode; loc } ->
     let expr, desc = typecheck state env expr in
-    let mode = Modes.with_ desc.mode mode in
+    let mode = Modes.annotate desc.mode mode in
     require_mode ~loc desc.mode mode;
     weaken ~loc expr desc ~ty:desc.ty ~mode
   | Type_annotation { expr; ty; loc } ->
@@ -988,6 +1007,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     require_leq state ~loc desc.ty ty;
     weaken ~loc expr desc ~ty ~mode:desc.mode
   | Arrow { arg; arg_mode; arg_id; ret; ret_mode; loc } ->
+    (* TODO should bind types instead of forcing *)
     let ty = Value.Type Type in
     let mode = Modes.create ~staticity:Static ~erasure:Erased in
     let value =
@@ -1001,18 +1021,15 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
 
 and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode : Value.t =
   let arg_desc = reduce state env arg_ty in
-  let arg_mode = Modes.annotation arg_mode in
-  let ret_mode = Modes.annotation ret_mode in
+  let arg_mode = Modes.annotate (Modes.default ()) arg_mode in
+  let ret_mode = Modes.annotate (Modes.default ()) ret_mode in
   let arg_ty = require_static_type state ~loc arg_desc in
   match arg_mode.staticity with
-  | Dynamic | Phase ->
-    let arg_mode = { arg_mode with staticity = Dynamic } in
-    let ret_mode = { ret_mode with staticity = Modes.Staticity.resolve ret_mode.staticity } in
+  | Dynamic | Parametric ->
     let ret_desc = reduce state env ret_ty in
     let ret_ty = require_static_type state ~loc ret_desc in
     Value.Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
   | Static ->
-    let ret_mode = { ret_mode with staticity = Modes.Staticity.resolve ret_mode.staticity } in
     let env =
       Env.bind
         env
@@ -1038,8 +1055,7 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
         let ty = typecheck_arrow state ~loc env ~arg_id:arg ~arg_ty ~arg_mode ~ret_ty ~ret_mode in
         let desc : Desc.t =
           match ty with
-          | Type (Pi _) ->
-            let ret_mode = Modes.annotation ret_mode in
+          | Type (Pi { ret_mode; _ }) ->
             let mode = Modes.return (Modes.bottom ~erasure:erased ()) ~ret:ret_mode in
             let static =
               Lazy.from_fun (fun () ->
@@ -1052,9 +1068,12 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
                   })
             in
             { ty; mode; static }
-          | Type (Arrow { arg_ty; ret_ty; _ }) ->
-            let arg_mode = Modes.annotation arg_mode in
-            let ret_mode = Modes.annotation ret_mode in
+          | Type (Arrow { arg_ty; ret_ty; ret_mode; _ }) ->
+            let is_unannotated = Option.is_none arg_mode.staticity in
+            let arg_mode = Modes.annotate (Modes.default ()) arg_mode in
+            let arg_mode =
+              if is_unannotated then { arg_mode with staticity = Parametric } else arg_mode
+            in
             let mode = Modes.return (Modes.bottom ~erasure:erased ()) ~ret:ret_mode in
             let static =
               Lazy.from_fun (fun () ->
@@ -1067,11 +1086,20 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
                   in
                   typecheck state env body_cst
                 in
-                require_mode ~loc body_desc.mode ret_mode;
+                let body_mode =
+                  if is_unannotated
+                  then
+                    { body_desc.mode with
+                      staticity = Modes.Staticity.resolve body_desc.mode.staticity
+                    }
+                  else body_desc.mode
+                in
+                require_mode ~loc body_mode ret_mode;
                 require_leq state ~loc body_desc.ty ret_ty;
                 Value.Closure { arg; ty; body; body_cst; env = !env_rec })
             in
-            { ty; mode; static }
+            let arg_mode = { arg_mode with staticity = Dynamic } in
+            { Desc.ty = Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode }); mode; static }
           | _ -> assert false
         in
         Env.bind acc var desc)

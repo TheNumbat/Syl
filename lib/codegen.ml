@@ -106,7 +106,7 @@ end
 let print_static (mode : Modes.Staticity.t) =
   match mode with
   | Static -> "𝒮"
-  | Dynamic | Phase -> ""
+  | Parametric | Dynamic -> ""
 ;;
 
 let print_erased (mode : Modes.Erasure.t) =

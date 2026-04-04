@@ -45,8 +45,7 @@ let fmt_erased (erased : Modes.Erasure.t) =
 let fmt_static (static : Modes.Staticity.t) =
   match static with
   | Static -> text " static"
-  | Dynamic -> nil
-  | Phase -> raise_s [%message "Unexpected phase"]
+  | Parametric | Dynamic -> nil
 ;;
 
 let fmt_modes (mode : Modes.Maybe.t) =

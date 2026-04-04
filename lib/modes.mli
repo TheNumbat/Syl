@@ -26,18 +26,18 @@ end
 module Staticity : sig
   type t =
     | Dynamic
-    | Phase
+    | Parametric
     | Static
   [@@deriving sexp, compare, equal, hash]
 
   val top : t
   val bottom : t
   val default : t
-  val resolve : t -> t
   val meet : t -> t -> t
   val join : t -> t -> t
   val leq : t -> t -> bool
   val geq : t -> t -> bool
+  val resolve : t -> t
   val print : t -> string
 end
 
@@ -63,11 +63,11 @@ val create : staticity:Staticity.t -> erasure:Erasure.t -> t
 val top : ?staticity:Staticity.t -> ?erasure:Erasure.t -> unit -> t
 val bottom : ?staticity:Staticity.t -> ?erasure:Erasure.t -> unit -> t
 val default : ?staticity:Staticity.t -> ?erasure:Erasure.t -> unit -> t
-val with_ : t -> Maybe.t -> t
-val annotation : Maybe.t -> t
+val annotate : t -> Maybe.t -> t
 
 (* Transforms *)
 val return : t -> ret:t -> t
+val capture : t -> fv:t -> t
 val cond : cond:t -> t -> t -> t
 
 (* Logic *)
@@ -78,6 +78,5 @@ val geq : t -> t -> bool
 val is_erased : t -> bool
 val is_unerased : t -> bool
 val is_static : t -> bool
-val is_phase : t -> bool
 val is_dynamic : t -> bool
 val print : unit -> t -> string

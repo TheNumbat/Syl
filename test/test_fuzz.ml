@@ -740,7 +740,7 @@ let _ = g true;;
 let%expect_test "fuzz: external print" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 let _ = print_int 42;;
 |};
   [%expect {| |}]
@@ -749,7 +749,7 @@ let _ = print_int 42;;
 let%expect_test "fuzz: external in higher-order context" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
+external print_int : int -> unit = syl_std_print_int;;
 let apply = fn (f : int -> unit) -> f 42;;
 let _ = apply print_int;;
 |};
@@ -759,8 +759,8 @@ let _ = apply print_int;;
 let%expect_test "fuzz: multiple externals" =
   go
     {|
-external print_int : int -> unit = sylstd_print_int;;
-external print_bool : bool -> unit = sylstd_print_bool;;
+external print_int : int -> unit = syl_std_print_int;;
+external print_bool : bool -> unit = syl_std_print_bool;;
 let _ = print_int 1;;
 let _ = print_bool true;;
 let _ = print_int 2;;
