@@ -106,7 +106,7 @@ and Closure : sig
     { arg : Ident.t
     ; ty : Value.t
     ; body : Expr.t
-    ; body_cst : Dst.Expr.t
+    ; body_dst : Dst.Expr.t
     ; env : Env.t
     }
   [@@deriving sexp]

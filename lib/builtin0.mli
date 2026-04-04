@@ -36,6 +36,7 @@ module Prim : sig
   end
 
   type t =
+    | Assert
     | Int of Int.t
     | Bool of Bool.t
   [@@deriving sexp, compare, equal, hash]

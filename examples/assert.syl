@@ -1,0 +1,11 @@
+let _ = assert true;;
+
+let _ = (assert true) @ static;;
+
+let _ = assert static true;;
+
+let _ = (assert static true) @ static;;
+
+let x = true @ dynamic;;
+
+let _ = assert x;;

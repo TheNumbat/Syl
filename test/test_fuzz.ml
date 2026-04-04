@@ -1436,17 +1436,6 @@ let _ = g true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: static lambda with dynamic body capture" =
-  go
-    {|
-let x = 42 @ dynamic;;
-let f = fn (static erased t : type) -> fn (_ : t) -> x;;
-let _ = f int 0;;
-let _ = f bool true;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "fuzz: erased function taking dynamic" =
   go
     {|

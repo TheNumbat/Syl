@@ -64,6 +64,146 @@ fun add (x : int) (y : int) : bool = x + y;;
     |}]
 ;;
 
+let%expect_test "multi-arg fun capture dynamic" =
+  go
+    {|
+let z = 0 @ dynamic;;
+fun add (x : int) (y : int) : int = x + y + z;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "multi-arg fun capture dynamic return static" =
+  go
+    {|
+let z = 0 @ dynamic;;
+fun add (x : int) (y : int) : static int = x + y + z;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 3) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "multi-arg fun return static" =
+  go
+    {|
+fun add (x : int) (y : int) : static int = x + y;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "multi-arg fun capture return erased" =
+  go
+    {|
+fun add (x : int) (y : int) : erased int = x + y;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "multi-arg fun capture return erased" =
+  go
+    {|
+fun add (x : int) (y : int) : erased int = x + y;;
+let f = (add 0) @ unerased;;
+let g = f 1;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "multi-arg lambda capture erased" =
+  go
+    {|
+let add = fn (erased x : int) -> x + 1;;
+let f = (add 0) @ unerased;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 35)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "multi-arg lambda capture erased" =
+  go
+    {|
+let add = fn (erased x : int) (y : int) -> x + y;;
+let f = (add 0) @ unerased;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 45)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "multi-arg lambda capture erased" =
+  go
+    {|
+let add = fn (erased x : int) (erased y : int) -> x + y;;
+let f = (add 0) @ unerased;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 52)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "multi-arg fun capture erased" =
+  go
+    {|
+fun add (erased x : int) (y : int) : int = x + y;;
+let f = (add 0) @ unerased;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 45)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "multi-arg fun capture erased" =
+  go
+    {|
+fun add (erased x : int) (erased y : int) : int = x + y;;
+let f = (add 0) @ unerased;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 52)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "multi-arg fun capture return erased" =
+  go
+    {|
+fun erased add (x : int) (y : int) : int = x + y;;
+let f = (add 0) @ unerased;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 3) (column 16)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
+;;
+
 let%expect_test "multi-arg fun with static erased" =
   go
     {|
@@ -137,7 +277,13 @@ let%expect_test "multi-arg fun erased" =
 fun erased f (x : int) (y : int) : int = x + y;;
 let _ = f 1 2;;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "multi-arg fun erased cannot weaken" =
@@ -165,8 +311,8 @@ let _ = (f 1 @ unerased);;
     {|
     ((loc ((line 3) (column 13)))
      (reason
-      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
-       (need ((staticity Static) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -176,7 +322,13 @@ let%expect_test "multi-arg fun erased with static erased" =
 fun erased id (static erased t : type) (x : t) : t = x;;
 let _ = id int 42;;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "let with args" =
@@ -314,7 +466,7 @@ let _ = f : int -> int;;
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (ret_mode ((staticity Static) (erasure Unerased))))))
+          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
        (need
         (Type
          (Arrow (arg_ty (Type Int))
@@ -380,8 +532,17 @@ let _ = id : static erased type \ t -> t -> t;;
 let%expect_test "multi-arg fun erased type matches with erased ret_mode" =
   go
     {|
+fun erased f (x : int) (y : int) : erased int = x + y;;
+let _ = f : int -> erased (int -> erased int);;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "multi-arg fun erased type mismatch unerased ret_mode" =
+  go
+    {|
 fun erased f (x : int) (y : int) : int = x + y;;
-let _ = f : int -> static erased (int -> int);;
+let _ = f : int -> erased (int -> int);;
   |};
   [%expect {| |}]
 ;;
@@ -407,7 +568,7 @@ let _ = f : int -> int -> int;;
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (ret_mode ((staticity Static) (erasure Erased))))))
+          (ret_mode ((staticity Dynamic) (erasure Erased))))))
        (need
         (Type
          (Arrow (arg_ty (Type Int))
@@ -419,6 +580,51 @@ let _ = f : int -> int -> int;;
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
           (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+    |}]
+;;
+
+let%expect_test "multi-arg fun erased type mismatch unerased ret_mode" =
+  go
+    {|
+fun erased f (x : int) (y : int) : static int = x + y;;
+let _ = f : int -> static erased (int -> int);;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "multi-arg fun erased type mismatch unerased ret_mode" =
+  go
+    {|
+fun erased f (x : int) (y : int) : static int = x + y;;
+let _ = f : int -> static (int -> int);;
+  |};
+  [%expect
+    {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Type_mismatch
+       (got
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased)))
+          (ret_ty
+           (Type
+            (Arrow (arg_ty (Type Int))
+             (arg_mode ((staticity Dynamic) (erasure Unerased)))
+             (ret_ty (Type Int))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Erased))))))
+       (need
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased)))
+          (ret_ty
+           (Type
+            (Arrow (arg_ty (Type Int))
+             (arg_mode ((staticity Dynamic) (erasure Unerased)))
+             (ret_ty (Type Int))
+             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -435,7 +641,16 @@ let%expect_test "multi-arg let erased type mismatch unerased ret_mode" =
   go
     {|
 let erased add (x : int) (y : int) = x + y;;
-let _ = add : int -> int -> int;;
+let _ = add : int -> static erased (int -> int);;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "multi-arg let erased type mismatch unerased ret_mode" =
+  go
+    {|
+let erased add (x : int) (y : int) = x + y;;
+let _ = add : int -> static (int -> int);;
   |};
   [%expect
     {|
@@ -463,7 +678,7 @@ let _ = add : int -> int -> int;;
              (arg_mode ((staticity Dynamic) (erasure Unerased)))
              (ret_ty (Type Int))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -474,6 +689,41 @@ let f = fn erased (x : int) (y : int) -> x + y;;
 let _ = f : int -> static erased (int -> int);;
   |};
   [%expect {| |}]
+;;
+
+let%expect_test "multi-arg fn erased type matches with erased ret_mode" =
+  go
+    {|
+let f = fn erased (x : int) (y : int) -> x + y;;
+let _ = f : int -> static (int -> int);;
+  |};
+  [%expect {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Type_mismatch
+       (got
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased)))
+          (ret_ty
+           (Type
+            (Arrow (arg_ty (Type Int))
+             (arg_mode ((staticity Dynamic) (erasure Unerased)))
+             (ret_ty (Type Int))
+             (ret_mode ((staticity Static) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Erased))))))
+       (need
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased)))
+          (ret_ty
+           (Type
+            (Arrow (arg_ty (Type Int))
+             (arg_mode ((staticity Dynamic) (erasure Unerased)))
+             (ret_ty (Type Int))
+             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
+    |}]
 ;;
 
 let%expect_test "multi-arg fn erased type mismatch unerased ret_mode" =
@@ -518,7 +768,44 @@ let%expect_test "multi-arg fun erased 3 args type matches" =
 fun erased f (a : int) (b : int) (c : int) : int = a + b + c;;
 let _ = f : int -> static erased (int -> static erased (int -> int));;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Type_mismatch
+       (got
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased)))
+          (ret_ty
+           (Type
+            (Arrow (arg_ty (Type Int))
+             (arg_mode ((staticity Dynamic) (erasure Unerased)))
+             (ret_ty
+              (Type
+               (Arrow (arg_ty (Type Int))
+                (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                (ret_ty (Type Int))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (ret_mode ((staticity Dynamic) (erasure Erased))))))
+          (ret_mode ((staticity Dynamic) (erasure Erased))))))
+       (need
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased)))
+          (ret_ty
+           (Type
+            (Arrow (arg_ty (Type Int))
+             (arg_mode ((staticity Dynamic) (erasure Unerased)))
+             (ret_ty
+              (Type
+               (Arrow (arg_ty (Type Int))
+                (arg_mode ((staticity Dynamic) (erasure Unerased)))
+                (ret_ty (Type Int))
+                (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+             (ret_mode ((staticity Static) (erasure Erased))))))
+          (ret_mode ((staticity Static) (erasure Erased)))))))))
+    |}]
 ;;
 
 let%expect_test "multi-arg fun erased 3 args full application" =
@@ -527,7 +814,13 @@ let%expect_test "multi-arg fun erased 3 args full application" =
 fun erased f (a : int) (b : int) (c : int) : int = a + b + c;;
 let _ = f 1 2 3;;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "multi-arg fun erased 3 args second partial app is erased" =
@@ -538,10 +831,10 @@ let _ = (f 1 2) @ unerased;;
   |};
   [%expect
     {|
-    ((loc ((line 3) (column 16)))
+    ((loc ((line 3) (column 9)))
      (reason
-      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
-       (need ((staticity Static) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -608,7 +901,13 @@ let%expect_test "fun partial app is static" =
 fun f (x : int) (y : int) : int = x + y;;
 let _ = (f 1) @ static;;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 14)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "fn partial app is static" =
@@ -635,7 +934,13 @@ let%expect_test "fun erased partial app is static erased" =
 fun erased f (x : int) (y : int) : int = x + y;;
 let _ = (f 1) @ static erased;;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 14)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "fn erased partial app is static erased" =
@@ -662,7 +967,13 @@ let%expect_test "fun two static type args" =
 fun id (static erased t : type) (static erased u : type) (x : t) (y : u) : t = x;;
 let _ = id int bool 1 true;;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "fn two static type args" =
@@ -791,7 +1102,13 @@ let%expect_test "fun dynamic then static" =
 fun f (x : int) (static erased t : type) (y : t) : int = x;;
 let _ = f 1 int 2;;
   |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "fn dynamic then static type mismatch" =

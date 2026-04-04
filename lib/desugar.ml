@@ -121,8 +121,8 @@ and desugar_fun (env : Env.t) (f : Cst.Expr.fun_) (var : Ident.t) : Dst.Expr.fun
   let env', arg = Env.bind env first.var in
   let anon_ret_mode =
     match f.erased with
-    | Erased -> { Modes.Maybe.staticity = Some Static; erasure = Some Erased }
-    | Unerased -> { Modes.Maybe.staticity = Some Static; erasure = None }
+    | Erased -> { Modes.Maybe.staticity = f.ret_mode.staticity; erasure = Some Erased }
+    | Unerased -> { Modes.Maybe.staticity = f.ret_mode.staticity; erasure = None }
   in
   let ret_ty, ret_mode =
     let env_ret = if arg_is_static first.mode then env' else env in

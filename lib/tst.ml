@@ -111,7 +111,7 @@ and closure =
   { arg : Ident.t
   ; ty : value
   ; body : expr
-  ; body_cst : Dst.Expr.t
+  ; body_dst : Dst.Expr.t
   ; env : (env[@sexp.opaque])
   }
 [@@deriving sexp]
@@ -785,7 +785,7 @@ module Closure = struct
     { arg : Ident.t
     ; ty : value
     ; body : expr
-    ; body_cst : Dst.Expr.t
+    ; body_dst : Dst.Expr.t
     ; env : (env[@sexp.opaque])
     }
   [@@deriving sexp]

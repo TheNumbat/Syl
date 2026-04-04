@@ -3,7 +3,6 @@ open Lst
 
 let prelude =
   {|
-#include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -68,10 +67,6 @@ static syl_env syl_capture(Env... captures) {
     offset += sizeof(captures)),
    ...);
   return env;
-}
-
-static syl_unit syl_assert(syl_bool cond) {
-  assert(cond);
 }
 |}
   ^ Builtin.prelude

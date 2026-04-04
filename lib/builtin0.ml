@@ -36,11 +36,13 @@ module Prim = struct
   end
 
   type t =
+    | Assert
     | Int of Int.t
     | Bool of Bool.t
   [@@deriving sexp, compare, equal, hash]
 
   let symbol = function
+    | Assert -> "syl_assert"
     | Int Add -> "syl_int_add"
     | Int Sub -> "syl_int_sub"
     | Int Mul -> "syl_int_mul"
@@ -75,7 +77,8 @@ let builtins =
     List.map
       ~f:(fun p -> Prim.symbol p, Prim p)
       Prim.
-        [ Int Add
+        [ Assert
+        ; Int Add
         ; Int Sub
         ; Int Mul
         ; Int Div
@@ -106,6 +109,11 @@ let find name = Hashtbl.find builtins name
 
 let prelude =
   {|
+#include <assert.h>
+
+static syl_unit syl_assert(syl_bool cond) {
+  assert(cond);
+}
 static syl_int syl_int_add(syl_tuple<syl_int,syl_int> x) {
   return x.first + x.rest.first;
 }

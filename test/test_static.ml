@@ -60,10 +60,10 @@ let _ = assert static (f 0 1 == 1);;
 |};
   [%expect
     {|
-    ((loc ((line 4) (column 8)))
+    ((loc ((line 3) (column 14)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
+       (need ((staticity Static) (erasure Unerased))))))
     |}]
 ;;
 
@@ -525,6 +525,93 @@ let _ = assert static (f 0 == 0);;
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
+;;
+
+let%expect_test "fun captures dynamic" =
+  go
+    {|
+let x = 0 @ dynamic;;
+fun f (y : int) : int = x;;
+let _ = f @ static;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 10)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "lambda captures dynamic" =
+  go
+    {|
+let x = 0 @ dynamic;;
+let f = fn (y : int) -> x;;
+let _ = f @ static;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 10)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "mono lambda captures dynamic" =
+  go
+    {|
+let x = 0 @ dynamic;;
+let f = fn (static y : int) -> x;;
+let _ = f @ static;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 10)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "fun captures static" =
+  go
+    {|
+let x = 0;;
+fun f (y : int) : int = x;;
+let _ = f @ static;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "mutual recursion captures dynamic" =
+  go
+    {|
+let x = 0 @ dynamic;;
+fun f (a : int) : int = g a
+and g (b : int) : int = x;;
+let _ = f @ static;;
+|};
+  [%expect
+    {|
+    ((loc ((line 5) (column 10)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "mutual recursion captures static" =
+  go
+    {|
+let x = 0;;
+fun f (a : int) : int = g a
+and g (b : int) : int = x;;
+let _ = f @ static;;
+let _ = g @ static;;
+|};
+  [%expect {| |}]
 ;;
 
 (* ============================================================ *)
