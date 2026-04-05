@@ -24,6 +24,18 @@ let _ = 123 @ dynamic;;|};
   [%expect {| |}]
 ;;
 
+let%expect_test "function error" =
+  go
+    {|
+let _ = 0 0;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 8)))
+     (reason (Expected_function (fn (Type Int)) (arg (Type Int)))))
+    |}]
+;;
+
 let%expect_test "primitive" =
   go
     {|
@@ -413,12 +425,7 @@ let _ =
   if x then 1 else 2
 ;;|};
   [%expect
-    {|
-    ((loc ((line 4) (column 2)))
-     (reason
-      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+    {| |}]
 ;;
 
 let%expect_test "If dynamic erased cond" =
@@ -1635,7 +1642,11 @@ let%expect_test "arrow force args" =
     {|
 let a = (let _ = assert static false in int) -> int;;
 |};
-  [%expect {| ((loc ((line 2) (column 17))) (reason (Static_assert (Bool (T false))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 17)))
+     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    |}]
 ;;
 
 let%expect_test "tuple force args" =
@@ -1643,7 +1654,11 @@ let%expect_test "tuple force args" =
     {|
 let a = (let _ = assert static false in int) ^ int;;
 |};
-  [%expect {| ((loc ((line 2) (column 17))) (reason (Static_assert (Bool (T false))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 17)))
+     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    |}]
 ;;
 
 let%expect_test "arrow typechecking" =
@@ -2770,7 +2785,11 @@ let%expect_test "assert static" =
     {|
 let _ = assert static false;;
   |};
-  [%expect {| ((loc ((line 2) (column 8))) (reason (Static_assert (Bool (T false))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 8)))
+     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2793,7 +2812,11 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if x then assert static x else ();;
   |};
-  [%expect {| ((loc ((line 2) (column 42))) (reason (Static_assert (Var (Anon <opaque>))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 42)))
+     (reason (Static_failure (Assert_failed (Var (Anon <opaque>))))))
+    |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2801,7 +2824,11 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if x then () else assert static x;;
   |};
-  [%expect {| ((loc ((line 2) (column 50))) (reason (Static_assert (Var (Anon <opaque>))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 50)))
+     (reason (Static_failure (Assert_failed (Var (Anon <opaque>))))))
+    |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2809,7 +2836,11 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> assert static x;;
   |};
-  [%expect {| ((loc ((line 2) (column 32))) (reason (Static_assert (Var (Anon <opaque>))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 32)))
+     (reason (Static_failure (Assert_failed (Var (Anon <opaque>))))))
+    |}]
 ;;
 
 let%expect_test "assert static" =
@@ -2899,7 +2930,11 @@ let x = false;;
 let u = (assert x) @ static;;
 let _ = u @ erased;;
   |};
-  [%expect {| ((loc ((line 3) (column 9))) (reason (Static_assert (Bool (T false))))) |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 9)))
+     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    |}]
 ;;
 
 let%expect_test "assert dynamic result is static" =
@@ -2910,7 +2945,11 @@ let x = false;;
 let u = (a x) @ static;;
 let _ = u @ erased;;
   |};
-  [%expect {| ((loc ((line 4) (column 9))) (reason (Static_assert (Bool (T false))))) |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 9)))
+     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    |}]
 ;;
 
 let%expect_test "assert dynamic result is static" =
@@ -2952,16 +2991,49 @@ let _ = assert 1;;
 let%expect_test "assert dynamic erased condition" =
   go
     {|
-let x = true @ erased;;
+let x = true @ dynamic erased;;
 let _ = assert x;;
   |};
   [%expect
     {|
     ((loc ((line 3) (column 8)))
      (reason
-      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
+;;
+
+let%expect_test "assert static dynamic erased condition" =
+  go
+    {|
+let x = true @ dynamic erased;;
+let _ = assert static x;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
+;;
+
+let%expect_test "assert erased condition" =
+  go
+    {|
+let x = true @ erased;;
+let _ = assert x;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "assert static erased condition" =
+  go
+    {|
+let x = true @ erased;;
+let _ = assert static x;;
+  |};
+  [%expect {| |}]
 ;;
 
 let%expect_test "assert dynamic in function body" =

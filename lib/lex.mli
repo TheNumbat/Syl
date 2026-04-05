@@ -49,6 +49,9 @@ module Kind : sig
     | Double_semicolon : unit t
     | External : unit t
     | Builtin : unit t
+    | Match : unit t
+    | With : unit t
+    | Pipe : unit t
     | Assert : unit t
     | Unreachable : unit t
     | Op : Op.t t
@@ -83,6 +86,9 @@ module Token : sig
     | Double_semicolon
     | External
     | Builtin
+    | Match
+    | With
+    | Pipe
     | Assert
     | Unreachable
     | Op of Op.t

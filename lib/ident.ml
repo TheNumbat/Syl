@@ -46,30 +46,12 @@ module Binop = struct
   ;;
 end
 
-module Nop = struct
-  type t =
-    | Comma
-    | Caret
-  [@@deriving sexp, compare, equal, hash]
-
-  let print () = function
-    | Comma -> ","
-    | Caret -> "^"
-  ;;
-
-  let sep = function
-    | Comma -> ", "
-    | Caret -> " ^ "
-  ;;
-end
-
 module Raw = struct
   module T = struct
     type t =
       | Anon
       | Unop of Unop.t
       | Binop of Binop.t
-      | Nop of Nop.t
       | Id of string
     [@@deriving sexp, compare, equal, hash]
   end
@@ -88,13 +70,11 @@ module Raw = struct
 
   let unop op = Unop op
   let binop op = Binop op
-  let nop op = Nop op
 
   let print () = function
     | Anon -> "_"
     | Unop op -> sprintf "(%a)" Unop.print op
     | Binop op -> sprintf "(%a)" Binop.print op
-    | Nop op -> sprintf "(%a)" Nop.print op
     | Id id -> id
   ;;
 end
@@ -139,8 +119,6 @@ let name () ((raw, stamp) : t) =
     | Binop Lte -> "opˢlte"
     | Binop Gt -> "opˢgt"
     | Binop Gte -> "opˢgte"
-    | Nop Comma -> "opˢcomma"
-    | Nop Caret -> "opˢcaret"
     | Id id -> id
   in
   match stamp with

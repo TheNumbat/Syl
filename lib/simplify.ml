@@ -33,25 +33,25 @@ let rec simplify_ty ~loc (ty : Tst.Value.t) : Ty.t =
   | Prim _
   | Tuple _
   | Type (Pi _) ->
-    raise_s [%message "Cannot simplify type" (ty : Tst.Value.t) (loc : Lex.Location.t)]
+    raise_s [%message "Bug: cannot simplify type" (ty : Tst.Value.t) (loc : Lex.Location.t)]
 ;;
 
 let simplify_arrow ~loc (ty : Tst.Value.t) : Ty.t * Ty.t =
   match ty with
   | Type (Arrow { arg_ty; ret_ty; _ }) -> simplify_ty ~loc arg_ty, simplify_ty ~loc ret_ty
-  | _ -> raise_s [%message "Expected arrow" (ty : Tst.Value.t) (loc : Lex.Location.t)]
+  | _ -> raise_s [%message "Bug: expected arrow" (ty : Tst.Value.t) (loc : Lex.Location.t)]
 ;;
 
 let simplify_bool ~loc (bool : Tst.Bool.t) : bool =
   match bool with
   | T bool -> bool
-  | _ -> raise_s [%message "Cannot simplify bool" (bool : Tst.Bool.t) (loc : Lex.Location.t)]
+  | _ -> raise_s [%message "Bug: cannot simplify bool" (bool : Tst.Bool.t) (loc : Lex.Location.t)]
 ;;
 
 let simplify_int ~loc (int : Tst.Int.t) : int64 =
   match int with
   | T int -> int
-  | _ -> raise_s [%message "Cannot simplify int" (int : Tst.Int.t) (loc : Lex.Location.t)]
+  | _ -> raise_s [%message "Bug: cannot simplify int" (int : Tst.Int.t) (loc : Lex.Location.t)]
 ;;
 
 let rec union_ty (ty1 : Ty.t) (ty2 : Ty.t) : Ty.t =
@@ -70,7 +70,7 @@ let rec union_ty (ty1 : Ty.t) (ty2 : Ty.t) : Ty.t =
     Pack merge
   | Tuple a, Tuple b -> Tuple (List.map2_exn a b ~f:union_ty)
   | (Unit | Bool | Int | Arrow _ | Pack _ | Tuple _), _ ->
-    raise_s [%message "Cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]
+    raise_s [%message "Bug: cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]
 ;;
 
 let collect_free_keys env free_keys =
@@ -109,7 +109,7 @@ let rec simplify_value ~loc env (value : Tst.Value.t) : Expr.t =
     let elts = List.map elts ~f:(simplify_value ~loc env) in
     Tuple { elts; ty = Tuple (List.map elts ~f:Expr.ty); loc }
   | Bottom | Type _ | Var _ | If _ | Apply _ ->
-    raise_s [%message "Cannot simplify literal" (value : Tst.Value.t) (loc : Lex.Location.t)]
+    raise_s [%message "Bug: cannot simplify literal" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
 and simplify_mono ~loc env mono =
   let pack =
@@ -188,7 +188,13 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
   | Binder { mono; loc; _ } ->
     let pack, fvs, ty = simplify_mono ~loc env mono in
     Pack { pack; fvs; ty; loc }
-  | Erased { loc; _ } -> raise_s [%message "Erased expression" (loc : Lex.Location.t)]
+  | Erased { loc; _ } -> raise_s [%message "Bug: erased expression" (loc : Lex.Location.t)]
+  | Builtin { builtin; loc; ty; _ } ->
+    (match builtin with
+     | Type _ -> raise_s [%message "Bug: builtin type"]
+     | Prim prim ->
+       let ty = simplify_ty ~loc ty in
+       External { symbol = Builtin.Prim.symbol prim; ty; loc })
 
 and simplify_funs env (funs : Tst.Expr.fun_ Nonempty_list.t) =
   let rec mono_ty ~loc { Tst.Binder.Mono.body_desc; _ } =
@@ -198,7 +204,8 @@ and simplify_funs env (funs : Tst.Expr.fun_ Nonempty_list.t) =
        | Binder { mono; _ } ->
          let ty = Hashtbl.map mono ~f:(mono_ty ~loc) in
          Ty.Pack ty
-       | value -> raise_s [%message "Expected binder" (value : Tst.Value.t) (loc : Lex.Location.t)])
+       | value ->
+         raise_s [%message "Bug: expected binder" (value : Tst.Value.t) (loc : Lex.Location.t)])
     | _ -> simplify_ty ~loc body_desc.ty
   in
   let env =

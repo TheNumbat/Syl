@@ -697,7 +697,8 @@ let%expect_test "multi-arg fn erased type matches with erased ret_mode" =
 let f = fn erased (x : int) (y : int) -> x + y;;
 let _ = f : int -> static (int -> int);;
   |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 3) (column 10)))
      (reason
       (Type_mismatch

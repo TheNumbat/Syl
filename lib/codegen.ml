@@ -154,7 +154,7 @@ let rec print_ty (ty : Ty.t) =
     sprintf "syl_closure<%s,%s>" (print_ty arg_ty) (print_ty_or_void ret_ty)
   | Thunk ty -> sprintf "syl_thunk<%s>" (print_ty_or_void ty)
   | Tuple elts -> sprintf "syl_tuple<%s>" (String.concat ~sep:", " (List.map elts ~f:print_ty))
-  | Pack _ -> raise_s [%message "Unexpected type" (ty : Ty.t)]
+  | Pack _ -> raise_s [%message "Bug: unexpected type" (ty : Ty.t)]
 
 and print_ty_or_void (ty : Ty.t) = if Ty.is_zero_size ty then "void" else print_ty ty
 

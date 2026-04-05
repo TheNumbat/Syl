@@ -85,7 +85,7 @@ let rec linearize_ty (ty : Sst.Ty.t) : Ty.t =
 let linearize_arrow ~loc (ty : Sst.Ty.t) : Ty.t * Ty.t =
   match ty with
   | Arrow { arg_ty; ret_ty } -> linearize_ty arg_ty, linearize_ty ret_ty
-  | ty -> raise_s [%message "Expected arrow" (ty : Sst.Ty.t) (loc : Lex.Location.t)]
+  | ty -> raise_s [%message "Bug: expected arrow" (ty : Sst.Ty.t) (loc : Lex.Location.t)]
 ;;
 
 let expand_pack path (expr : Expr.t) =
@@ -116,7 +116,7 @@ let expand_pack path (expr : Expr.t) =
     | Make_tuple { ty; _ }
     | Ident { ty; _ } ->
       (match ty with
-       | Pack _ -> raise_s [%message "Unexpected pack" (expr : Expr.t)]
+       | Pack _ -> raise_s [%message "Bug: unexpected pack" (expr : Expr.t)]
        | _ -> ());
       Vec.push_back exprs (dst, f expr)
   in
@@ -384,10 +384,10 @@ let linearize (sst : Sst.Program.t) : Program.t =
   if Vec.length state.scopes <> 1
   then (
     let top = Vec.peek_back_exn state.scopes in
-    raise_s [%message "Unused scope" (top : State.scope)]);
+    raise_s [%message "Bug: unused scope" (top : State.scope)]);
   if Vec.length (Vec.peek_back_exn state.scopes).stmts <> 0
   then (
     let top = Vec.peek_back_exn state.scopes in
-    raise_s [%message "Unused statements" (top : State.scope)]);
+    raise_s [%message "Bug: unused statements" (top : State.scope)]);
   Vec.to_array state.decls
 ;;

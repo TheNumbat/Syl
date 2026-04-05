@@ -439,7 +439,7 @@ let _ = if true then f else g;;
                 (fn
                  (Var (id ((Binop Eq) <opaque>)) (loc ((line 2) (column 43)))))
                 (arg
-                 (Nop (op Comma)
+                 (Make_tuple
                   (elts
                    ((Var (id ((Id x) <opaque>)) (loc ((line 2) (column 41))))
                     (Literal (value (Int 0)) (loc ((line 2) (column 46))))))
@@ -463,7 +463,7 @@ let _ = if true then f else g;;
                 (fn
                  (Var (id ((Binop Eq) <opaque>)) (loc ((line 3) (column 43)))))
                 (arg
-                 (Nop (op Comma)
+                 (Make_tuple
                   (elts
                    ((Var (id ((Id x) <opaque>)) (loc ((line 3) (column 41))))
                     (Literal (value (Int 0)) (loc ((line 3) (column 46))))))
@@ -857,7 +857,11 @@ let%expect_test "assert static" =
     {|
 let _ = fn (static x : bool) -> if static x then () else assert static x;;
   |};
-  [%expect {| ((loc ((line 2) (column 57))) (reason (Static_assert (Bool (T false))))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 57)))
+     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    |}]
 ;;
 
 let%expect_test "static bool reduction" =
@@ -929,7 +933,7 @@ let _ = assert static (0 / 0 == 0);;
   [%expect
     {|
     ((loc ((line 2) (column 25)))
-     (reason (Divide_by_zero (Div (Int (T 0)) (Int (T 0))))))
+     (reason (Static_failure (Divide_by_zero (Div (Int (T 0)) (Int (T 0)))))))
     |}]
 ;;
 
@@ -941,7 +945,7 @@ let _ = assert static (0 % 0 == 0);;
   [%expect
     {|
     ((loc ((line 2) (column 25)))
-     (reason (Divide_by_zero (Mod (Int (T 0)) (Int (T 0))))))
+     (reason (Static_failure (Divide_by_zero (Mod (Int (T 0)) (Int (T 0)))))))
     |}]
 ;;
 
@@ -953,7 +957,8 @@ let _ = fn (static x : int) -> assert static (x / 0 == 1);;
   [%expect
     {|
     ((loc ((line 2) (column 48)))
-     (reason (Divide_by_zero (Div (Var (Anon <opaque>)) (Int (T 0))))))
+     (reason
+      (Static_failure (Divide_by_zero (Div (Var (Anon <opaque>)) (Int (T 0)))))))
     |}]
 ;;
 
@@ -965,7 +970,8 @@ let _ = fn (static x : int) -> assert static (x % 0 == 1);;
   [%expect
     {|
     ((loc ((line 2) (column 48)))
-     (reason (Divide_by_zero (Mod (Var (Anon <opaque>)) (Int (T 0))))))
+     (reason
+      (Static_failure (Divide_by_zero (Mod (Var (Anon <opaque>)) (Int (T 0)))))))
     |}]
 ;;
 

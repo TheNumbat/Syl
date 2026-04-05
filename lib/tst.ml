@@ -234,6 +234,12 @@ and expr =
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
+  | Builtin of
+      { builtin : Builtin0.t
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
+      }
   | Erased of
       { ty : value
       ; mode : Modes.t
@@ -885,6 +891,12 @@ module Expr = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
+    | Builtin of
+        { builtin : Builtin0.t
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
     | Erased of
         { ty : value
         ; mode : Modes.t
@@ -914,7 +926,7 @@ module Expr = struct
 
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
-    | Literal _ | Erased _ -> Ident.Set.empty
+    | Literal _ | Erased _ | Builtin _ -> Ident.Set.empty
     | Var { id; _ } -> Ident.Set.singleton id
     | Symbol { fn; _ } -> free_vars fn
     | Tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
@@ -952,7 +964,8 @@ module Expr = struct
     | Erased { ty; _ }
     | Let { ty; _ }
     | Fun { ty; _ }
-    | Symbol { ty; _ } -> ty
+    | Symbol { ty; _ }
+    | Builtin { ty; _ } -> ty
   ;;
 
   let mode = function
@@ -966,7 +979,8 @@ module Expr = struct
     | Erased { mode; _ }
     | Let { mode; _ }
     | Fun { mode; _ }
-    | Symbol { mode; _ } -> mode
+    | Symbol { mode; _ }
+    | Builtin { mode; _ } -> mode
   ;;
 
   let loc = function
@@ -980,7 +994,8 @@ module Expr = struct
     | Erased { loc; _ }
     | Let { loc; _ }
     | Fun { loc; _ }
-    | Symbol { loc; _ } -> loc
+    | Symbol { loc; _ }
+    | Builtin { loc; _ } -> loc
   ;;
 
   let desc t static = { ty = ty t; mode = mode t; static }
@@ -998,6 +1013,7 @@ module Expr = struct
     | Let t -> Let { t with ty; mode }
     | Fun t -> Fun { t with ty; mode }
     | Symbol t -> Symbol { t with ty; mode }
+    | Builtin t -> Builtin { t with ty; mode }
   ;;
 
   let with_ty t ty =
@@ -1013,6 +1029,7 @@ module Expr = struct
     | Let t -> Let { t with ty }
     | Fun t -> Fun { t with ty }
     | Symbol t -> Symbol { t with ty }
+    | Builtin t -> Builtin { t with ty }
   ;;
 
   let with_mode t mode =
@@ -1028,6 +1045,7 @@ module Expr = struct
     | Let t -> Let { t with mode }
     | Fun t -> Fun { t with mode }
     | Symbol t -> Symbol { t with mode }
+    | Builtin t -> Builtin { t with mode }
   ;;
 end
 

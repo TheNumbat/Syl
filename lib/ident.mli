@@ -29,16 +29,6 @@ module Binop : sig
   val print : unit -> t -> string
 end
 
-module Nop : sig
-  type t =
-    | Comma
-    | Caret
-  [@@deriving sexp, compare, equal, hash]
-
-  val print : unit -> t -> string
-  val sep : t -> string
-end
-
 module Raw : sig
   type t [@@deriving sexp, compare, equal, hash]
 
@@ -46,7 +36,6 @@ module Raw : sig
   val id : string -> t
   val unop : Unop.t -> t
   val binop : Binop.t -> t
-  val nop : Nop.t -> t
   val print : unit -> t -> string
 
   include Hashable.S with type t := t

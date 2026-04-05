@@ -168,6 +168,8 @@ let default ?(staticity = Staticity.default) ?(erasure = Erasure.default) () =
   { staticity; erasure }
 ;;
 
+let maybe t = { Maybe.staticity = Some t.staticity; erasure = Some t.erasure }
+
 let annotate t (maybe : Maybe.t) =
   let staticity = Option.value maybe.staticity ~default:t.staticity in
   let erasure = Option.value maybe.erasure ~default:t.erasure in
@@ -178,8 +180,8 @@ let create ~staticity ~erasure = { staticity; erasure }
 let return t ~ret = { t with erasure = Erasure.join t.erasure ret.erasure }
 let capture t ~fv = { t with staticity = Staticity.join t.staticity fv.staticity }
 
-let cond ~cond then_ else_ =
-  let t = join then_ else_ in
+let cond ~cond cases =
+  let t = List.fold cases ~init:(bottom ()) ~f:join in
   { t with staticity = Staticity.join t.staticity cond.staticity }
 ;;
 

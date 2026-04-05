@@ -63,12 +63,13 @@ val create : staticity:Staticity.t -> erasure:Erasure.t -> t
 val top : ?staticity:Staticity.t -> ?erasure:Erasure.t -> unit -> t
 val bottom : ?staticity:Staticity.t -> ?erasure:Erasure.t -> unit -> t
 val default : ?staticity:Staticity.t -> ?erasure:Erasure.t -> unit -> t
+val maybe : t -> Maybe.t
 val annotate : t -> Maybe.t -> t
 
 (* Transforms *)
 val return : t -> ret:t -> t
 val capture : t -> fv:t -> t
-val cond : cond:t -> t -> t -> t
+val cond : cond:t -> t list -> t
 
 (* Logic *)
 val join : t -> t -> t

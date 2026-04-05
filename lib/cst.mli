@@ -28,21 +28,26 @@ module With_loc : sig
 end
 
 module Expr : sig
-  type arg =
+  type arg_node =
     { var : Ident.Raw.t
     ; mode : Modes.Maybe.t
     ; ty : t
-    ; loc : Lex.Location.t
+    ; after_open : Lex.Comment.t list
+    ; after_mode : Lex.Comment.t list
+    ; after_var : Lex.Comment.t list
     }
 
-  and fun_ =
+  and pattern_node = Var of { id : Ident.Raw.t }
+
+  and fun_node =
     { var : Ident.Raw.t
     ; erased : Modes.Erasure.t
     ; args : arg Nonempty_list.t
     ; ret_mode : Modes.Maybe.t
     ; ret_ty : t
     ; body : t
-    ; loc : Lex.Location.t
+    ; after_erased : Lex.Comment.t list
+    ; after_args : Lex.Comment.t list
     }
 
   and node =
@@ -51,6 +56,13 @@ module Expr : sig
         ; then_ : t
         ; else_ : t
         ; static : Modes.Staticity.t
+        ; before_static : Lex.Comment.t list
+        }
+    | Match of
+        { cond : t
+        ; arms : (pattern * t) Nonempty_list.t
+        ; static : Modes.Staticity.t
+        ; before_static : Lex.Comment.t list
         }
     | Let of
         { var : Ident.Raw.t
@@ -58,6 +70,9 @@ module Expr : sig
         ; args : arg list
         ; bind : t
         ; rest : t
+        ; before_erased : Lex.Comment.t list
+        ; after_erased : Lex.Comment.t list
+        ; after_args : Lex.Comment.t list
         }
     | Fun of
         { funs : fun_ Nonempty_list.t
@@ -67,6 +82,8 @@ module Expr : sig
         { erased : Modes.Erasure.t
         ; args : arg Nonempty_list.t
         ; body : t
+        ; before_erased : Lex.Comment.t list
+        ; after_args : Lex.Comment.t list
         }
     | Apply of
         { fn : t
@@ -84,10 +101,6 @@ module Expr : sig
         ; lhs : t
         ; rhs : t
         }
-    | Nop of
-        { op : Ident.Nop.t
-        ; elts : t list
-        }
     | Arrow of
         { arg : t
         ; arg_id : Ident.Raw.t Option.t
@@ -95,9 +108,12 @@ module Expr : sig
         ; ret : t
         ; ret_mode : Modes.Maybe.t
         }
+    | Tuple of { elts : t list }
+    | Make_tuple of { elts : t list }
     | Assert of
         { cond : t
         ; static : Modes.Staticity.t
+        ; before_static : Lex.Comment.t list
         }
     | Unreachable
     | Type_annotation of
@@ -110,6 +126,9 @@ module Expr : sig
         }
 
   and t = node With_loc.t [@@deriving sexp]
+  and arg = arg_node With_loc.t [@@deriving sexp]
+  and pattern = pattern_node With_loc.t [@@deriving sexp]
+  and fun_ = fun_node With_loc.t [@@deriving sexp]
 
   val strip : t -> t
   val loc : t -> Lex.Location.t
@@ -122,6 +141,9 @@ module Top_level : sig
         ; erased : Modes.Erasure.t
         ; args : Expr.arg list
         ; bind : Expr.t
+        ; before_erased : Lex.Comment.t list
+        ; after_erased : Lex.Comment.t list
+        ; after_args : Lex.Comment.t list
         }
     | Fun of { funs : Expr.fun_ Nonempty_list.t }
     | External of

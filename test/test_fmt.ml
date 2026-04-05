@@ -449,6 +449,371 @@ let%expect_test "comment after last app arg" =
   [%expect {| let _ = f a b (* c *);; |}]
 ;;
 
+(* Comment preservation on args, patterns, and funs *)
+
+let%expect_test "comment between fn args" =
+  fmt "let _ = fn (x : int) (* c *) (y : int) -> x + y;;";
+  [%expect {| let _ = fn (x : int) (* c *) (y : int) -> x + y;; |}]
+;;
+
+let%expect_test "comment between let args" =
+  fmt "let f (x : int) (* c *) (y : int) = x + y;;";
+  [%expect {| let f (x : int) (* c *) (y : int) = x + y;; |}]
+;;
+
+let%expect_test "comment between fun args" =
+  fmt "fun f (x : int) (* c *) (y : int) : int = x + y;;";
+  [%expect
+    {|
+    fun f (x : int) (* c *) (y : int) : int =
+      x + y
+    ;;
+    |}]
+;;
+
+let%expect_test "comment before match pattern" =
+  fmt "let _ = match x with | (* c *) a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | (* c *) a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "comment before second match pattern" =
+  fmt "let _ = match x with | a -> 1 | (* c *) b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a -> 1
+      | (* c *) b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "comment before mutual fun" =
+  fmt "fun f (x : int) : int = g x and (* c *) g (y : int) : int = f y;;";
+  [%expect
+    {|
+    fun f (x : int) : int =
+      g x
+    and (* c *) g (y : int) : int =
+      f y
+    ;;
+    |}]
+;;
+
+let%expect_test "comment before local mutual fun" =
+  fmt "let _ = fun f (x : int) : int = g x and (* c *) g (y : int) : int = f y in f 0;;";
+  [%expect
+    {|
+    let _ =
+      fun f (x : int) : int =
+        g x
+      and (* c *) g (y : int) : int =
+        f y
+      in
+      f 0
+    ;;
+    |}]
+;;
+
+let%expect_test "comment in local let arg" =
+  fmt "let _ = let f (* c *) (x : int) = x in f 0;;";
+  [%expect {| let _ = let f (* c *) (x : int) = x in f 0;; |}]
+;;
+
+let%expect_test "comment before match pattern in static match" =
+  fmt "let _ = match static x with | (* c *) a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match static x with
+      | (* c *) a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "fn arg comment before paren" =
+  fmt "let _ = fn (* c *) (x : int) -> x;;";
+  [%expect {| let _ = fn (* c *) (x : int) -> x;; |}]
+;;
+
+let%expect_test "fn arg comment after mode" =
+  fmt "let _ = fn (static (* c *) x : int) -> x;;";
+  [%expect {| let _ = fn (static (* c *) x : int) -> x;; |}]
+;;
+
+let%expect_test "fn arg comment after ident" =
+  fmt "let _ = fn (x (* c *) : int) -> x;;";
+  [%expect {| let _ = fn (x (* c *) : int) -> x;; |}]
+;;
+
+let%expect_test "fn arg comment before type" =
+  fmt "let _ = fn (x : (* c *) int) -> x;;";
+  [%expect {| let _ = fn (x : (* c *) int) -> x;; |}]
+;;
+
+let%expect_test "fn arg comment after type" =
+  fmt "let _ = fn (x : int (* c *)) -> x;;";
+  [%expect {| let _ = fn (x : int (* c *)) -> x;; |}]
+;;
+
+let%expect_test "let arg comment before paren" =
+  fmt "let f (* c *) (x : int) = x;;";
+  [%expect {| let f (* c *) (x : int) = x;; |}]
+;;
+
+let%expect_test "let arg comment after mode" =
+  fmt "let f (static (* c *) x : int) = x;;";
+  [%expect {| let f (static (* c *) x : int) = x;; |}]
+;;
+
+let%expect_test "let arg comment before mode" =
+  fmt "let f ((* c *) static x : int) = x;;";
+  [%expect {| let f ((* c *) static x : int) = x;; |}]
+;;
+
+let%expect_test "let arg comment after ident" =
+  fmt "let f (x (* c *) : int) = x;;";
+  [%expect {| let f (x (* c *) : int) = x;; |}]
+;;
+
+let%expect_test "let arg comment before type" =
+  fmt "let f (x : (* c *) int) = x;;";
+  [%expect {| let f (x : (* c *) int) = x;; |}]
+;;
+
+let%expect_test "let arg comment after type" =
+  fmt "let f (x : int (* c *)) = x;;";
+  [%expect {| let f (x : int (* c *)) = x;; |}]
+;;
+
+let%expect_test "fun arg comment before paren" =
+  fmt "fun f (* c *) (x : int) : int = x;;";
+  [%expect
+    {|
+    fun f (* c *) (x : int) : int =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "fun arg comment after mode" =
+  fmt "fun f (static (* c *) x : int) : int = x;;";
+  [%expect
+    {|
+    fun f (static (* c *) x : int) : int =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "fun arg comment after ident" =
+  fmt "fun f (x (* c *) : int) : int = x;;";
+  [%expect
+    {|
+    fun f (x (* c *) : int) : int =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "fun arg comment before type" =
+  fmt "fun f (x : (* c *) int) : int = x;;";
+  [%expect
+    {|
+    fun f (x : (* c *) int) : int =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "fun arg comment after type" =
+  fmt "fun f (x : int (* c *)) : int = x;;";
+  [%expect
+    {|
+    fun f (x : int (* c *)) : int =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "comment before match cond" =
+  fmt "let _ = match (* c *) x with | a -> 1;;";
+  [%expect
+    {|
+    let _ =
+      match (* c *) x with
+      | a -> 1
+    ;;
+    |}]
+;;
+
+let%expect_test "comment after match cond" =
+  fmt "let _ = match x (* c *) with | a -> 1;;";
+  [%expect
+    {|
+    let _ =
+      match x (* c *) with
+      | a -> 1
+    ;;
+    |}]
+;;
+
+let%expect_test "comment in match arm body" =
+  fmt "let _ = match x with | a -> (* c *) 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a -> (* c *) 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "comment after match arm body" =
+  fmt "let _ = match x with | a -> 1 (* c *) | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a -> 1 (* c *)
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "comment in every match position" =
+  fmt "let _ = match (* a *) x (* b *) with | (* c *) a -> (* d *) 1 | (* e *) b -> (* f *) 2;;";
+  [%expect
+    {|
+    let _ =
+      match (* a *) x (* b *) with
+      | (* c *) a -> (* d *) 1
+      | (* e *) b -> (* f *) 2
+    ;;
+    |}]
+;;
+
+let%expect_test "comment before first pipe in match" =
+  fmt "let _ = match x with (* c *) | a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | (* c *) a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+(* Comment position stability — verify no migration across tokens *)
+
+let%expect_test "match arm: comment after pattern before arrow" =
+  fmt "let _ = match x with | a (* c *) -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a (* c *) -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "fun: comment after args before colon" =
+  fmt "fun f (x : int) (* c *) : int = x;;";
+  [%expect
+    {|
+    fun f (x : int) (* c *) : int =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "fun: comment after erased before name" =
+  fmt "fun erased (* c *) f (x : int) : int = x;;";
+  [%expect
+    {|
+    fun erased (* c *) f (x : int) : int =
+      x
+    ;;
+    |}]
+;;
+
+let%expect_test "let expr: comment before erased" =
+  fmt "let _ = let (* c *) erased x = 1 in x;;";
+  [%expect {| let _ = let (* c *) erased x = 1 in x;; |}]
+;;
+
+let%expect_test "let expr: comment after erased before var" =
+  fmt "let _ = let erased (* c *) x = 1 in x;;";
+  [%expect {| let _ = let erased (* c *) x = 1 in x;; |}]
+;;
+
+let%expect_test "let expr: comment after var before equals" =
+  fmt "let _ = let x (* c *) = 1 in x;;";
+  [%expect {| let _ = let x (* c *) = 1 in x;; |}]
+;;
+
+let%expect_test "let expr: comment after args before equals" =
+  fmt "let _ = let f (x : int) (* c *) = x in f 0;;";
+  [%expect {| let _ = let f (x : int) (* c *) = x in f 0;; |}]
+;;
+
+let%expect_test "fn: comment before erased" =
+  fmt "let _ = fn (* c *) erased (x : int) -> x;;";
+  [%expect {| let _ = fn (* c *) erased (x : int) -> x;; |}]
+;;
+
+let%expect_test "fn: comment after args before arrow" =
+  fmt "let _ = fn (x : int) (* c *) -> x;;";
+  [%expect {| let _ = fn (x : int) (* c *) -> x;; |}]
+;;
+
+let%expect_test "if: comment before static" =
+  fmt "let _ = if (* c *) static true then 1 else 0;;";
+  [%expect {| let _ = if (* c *) static true then 1 else 0;; |}]
+;;
+
+let%expect_test "match: comment before static" =
+  fmt "let _ = match (* c *) static x with | a -> 1;;";
+  [%expect
+    {|
+    let _ =
+      match (* c *) static x with
+      | a -> 1
+    ;;
+    |}]
+;;
+
+let%expect_test "assert: comment before static" =
+  fmt "let _ = assert (* c *) static true;;";
+  [%expect {| let _ = assert (* c *) static true;; |}]
+;;
+
+let%expect_test "assert: comment after static" =
+  fmt "let _ = assert static (* c *) true;;";
+  [%expect {| let _ = assert static (* c *) true;; |}]
+;;
+
+let%expect_test "top-level let: comment before erased" =
+  fmt "let (* c *) erased x = 1;;";
+  [%expect {| let (* c *) erased x = 1;; |}]
+;;
+
+let%expect_test "top-level let: comment after args before equals" =
+  fmt "let f (x : int) (* c *) = x;;";
+  [%expect {| let f (x : int) (* c *) = x;; |}]
+;;
+
 (* Line-breaking tests *)
 
 let%expect_test "application breaks" =
@@ -875,6 +1240,102 @@ let%expect_test "nested binop all breaks" =
       a
       + b * c
       - d
+    ;;
+    |}]
+;;
+
+let%expect_test "match arm bodies break" =
+  fmt ~width:15 "let _ = match x with | a -> a + 1 + 2 + 3 | b -> b * c * d;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a ->
+        a + 1 + 2
+        + 3
+      | b ->
+        b * c * d
+    ;;
+    |}]
+;;
+
+let%expect_test "match complex cond breaks" =
+  fmt ~width:15 "let _ = match f x y with | a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match f
+        x
+        y with
+      | a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "match static narrow" =
+  fmt ~width:15 "let _ = match static cond with | a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match static cond with
+      | a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "match nested in if" =
+  fmt ~width:20 "let _ = if true then match x with | a -> 1 | b -> 2 else 0;;";
+  [%expect
+    {|
+    let _ =
+      if true
+      then
+        match x with
+        | a -> 1
+        | b -> 2
+      else 0
+    ;;
+    |}]
+;;
+
+let%expect_test "match in parens narrow" =
+  fmt ~width:15 "let _ = f (match x with | a -> 1 | b -> 2);;";
+  [%expect
+    {|
+    let _ =
+      f
+        (match x with
+         | a -> 1
+         | b -> 2)
+    ;;
+    |}]
+;;
+
+let%expect_test "match arm with lambda" =
+  fmt ~width:20 "let _ = match x with | a -> fn (y : int) -> y + a;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a ->
+        fn (y : int) ->
+          y + a
+    ;;
+    |}]
+;;
+
+let%expect_test "match arm with let" =
+  fmt ~width:20 "let _ = match x with | a -> let r = a + 1 in r | b -> b;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a ->
+        let r = a + 1 in
+        r
+      | b -> b
     ;;
     |}]
 ;;

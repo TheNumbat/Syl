@@ -35,14 +35,34 @@ module Prim = struct
     [@@deriving sexp, compare, equal, hash]
   end
 
+  module Type = struct
+    type t =
+      | Is_unit
+      | Is_bool
+      | Is_int
+      | Is_type
+      | Is_tuple
+      | Is_arrow
+      | Is_pi
+      | Tuple_get
+      | Tuple_length
+      | Arrow_arg
+      | Arrow_ret
+      | Pi_arg
+    [@@deriving sexp, compare, equal, hash]
+  end
+
   type t =
     | Assert
+    | Assert_static
     | Int of Int.t
     | Bool of Bool.t
+    | Type of Type.t
   [@@deriving sexp, compare, equal, hash]
 
   let symbol = function
     | Assert -> "syl_assert"
+    | Assert_static -> "syl_assert_static"
     | Int Add -> "syl_int_add"
     | Int Sub -> "syl_int_sub"
     | Int Mul -> "syl_int_mul"
@@ -58,6 +78,18 @@ module Prim = struct
     | Bool And -> "syl_bool_and"
     | Bool Or -> "syl_bool_or"
     | Bool Not -> "syl_bool_not"
+    | Type Is_unit -> "syl_type_is_unit"
+    | Type Is_bool -> "syl_type_is_bool"
+    | Type Is_int -> "syl_type_is_int"
+    | Type Is_type -> "syl_type_is_type"
+    | Type Is_tuple -> "syl_type_is_tuple"
+    | Type Is_arrow -> "syl_type_is_arrow"
+    | Type Is_pi -> "syl_type_is_pi"
+    | Type Tuple_get -> "syl_type_tuple_get"
+    | Type Tuple_length -> "syl_type_tuple_length"
+    | Type Arrow_arg -> "syl_type_arrow_arg"
+    | Type Arrow_ret -> "syl_type_arrow_ret"
+    | Type Pi_arg -> "syl_type_pi_arg"
   ;;
 end
 
@@ -78,6 +110,7 @@ let builtins =
       ~f:(fun p -> Prim.symbol p, Prim p)
       Prim.
         [ Assert
+        ; Assert_static
         ; Int Add
         ; Int Sub
         ; Int Mul
@@ -93,6 +126,18 @@ let builtins =
         ; Bool And
         ; Bool Or
         ; Bool Not
+        ; Type Is_unit
+        ; Type Is_bool
+        ; Type Is_int
+        ; Type Is_type
+        ; Type Is_tuple
+        ; Type Is_arrow
+        ; Type Is_pi
+        ; Type Tuple_get
+        ; Type Tuple_length
+        ; Type Arrow_arg
+        ; Type Arrow_ret
+        ; Type Pi_arg
         ]
   in
   Hashtbl.of_alist_exn

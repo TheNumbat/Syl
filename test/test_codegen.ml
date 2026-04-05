@@ -3200,3 +3200,15 @@ fun f (x : int) : int =
   |};
   [%expect {| |}]
 ;;
+
+let%expect_test "var" =
+  go
+    {|
+let x = true @ dynamic;;
+let _ =
+  match !x with
+  | x -> assert !x
+;;
+|};
+  [%expect {| |}]
+;;

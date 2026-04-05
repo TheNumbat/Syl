@@ -14,11 +14,23 @@ module Expr : sig
     ; loc : Lex.Location.t
     }
 
+  and pattern =
+    | Var of
+        { id : Ident.t
+        ; loc : Lex.Location.t
+        }
+
   and t =
     | If of
         { cond : t
         ; then_ : t
         ; else_ : t
+        ; static : Modes.Staticity.t
+        ; loc : Lex.Location.t
+        }
+    | Match of
+        { cond : t
+        ; arms : (pattern * t) Nonempty_list.t
         ; static : Modes.Staticity.t
         ; loc : Lex.Location.t
         }
@@ -53,11 +65,6 @@ module Expr : sig
         { value : Literal.t
         ; loc : Lex.Location.t
         }
-    | Nop of
-        { op : Ident.Nop.t
-        ; elts : t list
-        ; loc : Lex.Location.t
-        }
     | Arrow of
         { arg : t
         ; arg_id : Ident.t
@@ -66,9 +73,16 @@ module Expr : sig
         ; ret_mode : Modes.Maybe.t
         ; loc : Lex.Location.t
         }
-    | Assert of
-        { cond : t
-        ; static : Modes.Staticity.t
+    | Tuple of
+        { elts : t list
+        ; loc : Lex.Location.t
+        }
+    | Make_tuple of
+        { elts : t list
+        ; loc : Lex.Location.t
+        }
+    | Builtin of
+        { builtin : Builtin0.t
         ; loc : Lex.Location.t
         }
     | Unreachable of { loc : Lex.Location.t }
@@ -85,6 +99,7 @@ module Expr : sig
   [@@deriving sexp]
 
   val free_vars : t -> Ident.Set.t
+  val free_vars_pattern : pattern -> Ident.Set.t
   val loc : t -> Lex.Location.t
 end
 

@@ -32,10 +32,17 @@ let maybe_erased (erased : Modes.Erasure.t) (expr : Dst.Expr.t) loc : Dst.Expr.t
   | Unerased -> expr
 ;;
 
-let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
+let rec desugar_pattern env (pattern : Cst.Expr.pattern) : Env.t * Dst.Expr.pattern =
+  let loc = pattern.loc in
+  match pattern.node with
+  | Var { id } ->
+    let env, id = Env.bind env id in
+    env, Var { id; loc }
+
+and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
   let loc = expr.loc in
   match expr.node with
-  | If { cond; then_; else_; static } ->
+  | If { cond; then_; else_; static; _ } ->
     If
       { cond = desugar_expr env cond
       ; then_ = desugar_expr env then_
@@ -43,7 +50,15 @@ let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
       ; static
       ; loc
       }
-  | Let { var; erased; args; bind; rest } ->
+  | Match { cond; arms; static; _ } ->
+    let cond = desugar_expr env cond in
+    let arms =
+      Nonempty_list.map arms ~f:(fun (pat, rhs) ->
+        let env, pat = desugar_pattern env pat in
+        pat, desugar_expr env rhs)
+    in
+    Match { cond; arms; static; loc }
+  | Let { var; erased; args; bind; rest; _ } ->
     let bind =
       let bind =
         match args with
@@ -53,7 +68,13 @@ let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
             env
             (Cst.With_loc.create
                ~loc:arg.loc
-               (Cst.Expr.Lambda { erased; args = Nonempty_list.create arg rest; body = bind }))
+               (Cst.Expr.Lambda
+                  { erased
+                  ; args = Nonempty_list.create arg rest
+                  ; body = bind
+                  ; before_erased = []
+                  ; after_args = []
+                  }))
       in
       maybe_erased erased bind loc
     in
@@ -62,7 +83,7 @@ let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
   | Fun { funs; rest } ->
     let env, rev_pairs =
       Nonempty_list.fold funs ~init:(env, []) ~f:(fun (env, acc) f ->
-        let env, var = Env.bind env f.var in
+        let env, var = Env.bind env f.node.var in
         env, (f, var) :: acc)
     in
     let pairs = List.rev rev_pairs in
@@ -70,11 +91,11 @@ let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
       List.map pairs ~f:(fun (f, var) -> desugar_fun env f var) |> Nonempty_list.of_list_exn
     in
     Fun { funs; rest = desugar_expr env rest; loc }
-  | Lambda { erased; args; body } ->
+  | Lambda { erased; args; body; _ } ->
     let first = Nonempty_list.hd args in
     let rest = Nonempty_list.tl args in
-    let arg_ty = desugar_expr env first.ty in
-    let env, arg = Env.bind env first.var in
+    let arg_ty = desugar_expr env first.node.ty in
+    let env, arg = Env.bind env first.node.var in
     let body =
       match rest with
       | [] -> desugar_expr env body
@@ -83,9 +104,15 @@ let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
           env
           (Cst.With_loc.create
              ~loc:arg.loc
-             (Cst.Expr.Lambda { erased; args = Nonempty_list.create arg rest; body }))
+             (Cst.Expr.Lambda
+                { erased
+                ; args = Nonempty_list.create arg rest
+                ; body
+                ; before_erased = []
+                ; after_args = []
+                }))
     in
-    let lambda : Dst.Expr.t = Lambda { arg; arg_mode = first.mode; arg_ty; body; loc } in
+    let lambda : Dst.Expr.t = Lambda { arg; arg_mode = first.node.mode; arg_ty; body; loc } in
     maybe_erased erased lambda loc
   | Apply { fn; arg } -> Apply { fn = desugar_expr env fn; arg = desugar_expr env arg; loc }
   | Paren { expr } -> desugar_expr env expr
@@ -99,23 +126,32 @@ let rec desugar_expr (env : Env.t) (expr : Cst.Expr.t) : Dst.Expr.t =
     let rhs = desugar_expr env rhs in
     Apply
       { fn = Var { id = Env.find env (Ident.Raw.binop op); loc }
-      ; arg = Nop { op = Comma; elts = [ lhs; rhs ]; loc }
+      ; arg = Make_tuple { elts = [ lhs; rhs ]; loc }
       ; loc
       }
-  | Nop { op; elts } -> Nop { op; elts = List.map elts ~f:(desugar_expr env); loc }
+  | Make_tuple { elts } ->
+    let elts = List.map elts ~f:(desugar_expr env) in
+    Make_tuple { elts; loc }
   | Arrow { arg; arg_id; arg_mode; ret; ret_mode } ->
     let arg = desugar_expr env arg in
     let arg_id = Option.value_or_thunk arg_id ~default:(fun () -> Ident.Raw.anon) in
     let env, arg_id = Env.bind env arg_id in
     Arrow { arg; arg_id; arg_mode; ret = desugar_expr env ret; ret_mode; loc }
-  | Assert { cond; static } -> Assert { cond = desugar_expr env cond; static; loc }
+  | Tuple { elts } -> Tuple { elts = List.map elts ~f:(desugar_expr env); loc }
+  | Assert { cond; static; _ } ->
+    let prim =
+      match static with
+      | Static -> Dst.Expr.Builtin { builtin = Prim Assert_static; loc }
+      | Dynamic | Parametric -> Dst.Expr.Builtin { builtin = Prim Assert; loc }
+    in
+    Apply { fn = prim; arg = desugar_expr env cond; loc }
   | Unreachable -> Unreachable { loc }
   | Type_annotation { expr; ty } ->
     Type_annotation { expr = desugar_expr env expr; ty = desugar_expr env ty; loc }
   | Mode_annotation { expr; mode } -> Mode_annotation { expr = desugar_expr env expr; mode; loc }
 
-and desugar_fun (env : Env.t) (f : Cst.Expr.fun_) (var : Ident.t) : Dst.Expr.fun_ =
-  let first = Nonempty_list.hd f.args in
+and desugar_fun env ({ node = f; loc; _ } : Cst.Expr.fun_) (var : Ident.t) : Dst.Expr.fun_ =
+  let first = (Nonempty_list.hd f.args).node in
   let rest = Nonempty_list.tl f.args in
   let arg_ty = desugar_expr env first.ty in
   let env', arg = Env.bind env first.var in
@@ -130,9 +166,9 @@ and desugar_fun (env : Env.t) (f : Cst.Expr.fun_) (var : Ident.t) : Dst.Expr.fun
       List.fold_right
         rest
         ~init:(f.ret_ty, f.ret_mode)
-        ~f:(fun (arg : Cst.Expr.arg) (ret, ret_mode) ->
+        ~f:(fun ({ node = arg; loc; _ } : Cst.Expr.arg) (ret, ret_mode) ->
           ( Cst.With_loc.create
-              ~loc:arg.loc
+              ~loc
               (Cst.Expr.Arrow
                  { arg = arg.ty; arg_id = Some arg.var; arg_mode = arg.mode; ret; ret_mode })
           , anon_ret_mode ))
@@ -144,26 +180,23 @@ and desugar_fun (env : Env.t) (f : Cst.Expr.fun_) (var : Ident.t) : Dst.Expr.fun
      | [] -> f.body
      | arg :: rest ->
        Cst.With_loc.create
-         ~loc:arg.loc
-         (Cst.Expr.Lambda { erased = f.erased; args = Nonempty_list.create arg rest; body = f.body }))
+         ~loc
+         (Cst.Expr.Lambda
+            { erased = f.erased
+            ; args = Nonempty_list.create arg rest
+            ; body = f.body
+            ; before_erased = []
+            ; after_args = []
+            }))
     |> desugar_expr env'
   in
-  { var
-  ; arg
-  ; erased = f.erased
-  ; arg_mode = first.mode
-  ; arg_ty
-  ; ret_mode
-  ; ret_ty
-  ; body
-  ; loc = f.loc
-  }
+  { var; arg; erased = f.erased; arg_mode = first.mode; arg_ty; ret_mode; ret_ty; body; loc }
 ;;
 
-let desugar_top_level (env : Env.t) (t : Cst.Top_level.t) : Env.t * Dst.Top_level.t =
+let desugar_top_level env (t : Cst.Top_level.t) : Env.t * Dst.Top_level.t =
   let loc = t.loc in
   match t.node with
-  | Let { var; erased; args; bind } ->
+  | Let { var; erased; args; bind; _ } ->
     let bind =
       let bind =
         match args with
@@ -173,7 +206,13 @@ let desugar_top_level (env : Env.t) (t : Cst.Top_level.t) : Env.t * Dst.Top_leve
             env
             (Cst.With_loc.create
                ~loc:a.loc
-               (Cst.Expr.Lambda { erased; args = Nonempty_list.create a rest_args; body = bind }))
+               (Cst.Expr.Lambda
+                  { erased
+                  ; args = Nonempty_list.create a rest_args
+                  ; body = bind
+                  ; before_erased = []
+                  ; after_args = []
+                  }))
       in
       maybe_erased erased bind loc
     in
@@ -182,7 +221,7 @@ let desugar_top_level (env : Env.t) (t : Cst.Top_level.t) : Env.t * Dst.Top_leve
   | Fun { funs } ->
     let env, rev_pairs =
       Nonempty_list.fold funs ~init:(env, []) ~f:(fun (env, acc) f ->
-        let env, var = Env.bind env f.var in
+        let env, var = Env.bind env f.node.var in
         env, (f, var) :: acc)
     in
     let pairs = List.rev rev_pairs in

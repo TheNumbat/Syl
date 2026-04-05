@@ -440,25 +440,10 @@ let%expect_test "comment" =
   [%expect
     {|
     (* *)
-    fun erased f
-      (static erased x : (* *)
-
+    fun (* *) erased (* *) f
       (* *)
-
-      (* *)
-
-      (* *)
-
-      (* *)
-
-      (* *)
-
-      (* *)
-
-      (* *)
-      int (* *)) : static erased (* *)
-
-      (* *)
+      ((* *) static erased (* *) (* *) x (* *) : (* *)
+      int (* *)) (* *) : static erased (* *)
 
       (* *)
 
@@ -757,6 +742,104 @@ let%expect_test "let no args unchanged" =
 let%expect_test "let with modes in args" =
   go "let id (static erased t : type) (x : t) = x;;";
   [%expect {| let id (static erased t : type) (x : t) = x;; |}]
+;;
+
+let%expect_test "match basic" =
+  go "let _ = match x with | y -> y;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | y -> y
+    ;;
+    |}]
+;;
+
+let%expect_test "match multi arm" =
+  go "let _ = match x with | a -> 1 | b -> 2 | c -> 3;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a -> 1
+      | b -> 2
+      | c -> 3
+    ;;
+    |}]
+;;
+
+let%expect_test "match static" =
+  go "let _ = match static x with | a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match static x with
+      | a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "match complex rhs" =
+  go "let _ = match x with | a -> a + 1 | b -> b * 2;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a -> a + 1
+      | b -> b * 2
+    ;;
+    |}]
+;;
+
+let%expect_test "match nested in let" =
+  go "let _ = let r = match x with | a -> 1 | b -> 2 in r;;";
+  [%expect
+    {|
+    let _ =
+      let r =
+        match x with
+        | a -> 1
+        | b -> 2
+      in
+      r
+    ;;
+    |}]
+;;
+
+let%expect_test "match no arms" =
+  go "let _ = match x with;;";
+  [%expect {| ((loc ((line 1) (column 20))) (reason (Unexpected Double_semicolon))) |}]
+;;
+
+let%expect_test "match missing with" =
+  go "let _ = match x | a -> 1;;";
+  [%expect {| ((loc ((line 1) (column 16))) (reason (Unexpected Pipe))) |}]
+;;
+
+let%expect_test "match in parens" =
+  go "let _ = (match x with | a -> 1 | b -> 2);;";
+  [%expect
+    {|
+    let _ =
+      (match x with
+       | a -> 1
+       | b -> 2)
+    ;;
+    |}]
+;;
+
+let%expect_test "match applied" =
+  go "let _ = f (match x with | a -> 1 | b -> 2);;";
+  [%expect
+    {|
+    let _ =
+      f
+        (match x with
+         | a -> 1
+         | b -> 2)
+    ;;
+    |}]
 ;;
 
 let%expect_test "unterminated comment" =

@@ -35,10 +35,29 @@ module Prim : sig
     [@@deriving sexp, compare, equal, hash]
   end
 
+  module Type : sig
+    type t =
+      | Is_unit
+      | Is_bool
+      | Is_int
+      | Is_type
+      | Is_tuple
+      | Is_arrow
+      | Is_pi
+      | Tuple_get
+      | Tuple_length
+      | Arrow_arg
+      | Arrow_ret
+      | Pi_arg
+    [@@deriving sexp, compare, equal, hash]
+  end
+
   type t =
     | Assert
+    | Assert_static
     | Int of Int.t
     | Bool of Bool.t
+    | Type of Type.t
   [@@deriving sexp, compare, equal, hash]
 
   val symbol : t -> string

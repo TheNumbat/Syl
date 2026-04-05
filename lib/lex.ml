@@ -73,6 +73,9 @@ module Kind = struct
     | Double_semicolon : unit t
     | External : unit t
     | Builtin : unit t
+    | Match : unit t
+    | With : unit t
+    | Pipe : unit t
     | Assert : unit t
     | Unreachable : unit t
     | Op : Op.t t
@@ -107,6 +110,9 @@ module Token = struct
     | Double_semicolon
     | External
     | Builtin
+    | Match
+    | With
+    | Pipe
     | Assert
     | Unreachable
     | Op of Op.t
@@ -140,6 +146,9 @@ module Token = struct
     | Double_semicolon, Double_semicolon -> Some ()
     | External, External -> Some ()
     | Builtin, Builtin -> Some ()
+    | Match, Match -> Some ()
+    | With, With -> Some ()
+    | Pipe, Pipe -> Some ()
     | Assert, Assert -> Some ()
     | Unreachable, Unreachable -> Some ()
     | Op op, Op -> Some op
@@ -170,6 +179,9 @@ module Token = struct
         | Double_semicolon
         | External
         | Builtin
+        | Match
+        | With
+        | Pipe
         | Assert
         | Unreachable
         | Op _
@@ -204,6 +216,9 @@ module Token = struct
     | Double_semicolon -> ";;"
     | External -> "external"
     | Builtin -> "builtin"
+    | Match -> "match"
+    | With -> "with"
+    | Pipe -> "|"
     | Assert -> "assert"
     | Unreachable -> "unreachable"
     | Op Arrow -> "->"
@@ -255,6 +270,9 @@ module Token = struct
     | Double_semicolon, _
     | External, _
     | Builtin, _
+    | Match, _
+    | With, _
+    | Pipe, _
     | Assert, _
     | Unreachable, _
     | Op _, _
@@ -363,6 +381,8 @@ module Tokenizer = struct
     | "unerased" -> Unerased
     | "external" -> External
     | "builtin" -> Builtin
+    | "match" -> Match
+    | "with" -> With
     | "assert" -> Assert
     | "unreachable" -> Unreachable
     | "true" -> Bool true
@@ -448,7 +468,7 @@ module Tokenizer = struct
   let op_pipe t =
     match current t with
     | Some '|' -> single t (Op Or)
-    | Some _ -> Unknown "|"
+    | Some _ -> Pipe
     | None -> Eof
   ;;
 

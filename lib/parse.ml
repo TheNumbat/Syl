@@ -62,8 +62,6 @@ let expect_ident t =
          | Lte -> Ident.(binop Lte)
          | Gt -> Ident.(binop Gt)
          | Gte -> Ident.(binop Gte)
-         | Comma -> Ident.(nop Comma)
-         | Caret -> Ident.(nop Caret)
          | op -> Fail.unexpected ~loc (Op op)
        in
        expect t ~kind:Rparen;
@@ -186,7 +184,7 @@ and expr_comma t : Expr.t =
         aux (trailing t e :: acc)
       | _ -> List.rev acc
     in
-    with_loc ~loc (Nop { op = Comma; elts = aux [ first ] })
+    with_loc ~loc (Make_tuple { elts = aux [ first ] })
   | _ -> first
 
 and expr_caret t : Expr.t =
@@ -203,7 +201,7 @@ and expr_caret t : Expr.t =
         aux (trailing t e :: acc)
       | _ -> List.rev acc
     in
-    with_loc ~loc (Nop { op = Caret; elts = aux [ first ] })
+    with_loc ~loc (Tuple { elts = aux [ first ] })
   | _ -> first
 
 and expr_lor t : Expr.t =
@@ -331,8 +329,9 @@ and expr_neg t : Expr.t =
 
 and can_start_atom t =
   match Tokenizer.peek t.tokens with
-  | Op Not | Assert | If | Fun | Fn | Let | Lparen | Unit | Bool _ | Int _ | Ident _ | Unreachable
-    -> true
+  | Op Not
+  | Assert | Match | If | Fun | Fn | Let | Lparen | Unit | Bool _ | Int _ | Ident _ | Unreachable ->
+    true
   | _ -> false
 
 and expr_app t : Expr.t =
@@ -354,14 +353,17 @@ and expr_lnot t : Expr.t =
     if List.is_empty comments then expr else { expr with before = comments @ expr.before }
 
 and parse_arg t : Expr.arg =
-  let loc = Tokenizer.loc t.tokens in
+  let loc, before = leading t in
   expect t ~kind:Lparen;
+  let _, after_open = leading t in
   let mode = maybe_modes ~required:false t in
+  let _, after_mode = leading t in
   let var = expect_ident t in
+  let _, after_var = leading t in
   expect t ~kind:Colon;
   let ty = expr t in
   expect t ~kind:Rparen;
-  { var; mode; ty; loc }
+  With_loc.create ~before ~loc Expr.{ var; mode; ty; after_open; after_mode; after_var }
 
 and require_args t : Expr.arg Nonempty_list.t =
   let first = parse_arg t in
@@ -376,42 +378,77 @@ and parse_args t : Expr.arg list =
   in
   aux []
 
+and parse_arm t : Expr.pattern * Expr.t =
+  let loc, before = leading t in
+  let id = expect_ident t in
+  let _, after = leading t in
+  expect_op t ~op:Arrow;
+  let rhs = expr t in
+  let pat : Expr.pattern_node = Var { id } in
+  With_loc.create ~before ~after ~loc pat, rhs
+
+and parse_arms t : (Expr.pattern * Expr.t) Nonempty_list.t =
+  expect t ~kind:Pipe;
+  let first = parse_arm t in
+  let rec aux acc =
+    match Tokenizer.peek t.tokens with
+    | Pipe ->
+      Tokenizer.skip t.tokens;
+      aux (parse_arm t :: acc)
+    | _ -> Nonempty_list.of_list_exn (List.rev acc)
+  in
+  aux [ first ]
+
 and expr_primary t : Expr.t =
   let loc, comments = leading t in
   let node =
     match Tokenizer.next t.tokens with
     | Unreachable -> Expr.Unreachable
     | Assert ->
+      let _, before_static = leading t in
       let static = maybe_static t in
       let cond = expr_lnot t in
-      Assert { cond; static }
+      Assert { cond; static; before_static }
+    | Match ->
+      let _, before_static = leading t in
+      let static = maybe_static t in
+      let cond = expr t in
+      expect t ~kind:With;
+      let arms = parse_arms t in
+      Match { cond; arms; static; before_static }
     | If ->
+      let _, before_static = leading t in
       let static = maybe_static t in
       let cond = expr t in
       expect t ~kind:Then;
       let then_ = expr t in
       expect t ~kind:Else;
       let else_ = expr t in
-      If { cond; then_; else_; static }
+      If { cond; then_; else_; static; before_static }
     | Fun ->
       let funs = expr_funs ~loc t [] in
       let rest = expr t in
       Fun { funs; rest }
     | Fn ->
+      let _, before_erased = leading t in
       let erased = maybe_erased t in
       let args = require_args t in
+      let _, after_args = leading t in
       expect_op t ~op:Arrow;
       let body = expr t in
-      Lambda { erased; args; body }
+      Lambda { erased; args; body; before_erased; after_args }
     | Let ->
+      let _, before_erased = leading t in
       let erased = maybe_erased t in
+      let _, after_erased = leading t in
       let var = expect_ident t in
       let args = parse_args t in
+      let _, after_args = leading t in
       expect t ~kind:Asn;
       let bind = expr t in
       expect t ~kind:In;
       let rest = expr t in
-      Let { var; erased; args; bind; rest }
+      Let { var; erased; args; bind; rest; before_erased; after_erased; after_args }
     | Lparen ->
       let exp = expr t in
       expect t ~kind:Rparen;
@@ -425,19 +462,21 @@ and expr_primary t : Expr.t =
   with_loc ~loc ~before:comments node
 
 and expr_fun t : Expr.fun_ =
-  let loc = Tokenizer.loc t.tokens in
+  let loc, before = leading t in
   let erased = maybe_erased t in
+  let _, after_erased = leading t in
   let var =
     let name = expect t ~kind:Ident in
     if String.equal name "_" then Fail.fun_underscore ~loc else Ident.id name
   in
   let args = require_args t in
+  let _, after_args = leading t in
   expect t ~kind:Colon;
   let ret_mode = maybe_modes ~required:false t in
   let ret_ty = expr t in
   expect t ~kind:Asn;
   let body = expr t in
-  { var; erased; args; ret_mode; ret_ty; body; loc }
+  With_loc.create ~before ~loc { Expr.var; erased; args; ret_mode; ret_ty; body; after_erased; after_args }
 
 and expr_funs ~loc t fs : Expr.fun_ Nonempty_list.t =
   let f = expr_fun t in
@@ -462,13 +501,16 @@ let top_level t : Top_level.t =
     match Tokenizer.next t.tokens with
     | Fun -> top_level_funs ~loc t []
     | Let ->
+      let _, before_erased = leading t in
       let erased = maybe_erased t in
+      let _, after_erased = leading t in
       let var = expect_ident t in
       let args = parse_args t in
+      let _, after_args = leading t in
       expect t ~kind:Asn;
       let bind = expr t in
       expect t ~kind:Double_semicolon;
-      With_loc.create ~loc (Top_level.Let { var; erased; args; bind })
+      With_loc.create ~loc (Top_level.Let { var; erased; args; bind; before_erased; after_erased; after_args })
     | External ->
       let var = expect_ident t in
       expect t ~kind:Colon;

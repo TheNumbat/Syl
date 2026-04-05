@@ -14,11 +14,23 @@ module Expr = struct
     ; loc : Lex.Location.t
     }
 
+  and pattern =
+    | Var of
+        { id : Ident.t
+        ; loc : Lex.Location.t
+        }
+
   and t =
     | If of
         { cond : t
         ; then_ : t
         ; else_ : t
+        ; static : Modes.Staticity.t
+        ; loc : Lex.Location.t
+        }
+    | Match of
+        { cond : t
+        ; arms : (pattern * t) Nonempty_list.t
         ; static : Modes.Staticity.t
         ; loc : Lex.Location.t
         }
@@ -53,11 +65,6 @@ module Expr = struct
         { value : Literal.t
         ; loc : Lex.Location.t
         }
-    | Nop of
-        { op : Ident.Nop.t
-        ; elts : t list
-        ; loc : Lex.Location.t
-        }
     | Arrow of
         { arg : t
         ; arg_id : Ident.t
@@ -66,9 +73,16 @@ module Expr = struct
         ; ret_mode : Modes.Maybe.t
         ; loc : Lex.Location.t
         }
-    | Assert of
-        { cond : t
-        ; static : Modes.Staticity.t
+    | Tuple of
+        { elts : t list
+        ; loc : Lex.Location.t
+        }
+    | Make_tuple of
+        { elts : t list
+        ; loc : Lex.Location.t
+        }
+    | Builtin of
+        { builtin : Builtin0.t
         ; loc : Lex.Location.t
         }
     | Unreachable of { loc : Lex.Location.t }
@@ -86,15 +100,22 @@ module Expr = struct
 
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
-    | Assert { cond; _ } -> free_vars cond
     | Arrow { arg; ret; _ } -> Set.union (free_vars arg) (free_vars ret)
+    | Tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
     | Var { id; _ } -> Ident.Set.singleton id
     | Mode_annotation { expr; _ } -> free_vars expr
     | Type_annotation { expr; ty; _ } -> Set.union (free_vars expr) (free_vars ty)
-    | Nop { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
-    | Unreachable _ | Literal _ -> Ident.Set.empty
+    | Make_tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
+    | Unreachable _ | Literal _ | Builtin _ -> Ident.Set.empty
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
+    | Match { cond; arms; _ } ->
+      let arm_fvs =
+        Nonempty_list.map arms ~f:(fun (pat, rhs) ->
+          Set.diff (free_vars rhs) (free_vars_pattern pat))
+        |> Nonempty_list.to_list
+      in
+      Ident.Set.union_list (free_vars cond :: arm_fvs)
     | Let { var; bind; rest; _ } -> Set.union (free_vars bind) (Set.remove (free_vars rest) var)
     | Apply { fn; arg; _ } -> Set.union (free_vars fn) (free_vars arg)
     | Lambda { arg; arg_ty; body; _ } ->
@@ -117,10 +138,14 @@ module Expr = struct
           Ident.Set.union_list [ acc; fv_arg_ty; fv_ret_ty; fv_body ])
       in
       Set.diff (Set.union fvs_in_funs (free_vars rest)) bound_ids
+
+  and free_vars_pattern = function
+    | Var { id; _ } -> Ident.Set.singleton id
   ;;
 
   let loc = function
     | If { loc; _ }
+    | Match { loc; _ }
     | Fun { loc; _ }
     | Let { loc; _ }
     | Lambda { loc; _ }
@@ -128,11 +153,12 @@ module Expr = struct
     | Var { loc; _ }
     | Literal { loc; _ }
     | Arrow { loc; _ }
-    | Assert { loc; _ }
+    | Tuple { loc; _ }
     | Unreachable { loc; _ }
     | Type_annotation { loc; _ }
     | Mode_annotation { loc; _ }
-    | Nop { loc; _ } -> loc
+    | Builtin { loc; _ }
+    | Make_tuple { loc; _ } -> loc
   ;;
 end
 
