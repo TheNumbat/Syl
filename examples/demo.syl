@@ -64,8 +64,6 @@ let _ = 1 @ dynamic;;
 
 let _ = 1 @ erased;;
 
-let _ = 1 @ dynamic erased;;
-
 let _ = (1 + 2) @ unerased;;
 
 (* Modes on parameters *)
@@ -86,11 +84,11 @@ let _ = take_static : f_ty;;
 let _ = take_erased : g_ty;;
 
 (* If joins types *)
-let f = fn (x : int) -> x @ erased;;
+let f = fn (x : int) -> x @ dynamic;;
 
 let g = fn (static x : int) -> x;;
 
-let _ = (if true then f else g) : static int -> erased int;;
+let _ = (if true then f else g) : static int -> int;;
 
 (* Literals are static unerased *)
 let _ = take_static 0;;
@@ -126,42 +124,11 @@ let _ = assert static true;;
 (* Dynamic asserts fail at runtime if the condition is false. *)
 let _ = assert true;;
 
-(* -----------------------------------------------------
-   Currying
-   ----------------------------------------------------- *)
-
-(* Lambdas with multiple arguments desugar to nested lambdas *)
-let add = fn (x : int) (y : int) -> x + y;;
-
-let _ = add 2 3;;
-
-(* So do functions *)
-fun add (x : int) (y : int) : int =
-  x + y
-;;
-
-let _ = add 4 5;;
-
-(* Let bindings can have arguments, which also desugar to lambdas *)
-let add (x : int) (y : int) = x + y;;
-
-let _ = add 2 3;;
-
-(* Modes on arguments are preserved *)
-let add (static x : int) (static y : int) = x + y;;
-
-let _ = add 1 2;;
 
 (* Let erased desugars to an erased annotation *)
-let erased square (x : int) = x * x;;
+let erased square = fn (x : int) -> x * x;;
 
 let _ = square 5;;
-
-(* Writing erased after fn or fun erases all partial applications *)
-let add = fn erased (x : int) (y : int) -> x + y;;
-
-(* Partial application with a static arg is static *)
-let _ = (add 1 @ static);;
 
 (* -----------------------------------------------------
    Inlining with erasure
@@ -231,16 +198,16 @@ let _ = wrap identity int 10;;
    ----------------------------------------------------- *)
 
 (* If static splits types *)
-let f = fn (x : int) -> x @ erased;;
+let f = fn (x : int) -> x @ dynamic;;
 
 let g = fn (static x : int) -> x;;
 
-let _ = (if static true then f else g) : int -> erased int;;
+let _ = (if static true then f else g) : int -> int;;
 
 let _ = (if static false then f else g) : static int -> int;;
 
 (* Unless the condition is abstract *)
-let _ = fn (static b : bool) -> (if static b then f else g) : static int -> erased int;;
+let _ = fn (static b : bool) -> (if static b then f else g) : static int -> int;;
 
 (* Simple reductions happen automatically. *)
 let _ = fn (static b : bool) -> assert static (b || !b);;

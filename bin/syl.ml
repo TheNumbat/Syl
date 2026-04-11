@@ -150,7 +150,7 @@ let fmt =
            | Some file -> Out_channel.write_all file ~data:output
            | None -> eprintf "error: -i requires a file argument\n")
          else print_string output
-       | Error { loc; reason } ->
+       | Error { loc; reason; _ } ->
          error_json ~loc (Sexp.to_string [%sexp (reason : Syl.Parse.Error.t)]))
 ;;
 
@@ -164,9 +164,9 @@ let check =
        let open Syl in
        match to_tst contents with
        | Ok _ -> ()
-       | Parse_error { loc; reason } ->
+       | Parse_error { loc; reason; _ } ->
          error_json ~loc (Sexp.to_string [%sexp (reason : Parse.Error.t)])
-       | Type_error { loc; reason } ->
+       | Type_error { loc; reason; _ } ->
          error_json ~loc (Sexp.to_string [%sexp (reason : Typecheck.Error.t)]))
 ;;
 

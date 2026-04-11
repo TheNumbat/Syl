@@ -6,7 +6,13 @@ let go ?(print = false) input =
   let dst = Desugar.desugar cst in
   match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
+  | Error { loc; here; reason } ->
+    if print
+    then
+      print_s
+        [%message
+          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
+    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
 let%expect_test "literals" =
@@ -87,7 +93,7 @@ let dyn = 1;;
 let _ =
   dyn @ dynamic erased
 ;;|};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 4) (column 6))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -97,7 +103,7 @@ let dyn = 1 @ erased;;
 let _ =
   dyn @ dynamic erased
 ;;|};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 4) (column 6))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Mode annotation valid" =
@@ -117,7 +123,7 @@ let dyn = 1 @ dynamic;;
 let _ =
   dyn @ dynamic erased
 ;;|};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 4) (column 6))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Lambda return dynamic erased" =
@@ -128,13 +134,7 @@ let x =
 ;;
 let y = x @ static unerased;;
 |};
-  [%expect
-    {|
-    ((loc ((line 5) (column 10)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 3) (column 21))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Lambda return dynamic erased" =
@@ -144,13 +144,7 @@ let x =
   ((fn (x : int) -> 1 @ dynamic erased) @ dynamic) 0
 ;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 2)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 3) (column 22))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Lambda return dynamic unerased" =
@@ -214,7 +208,7 @@ let%expect_test "dynamic erased" =
 let _ =
   (true @ dynamic erased)
 ;;|};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 3) (column 8))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "erased dynamic" =
@@ -223,7 +217,13 @@ let%expect_test "erased dynamic" =
 let _ =
   ((true @ erased) @ dynamic)
 ;;|};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 19)))
+     (reason
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "Unop var static" =
@@ -251,13 +251,7 @@ let%expect_test "Unop var dynamic erased" =
     {|
 let dyn = true @ erased dynamic;;
 let _ = !dyn;;|};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 15))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Unop var dynamic" =
@@ -265,7 +259,13 @@ let%expect_test "Unop var dynamic" =
     {|
 let dyn = true @ dynamic;;
 let x = !dyn @ erased;;|};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 13)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "Binop static + static" =
@@ -292,13 +292,7 @@ let%expect_test "Unop erased dynamic" =
 let _ =
   !(true @ erased dynamic)
 ;;|};
-  [%expect
-    {|
-    ((loc ((line 3) (column 2)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 3) (column 9))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Binop erased dynamic" =
@@ -307,13 +301,7 @@ let%expect_test "Binop erased dynamic" =
 let _ =
   1 + (2 + 3 @ erased dynamic)
 ;;|};
-  [%expect
-    {|
-    ((loc ((line 3) (column 4)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 3) (column 13))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Binop erased dynamic" =
@@ -424,8 +412,7 @@ let x = true || false @ erased;;
 let _ =
   if x then 1 else 2
 ;;|};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "If dynamic erased cond" =
@@ -435,13 +422,7 @@ let x = true @ dynamic erased;;
 let _ =
   if x then 1 else 2
 ;;|};
-  [%expect
-    {|
-    ((loc ((line 4) (column 2)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 13))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "If static cond dynamic branches" =
@@ -551,7 +532,13 @@ let%expect_test "if erased branch" =
     {|
 let cond = true @ dynamic;;
 let t = (if cond then false else cond) @ erased;;|};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 39)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "Let static" =
@@ -595,6 +582,31 @@ let _ =
   x
 ;;|};
   [%expect {| |}]
+;;
+
+let%expect_test "Let erased" =
+  go
+    {|
+let erased dyn = 1;;
+let _ =
+  let x = dyn in
+  x
+;;|};
+  [%expect {| |}]
+;;
+
+let%expect_test "Let erased" =
+  go
+    {|
+let erased dyn = 1 @ dynamic;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 0)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "Let erased" =
@@ -691,10 +703,10 @@ let f = (fn (x : int) -> x + y);;
 let _ = (f @ erased) 0;;|};
   [%expect
     {|
-    ((loc ((line 4) (column 8)))
+    ((loc ((line 4) (column 11)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
 
@@ -760,13 +772,22 @@ let%expect_test "erased closure arg" =
   go
     {|
 let f = fn (erased g : int -> erased int) -> let _ = g 1 in 2;;
-let _ = f (fn (x : int) -> 0 @ erased);;
+let _ = f (fn erased (x : int) -> 0);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "erased closure arg" =
+  go
+    {|
+let f = fn (erased g : int -> erased int) -> let _ = g 1 in 2;;
+let _ = f ((fn erased (x : int) -> 0) @ dynamic);;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 53)))
+    ((loc ((line 3) (column 38)))
      (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
@@ -799,7 +820,7 @@ let g = fn (erased x : int) -> f x;;
     {|
     ((loc ((line 3) (column 31)))
      (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
@@ -851,7 +872,7 @@ let%expect_test "closure erased" =
     {|
 let f = (fn (erased x : int) -> 1);;
 let g = (fn (erased x : int) -> 2);;
-let _ = (if true @ dynamic then f else g) 0;;
+let _ = (if true then f else g) 0;;
 |};
   [%expect {| |}]
 ;;
@@ -935,13 +956,7 @@ let f = fn (x : int) -> 1;;
 let g = fn (erased f : int -> int) -> f 0;;
 let _ = g f;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 38)))
-     (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -967,13 +982,7 @@ let f1 = (fn (x : int) -> 1) @ erased;;
 let g = fn (erased f2 : int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 39)))
-     (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -990,7 +999,7 @@ let%expect_test "inlined closure nest" =
   go
     {|
 let f1 = fn (erased x : int) -> 1;;
-let g = fn (f2 : int -> int) -> f2 0;;
+let g = fn (static f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
   [%expect {| |}]
@@ -1003,7 +1012,13 @@ let f1 = fn (erased x : int) -> 1;;
 let g = fn (f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 39)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -1157,10 +1172,10 @@ let y =
 let _ = y @ unerased;;|};
   [%expect
     {|
-    ((loc ((line 6) (column 10)))
+    ((loc ((line 4) (column 2)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
 
@@ -1172,7 +1187,13 @@ let y =
   (fn (erased x : int) -> 5) (dyn-1)
 ;;
 let _ = y @ unerased;;|};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 2)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "Apply erased fn dynamic arg" =
@@ -1183,13 +1204,7 @@ let y =
   (fn (erased x : int) -> 5) (dyn-1)
 ;;
 let _ = y @ unerased;;|};
-  [%expect
-    {|
-    ((loc ((line 4) (column 33)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 12))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "Apply erased fn dynamic arg" =
@@ -1233,9 +1248,9 @@ let _ =
 ;;|};
   [%expect
     {|
-    ((loc ((line 4) (column 2)))
+    ((loc ((line 2) (column 40)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
@@ -1247,7 +1262,13 @@ let dyn_fn = (fn (erased x : int) -> 0) @ dynamic;;
 let _ =
   dyn_fn (1 @ dynamic)
 ;;|};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 2)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "Apply dynamic fn dynamic arg" =
@@ -1271,9 +1292,9 @@ let _ =
 ;;|};
   [%expect
     {|
-    ((loc ((line 5) (column 2)))
+    ((loc ((line 2) (column 40)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
@@ -1286,7 +1307,13 @@ let dyn_arg = 1 @ dynamic;;
 let _ =
   dyn_fn dyn_arg
 ;;|};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 5) (column 2)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "Lambda dynamic arg" =
@@ -1459,7 +1486,13 @@ let%expect_test "mono fn" =
 let x = fn (erased x : type) -> x;;
 let y = x @ dynamic;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "mono fn" =
@@ -1495,7 +1528,9 @@ let y = x (0 @ dynamic);;
   [%expect
     {|
     ((loc ((line 3) (column 8)))
-     (reason (Type_mismatch (got (Type Int)) (need (Type Type)))))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
 
@@ -1505,7 +1540,13 @@ let%expect_test "mono fn" =
 let x = fn (static erased x : type) -> x;;
 let y = (x int) @ dynamic;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 16)))
+     (reason
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -1513,13 +1554,7 @@ let%expect_test "Dependent lambda" =
     {|
 let f = fn (erased ty : type) -> fn (x : ty) -> x;;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 33)))
-     (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Dependent lambda" =
@@ -1693,9 +1728,9 @@ let _ = (f @ dynamic) 0;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8)))
+    ((loc ((line 3) (column 11)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
@@ -1737,15 +1772,9 @@ let%expect_test "arrow typechecking" =
   go
     {|
 let f = fn (erased g : erased int -> int) -> g 0;;
-let _ = f (fn (x : int) -> 0);;
+let _ = f (fn (erased x : int) -> 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 45)))
-     (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -1833,7 +1862,7 @@ let _ = f 1;;
 let%expect_test "arrow typechecking" =
   go
     {|
-  let f = fn (g : erased int -> int) -> g 0;;
+  let f = fn (static g : erased int -> int) -> g 0;;
   |};
   [%expect {| |}]
 ;;
@@ -2226,13 +2255,7 @@ let%expect_test "fun recursive erased" =
     {|
 fun f (erased x : int) : int = f x;;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 31)))
-     (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Fun erased arg" =
@@ -2328,7 +2351,13 @@ let%expect_test "types are erased" =
 fun f (static _ : unit) : static erased type = int;;
 let y = (f () @ dynamic);;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 14)))
+     (reason
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "types are erased" =
@@ -2389,9 +2418,9 @@ let _ = (id @ dynamic) 0;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8)))
+    ((loc ((line 3) (column 12)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
@@ -2498,10 +2527,10 @@ let f = int -> x;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8)))
+    ((loc ((line 2) (column 12)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -2513,10 +2542,10 @@ let f = x -> int;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8)))
+    ((loc ((line 2) (column 12)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -2585,10 +2614,10 @@ fun f (x : (int @ dynamic)) : int = x;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 4)))
+    ((loc ((line 2) (column 16)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -2599,10 +2628,10 @@ fun f (x : int) : (int @ dynamic) = x;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 4)))
+    ((loc ((line 2) (column 23)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -2994,13 +3023,7 @@ let%expect_test "assert dynamic erased condition" =
 let x = true @ dynamic erased;;
 let _ = assert x;;
   |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 13))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "assert static dynamic erased condition" =
@@ -3009,13 +3032,7 @@ let%expect_test "assert static dynamic erased condition" =
 let x = true @ dynamic erased;;
 let _ = assert static x;;
   |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 13))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "assert erased condition" =
@@ -3066,4 +3083,153 @@ fun f (x : int) : int =
     0 - x;;
   |};
   [%expect {| |}]
+;;
+
+let%expect_test "erased lambda param" =
+  go
+    {|
+let f = fn (erased x : int) -> x + 1;;
+let _ = f 42;;
+  |};
+  [%expect {| |}]
+;;
+
+(* --- Inlining erased closures that capture ambient values --- *)
+
+let%expect_test "inline closure capturing static value" =
+  go
+    {|
+let n = 10;;
+let add_n = fn (x : int) -> x + n;;
+let apply = fn (erased f : int -> int) -> fn (x : int) -> f x;;
+let _ = apply add_n 5;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure capturing multiple values" =
+  go
+    {|
+let a = 10;;
+let b = 20;;
+let combine = fn (x : int) -> x + a + b;;
+let apply = fn (erased f : int -> int) -> fn (x : int) -> f x;;
+let _ = apply combine 5;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure applied twice" =
+  go
+    {|
+let n = 1;;
+let inc = fn (x : int) -> x + n;;
+let apply2 = fn (erased f : int -> int) -> f (f 0);;
+let _ = apply2 inc;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure with polymorphic caller" =
+  go
+    {|
+let map =
+  fn (static erased t : type) ->
+    fn (static erased u : type) -> fn (erased f : t -> u) -> fn (x : t) -> f x
+;;
+let base = 100;;
+let _ = map int int (fn (x : int) -> x + base) 42;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure at multiple monomorphizations" =
+  go
+    {|
+let apply = fn (static erased t : type) -> fn (erased f : t -> t) -> fn (x : t) -> f x;;
+let n = 1;;
+let _ = apply int (fn (x : int) -> x + n) 42;;
+let _ = apply bool (fn (x : bool) -> x) true;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline composed closures capturing ambient" =
+  go
+    {|
+let a = 1;;
+let b = 2;;
+let compose = fn (erased f : int -> int) -> fn (erased g : int -> int) -> fn (x : int) -> f (g x);;
+let _ = compose (fn (x : int) -> x + a) (fn (x : int) -> x * b) 5;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure from nested let" =
+  go
+    {|
+let apply = fn (erased f : int -> int) -> fn (x : int) -> f x;;
+let _ =
+  let offset = 100 in
+  let add_offset = fn (x : int) -> x + offset in
+  apply add_offset 42
+;;
+  |};
+  [%expect {| |}]
+;;
+
+let%expect_test "dynamic erased lambda param rejected" =
+  go
+    {|
+let f = fn (dynamic erased x : int) -> x + 1;;
+let _ = f 42;;
+  |};
+  [%expect {| ((loc ((line 2) (column 8))) (reason Dynamic_erased)) |}]
+;;
+
+let%expect_test "dynamic erased fun param rejected" =
+  go
+    {|
+fun f (dynamic erased x : int) : int = x + 1;;
+let _ = f 42;;
+  |};
+  [%expect {| ((loc ((line 2) (column 4))) (reason Dynamic_erased)) |}]
+;;
+
+let%expect_test "dynamic erased fun return rejected" =
+  go
+    {|
+fun f (x : int) : dynamic erased int = x + 1;;
+let _ = f 42;;
+  |};
+  [%expect {| ((loc ((line 2) (column 4))) (reason Dynamic_erased)) |}]
+;;
+
+let%expect_test "erased fun return with dynamic body rejected" =
+  go
+    {|
+fun f (x : int) : erased int = x @ dynamic;;
+let _ = f 42;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 2) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
+;;
+
+let%expect_test "erased fun return with static body" =
+  go
+    {|
+fun f (x : int) : erased int = x ;;
+let _ = f 42;;
+  |};
+  [%expect {|
+    ((loc ((line 2) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;

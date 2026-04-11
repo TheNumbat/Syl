@@ -6,7 +6,13 @@ let go ?(print = false) input =
   let dst = Desugar.desugar cst in
   match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
+  | Error { loc; here; reason } ->
+    if print
+    then
+      print_s
+        [%message
+          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
+    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
 let%expect_test "var" =
@@ -34,8 +40,7 @@ let _ =
   | x -> 1
 ;;
 |};
-  [%expect
-    {| |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "var" =
@@ -49,10 +54,10 @@ let _ =
 |};
   [%expect
     {|
-    ((loc ((line 4) (column 2)))
+    ((loc ((line 4) (column 10)))
      (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
 

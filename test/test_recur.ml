@@ -6,7 +6,13 @@ let go ?(print = false) input =
   let dst = Desugar.desugar cst in
   match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
+  | Error { loc; here; reason } ->
+    if print
+    then
+      print_s
+        [%message
+          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
+    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
 (* ===== Static recursion ===== *)
@@ -144,7 +150,39 @@ fun f (x : int) : erased int = g x
 and g (y : int) : erased int = y;;
 let _ = f 0;;
 |};
+  [%expect
+    {|
+    ((loc ((line 3) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
+;;
+
+let%expect_test "recursive inlining" =
+  go
+    {|
+fun f (static x : int) : erased int = g x
+and g (static y : int) : erased int = y;;
+let _ = f 0;;
+|};
   [%expect {| |}]
+;;
+
+let%expect_test "recursive inlining" =
+  go
+    {|
+fun f (static x : int) : erased int = g x
+and g (y : int) : erased int = y;;
+let _ = f 0;;
+|};
+  [%expect
+    {|
+    ((loc ((line 3) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "recursive inlining" =
@@ -250,7 +288,13 @@ fun f (x : int) : erased int = g x
 and g (y : int) : int = let _ = f y in 0;;
 let _ = g 0;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -269,4 +313,19 @@ let f = fn erased (x : int) -> 0;;
 let _ = f 0;;
 |};
   [%expect {| |}]
+;;
+
+let%expect_test "erased fn" =
+  go
+    {|
+let f = fn erased (x : int) -> x @ erased;;
+let _ = f 0;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 33)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;

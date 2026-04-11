@@ -6,7 +6,13 @@ let go ?(print = false) input =
   let dst = Desugar.desugar cst in
   match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
+  | Error { loc; here; reason } ->
+    if print
+    then
+      print_s
+        [%message
+          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
+    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
 let%expect_test "lambda static -> arg" =
@@ -44,7 +50,7 @@ let bad = fn (dynamic z : int) ->
 let%expect_test "lambda static -> arg" =
   go
     {|
-let f = fn (x : int) (static y : int) -> x + y;;
+let f = fn (x : int) -> fn (static y : int) -> x + y;;
 let _ = (f 0) @ static;;
 let _ = assert static (f 0 1 == 1);;
 |};
@@ -54,23 +60,23 @@ let _ = assert static (f 0 1 == 1);;
 let%expect_test "fun static -> arg" =
   go
     {|
-fun f (x : int) (static y : int) : int = x + y;;
+fun f (x : int) : static (static int -> int) = fn (static y : int) -> x + y;;
 let _ = (f 0) @ static;;
 let _ = assert static (f 0 1 == 1);;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 14)))
+    ((loc ((line 4) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Unerased))))))
+       (need ((staticity Static) (erasure Erased))))))
     |}]
 ;;
 
 let%expect_test "lambda static -> arg" =
   go
     {|
-let f = fn (x : int) (static y : int) -> x + y;;
+let f = fn (x : int) -> fn (static y : int) -> x + y;;
 let _ = f (0 @ dynamic) 1;;
 |};
   [%expect
@@ -109,7 +115,7 @@ let _ = assert static (f 0 == 0);;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8)))
+    ((loc ((line 3) (column 8))) (here lib/typecheck.ml:170:53)
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
@@ -143,7 +149,7 @@ let _ = assert static (f 0 == 0);;
 let%expect_test "nested lambda _ -> arg" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let _ = assert static (f 0 1 == 1);;
 |};
   [%expect {| |}]
@@ -152,7 +158,7 @@ let _ = assert static (f 0 1 == 1);;
 let%expect_test "partial app -> dynamic" =
   go
     {|
-let f = fn (x : int) (y : int) -> (x + y) @ dynamic;;
+let f = fn (x : int) -> fn (y : int) -> (x + y) @ dynamic;;
 let _ = (f 0 @ static);;
 |};
   [%expect {| |}]
@@ -161,7 +167,7 @@ let _ = (f 0 @ static);;
 let%expect_test "nested lambda _ -> arg" =
   go
     {|
-let f = fn (x : int) (y : int) -> (x @ dynamic) + y;;
+let f = fn (x : int) -> fn (y : int) -> (x @ dynamic) + y;;
 let _ = assert static (f 0 1 == 1);;
 |};
   [%expect
@@ -176,7 +182,7 @@ let _ = assert static (f 0 1 == 1);;
 let%expect_test "nested lambda _ -> arg" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + (y @ dynamic);;
+let f = fn (x : int) -> fn (y : int) -> x + (y @ dynamic);;
 let _ = assert static (f 0 1 == 1);;
 |};
   [%expect
@@ -206,7 +212,7 @@ let _ = assert static (((f @ dynamic) 0) == 0);;
 let%expect_test "nested lambda _ -> arg" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let _ = assert static (f (0 @ dynamic) 1 == 1);;
 |};
   [%expect
@@ -221,7 +227,7 @@ let _ = assert static (f (0 @ dynamic) 1 == 1);;
 let%expect_test "nested lambda _ -> arg" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let _ = assert static (f 0 (1 @ dynamic) == 1);;
 |};
   [%expect
@@ -836,7 +842,7 @@ let _ = assert static (f 0 == 0);;
 let%expect_test "higher-order: int -> int parameter is not compile-time callable" =
   go
     {|
-let apply = fn (f : int -> int) (x : int) -> f x;;
+let apply = fn (f : int -> int) -> fn (x : int) -> f x;;
 let _ = assert static (apply (fn (x : int) -> x + 1) 5 == 6);;
 |};
   [%expect
@@ -851,7 +857,7 @@ let _ = assert static (apply (fn (x : int) -> x + 1) 5 == 6);;
 let%expect_test "higher-order: int -> int plus dynamic arg stays dynamic" =
   go
     {|
-let apply = fn (f : int -> int) (x : int) -> f x;;
+let apply = fn (f : int -> int) -> fn (x : int) -> f x;;
 let y = 5 @ dynamic;;
 let _ = assert static (apply (fn (x : int) -> x + 1) y == 6);;
 |};
@@ -867,7 +873,7 @@ let _ = assert static (apply (fn (x : int) -> x + 1) y == 6);;
 let%expect_test "higher-order: dynamic fn passed to int -> int param stays dynamic" =
   go
     {|
-let apply = fn (f : int -> int) (x : int) -> f x;;
+let apply = fn (f : int -> int) -> fn (x : int) -> f x;;
 let g = (fn (x : int) -> x) @ dynamic;;
 let _ = assert static (apply g 0 == 0);;
 |};
@@ -1084,7 +1090,7 @@ let _ = assert static (f 0 == 0);;
 let%expect_test "arrow type: int -> int parameter returns dynamic results" =
   go
     {|
-let f = fn (g : int -> int) (x : int) -> g x;;
+let f = fn (g : int -> int) -> fn (x : int) -> g x;;
 let _ = assert static (f (fn (x : int) -> x + 1) 5 == 6);;
 |};
   [%expect
@@ -1144,7 +1150,7 @@ let _ = assert static (f (fn (static x : int) -> x + 1) == 6);;
 let%expect_test "arrow type: dynamic arg keeps dynamic" =
   go
     {|
-let f = fn (g : dynamic int -> int) (x : int) -> g x;;
+let f = fn (g : dynamic int -> int) -> fn (x : int) -> g x;;
 let _ = f;;
 |};
   [%expect {| |}]
@@ -1157,7 +1163,7 @@ let _ = f;;
 let%expect_test "nested phase application: both args static" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let _ = assert static (f 1 2 == 3);;
 |};
   [%expect {| |}]
@@ -1166,7 +1172,7 @@ let _ = assert static (f 1 2 == 3);;
 let%expect_test "nested phase application: first arg dynamic" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let a = 1 @ dynamic;;
 let _ = assert static (f a 2 == 3);;
 |};
@@ -1182,7 +1188,7 @@ let _ = assert static (f a 2 == 3);;
 let%expect_test "nested phase application: second arg dynamic" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let b = 2 @ dynamic;;
 let _ = assert static (f 1 b == 3);;
 |};
@@ -1198,7 +1204,7 @@ let _ = assert static (f 1 b == 3);;
 let%expect_test "partial application: phase fn, static arg -> static closure" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let g = f 5;;
 let _ = assert static (g 3 == 8);;
 |};
@@ -1208,7 +1214,7 @@ let _ = assert static (g 3 == 8);;
 let%expect_test "partial application: phase fn, dynamic arg -> dynamic closure" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let a = 5 @ dynamic;;
 let g = f a;;
 let _ = assert static (g 3 == 8);;
@@ -1414,7 +1420,7 @@ let _ = x;;
 let%expect_test "phase operands: both phase -> phase result" =
   go
     {|
-let f = fn (x : int) (y : int) -> x + y;;
+let f = fn (x : int) -> fn (y : int) -> x + y;;
 let _ = assert static (f 1 2 == 3);;
 |};
   [%expect {| |}]
@@ -1442,7 +1448,7 @@ let _ = assert static (f 1 == 1);;
 let%expect_test "phase tuple elements" =
   go
     {|
-let f = fn (x : int) (y : int) -> (x, y);;
+let f = fn (x : int) -> fn (y : int) -> (x, y);;
 let _ = f 1 2;;
 |};
   [%expect {| |}]
@@ -1505,7 +1511,7 @@ let _ = assert static (f1 5 == f2 5);;
 let%expect_test "triple nested phase: all static" =
   go
     {|
-let f = fn (x : int) (y : int) (z : int) -> x + y + z;;
+let f = fn (x : int) -> fn (y : int) -> fn (z : int) -> x + y + z;;
 let _ = assert static (f 1 2 3 == 6);;
 |};
   [%expect {| |}]
@@ -1514,7 +1520,7 @@ let _ = assert static (f 1 2 3 == 6);;
 let%expect_test "triple nested phase: middle arg dynamic" =
   go
     {|
-let f = fn (x : int) (y : int) (z : int) -> x + y + z;;
+let f = fn (x : int) -> fn (y : int) -> fn (z : int) -> x + y + z;;
 let b = 2 @ dynamic;;
 let _ = assert static (f 1 b 3 == 6);;
 |};
@@ -1620,4 +1626,21 @@ let f = fn (static x : bool) -> if static x then 1 else unreachable;;
 let _ = assert static (f true == 1);;
 |};
   [%expect {| |}]
+;;
+
+let%expect_test "pi return static parametric" =
+  go
+    {|
+ let g = fn (x : int) ->
+    fun f (erased u : type) : static int = x in
+    f int
+  ;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;

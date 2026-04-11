@@ -104,7 +104,7 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
     group (concat ~sep ~f:(fmt_expr cfg) elts)
   | Arrow _ -> fmt_arrow cfg expr
   | Apply _ -> fmt_apply cfg expr
-  | Lambda { erased = e_; args; body; before_erased; after_args } ->
+  | Lambda { erased = e_; arg; body; before_erased; after_arg } ->
     group
       (group
          (text "fn"
@@ -114,25 +114,16 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
           ^^ fmt_erased e_
           ^^ nest
                ind
-               (line
-                ^^ fmt_arg_list cfg (Nonempty_list.to_list args)
-                |> fmt_after cfg after_args
-                |> fun d -> d ^^ text " ->"))
+               (line ^^ fmt_arg cfg arg |> fmt_after cfg after_arg |> fun d -> d ^^ text " ->"))
        ^^ nest ind (line ^^ fmt_expr cfg body))
-  | Let { var; erased = e_; args; bind; rest; before_erased; after_erased; after_args } ->
+  | Let { var; erased = e_; bind; rest; before_erased; after_erased; after_var } ->
     let name =
       text "let"
       |> fmt_after cfg before_erased
-      |> fun d -> d ^^ fmt_erased e_ |> fmt_after cfg after_erased |> fun d -> d ^^ text " " ^^ fmt_ident var
+      |> fun d ->
+      d ^^ fmt_erased e_ |> fmt_after cfg after_erased |> fun d -> d ^^ text " " ^^ fmt_ident var
     in
-    let header =
-      match args with
-      | [] -> name |> fmt_after cfg after_args |> fun d -> d ^^ text " ="
-      | _ ->
-        group
-          (name
-           ^^ nest ind (line ^^ fmt_arg_list cfg args |> fmt_after cfg after_args |> fun d -> d ^^ text " ="))
-    in
+    let header = name |> fmt_after cfg after_var |> fun d -> d ^^ text " =" in
     let let_ = group (header ^^ nest ind (line ^^ fmt_expr cfg bind) ^^ line ^^ text "in") in
     group (let_ ^^ line ^^ fmt_expr cfg rest)
   | Fun { funs; rest } ->
@@ -219,14 +210,7 @@ and fmt_if cfg ~ind ?(force_break = false) ?(before_static = []) static cond the
     (text "if"
      |> fmt_after cfg before_static
      |> fun d ->
-     d
-     ^^ fmt_static static
-     ^^ text " "
-     ^^ fmt_expr cfg cond
-     ^^ sep
-     ^^ then_doc
-     ^^ sep
-     ^^ else_doc)
+     d ^^ fmt_static static ^^ text " " ^^ fmt_expr cfg cond ^^ sep ^^ then_doc ^^ sep ^^ else_doc)
 
 and fmt_arg cfg (a : Cst.Expr.arg) =
   let n = a.node in
@@ -246,8 +230,6 @@ and fmt_arg cfg (a : Cst.Expr.arg) =
     ^^ text ")"
   in
   fmt_with_loc cfg a inner
-
-and fmt_arg_list cfg args = concat ~sep:line ~f:(fun a -> fmt_arg cfg a) args
 
 and fmt_fun_header (cfg : Config.t) ~keyword (fw : Cst.Expr.fun_) =
   let f = fw.node in
@@ -269,16 +251,10 @@ and fmt_fun_header (cfg : Config.t) ~keyword (fw : Cst.Expr.fun_) =
     (name
      ^^ nest
           ind
-          (line
-           ^^ concat ~sep:line ~f:(fmt_arg cfg) (Nonempty_list.to_list f.args)
-           |> fmt_after cfg f.after_args
-           |> fun d ->
-           d
-           ^^ text " :"
-           ^^ ret_mode
-           ^^ text " "
-           ^^ fmt_expr cfg f.ret_ty
-           ^^ text " ="))
+          (line ^^ fmt_arg cfg f.arg
+           |> fmt_after cfg f.after_arg
+           |> fun d -> d ^^ text " :" ^^ ret_mode ^^ text " " ^^ fmt_expr cfg f.ret_ty ^^ text " ="
+          ))
 
 and fmt_fun_def cfg ~keyword (fw : Cst.Expr.fun_) =
   fmt_fun_header cfg ~keyword fw ^^ nest cfg.indent (hardline ^^ fmt_expr cfg fw.node.body)
@@ -295,20 +271,14 @@ let fmt_top_level (cfg : Config.t) (top_level : Cst.Top_level.t) : Doc.t =
   let ind = cfg.indent in
   let inner =
     match top_level.node with
-    | Let { var; erased = e; args; bind; before_erased; after_erased; after_args } ->
+    | Let { var; erased = e; bind; before_erased; after_erased; after_var } ->
       let name =
         text "let"
         |> fmt_after cfg before_erased
-        |> fun d -> d ^^ fmt_erased e |> fmt_after cfg after_erased |> fun d -> d ^^ text " " ^^ fmt_ident var
+        |> fun d ->
+        d ^^ fmt_erased e |> fmt_after cfg after_erased |> fun d -> d ^^ text " " ^^ fmt_ident var
       in
-      let header =
-        match args with
-        | [] -> name |> fmt_after cfg after_args |> fun d -> d ^^ text " ="
-        | _ ->
-          group
-            (name
-             ^^ nest ind (line ^^ fmt_arg_list cfg args |> fmt_after cfg after_args |> fun d -> d ^^ text " ="))
-      in
+      let header = name |> fmt_after cfg after_var |> fun d -> d ^^ text " =" in
       group
         (header
          ^^ nest ind (line ^^ fmt_expr cfg bind)

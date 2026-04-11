@@ -188,7 +188,6 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
   | Binder { mono; loc; _ } ->
     let pack, fvs, ty = simplify_mono ~loc env mono in
     Pack { pack; fvs; ty; loc }
-  | Erased { loc; _ } -> raise_s [%message "Bug: erased expression" (loc : Lex.Location.t)]
   | Builtin { builtin; loc; ty; _ } ->
     (match builtin with
      | Type _ -> raise_s [%message "Bug: builtin type"]

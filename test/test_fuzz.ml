@@ -480,14 +480,6 @@ let _ = pair_id bool true false;;
    MODE SYSTEM EDGE CASES
    ============================================================ *)
 
-let%expect_test "fuzz: dynamic erased value" =
-  go
-    {|
-let x = 5 @ dynamic erased;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "fuzz: static value used as dynamic" =
   go
     {|

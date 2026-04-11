@@ -111,6 +111,27 @@ module Maybe = struct
   [@@deriving sexp, compare, equal, hash]
 
   let none = { staticity = None; erasure = None }
+
+  let is_erased = function
+    | { erasure = Some Erased; _ } -> true
+    | _ -> false
+  ;;
+
+  let is_unerased = function
+    | { erasure = Some Unerased; _ } -> true
+    | _ -> false
+  ;;
+
+  let is_static = function
+    | { staticity = Some Static; _ } -> true
+    | _ -> false
+  ;;
+
+  let is_dynamic = function
+    | { staticity = Some Dynamic; _ } -> true
+    | _ -> false
+  ;;
+
   let is_none { staticity; erasure } = Option.is_none staticity && Option.is_none erasure
 
   let print () { staticity; erasure } =
@@ -168,6 +189,31 @@ let default ?(staticity = Staticity.default) ?(erasure = Erasure.default) () =
   { staticity; erasure }
 ;;
 
+let is_static = function
+  | { staticity = Static; _ } -> true
+  | _ -> false
+;;
+
+let is_dynamic = function
+  | { staticity = Dynamic; _ } -> true
+  | _ -> false
+;;
+
+let is_parametric = function
+  | { staticity = Parametric; _ } -> true
+  | _ -> false
+;;
+
+let is_erased = function
+  | { erasure = Erased; _ } -> true
+  | _ -> false
+;;
+
+let is_unerased = function
+  | { erasure = Unerased; _ } -> true
+  | _ -> false
+;;
+
 let maybe t = { Maybe.staticity = Some t.staticity; erasure = Some t.erasure }
 
 let annotate t (maybe : Maybe.t) =
@@ -183,26 +229,6 @@ let capture t ~fv = { t with staticity = Staticity.join t.staticity fv.staticity
 let cond ~cond cases =
   let t = List.fold cases ~init:(bottom ()) ~f:join in
   { t with staticity = Staticity.join t.staticity cond.staticity }
-;;
-
-let is_static = function
-  | { staticity = Static; _ } -> true
-  | _ -> false
-;;
-
-let is_dynamic = function
-  | { staticity = Dynamic; _ } -> true
-  | _ -> false
-;;
-
-let is_erased = function
-  | { erasure = Erased; _ } -> true
-  | _ -> false
-;;
-
-let is_unerased = function
-  | { erasure = Unerased; _ } -> true
-  | _ -> false
 ;;
 
 let print () { staticity; erasure } =

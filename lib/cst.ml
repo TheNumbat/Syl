@@ -41,12 +41,12 @@ module Expr = struct
   and fun_node =
     { var : Ident.Raw.t
     ; erased : Modes.Erasure.t
-    ; args : arg Nonempty_list.t
+    ; arg : arg
     ; ret_mode : Modes.Maybe.t
     ; ret_ty : t
     ; body : t
     ; after_erased : Lex.Comment.t list
-    ; after_args : Lex.Comment.t list
+    ; after_arg : Lex.Comment.t list
     }
 
   and node =
@@ -66,12 +66,11 @@ module Expr = struct
     | Let of
         { var : Ident.Raw.t
         ; erased : Modes.Erasure.t
-        ; args : arg list
         ; bind : t
         ; rest : t
         ; before_erased : Lex.Comment.t list
         ; after_erased : Lex.Comment.t list
-        ; after_args : Lex.Comment.t list
+        ; after_var : Lex.Comment.t list
         }
     | Fun of
         { funs : fun_ Nonempty_list.t
@@ -79,10 +78,10 @@ module Expr = struct
         }
     | Lambda of
         { erased : Modes.Erasure.t
-        ; args : arg Nonempty_list.t
+        ; arg : arg
         ; body : t
         ; before_erased : Lex.Comment.t list
-        ; after_args : Lex.Comment.t list
+        ; after_arg : Lex.Comment.t list
         }
     | Apply of
         { fn : t
@@ -155,25 +154,24 @@ module Expr = struct
         ; static
         ; before_static = strip_comments before_static
         }
-    | Let { var; erased; args; bind; rest; before_erased; after_erased; after_args } ->
+    | Let { var; erased; bind; rest; before_erased; after_erased; after_var } ->
       Let
         { var
         ; erased
-        ; args = List.map args ~f:strip_arg
         ; bind = strip bind
         ; rest = strip rest
         ; before_erased = strip_comments before_erased
         ; after_erased = strip_comments after_erased
-        ; after_args = strip_comments after_args
+        ; after_var = strip_comments after_var
         }
     | Fun { funs; rest } -> Fun { funs = Nonempty_list.map funs ~f:strip_fun; rest = strip rest }
-    | Lambda { erased; args; body; before_erased; after_args } ->
+    | Lambda { erased; arg; body; before_erased; after_arg } ->
       Lambda
         { erased
-        ; args = Nonempty_list.map args ~f:strip_arg
+        ; arg = strip_arg arg
         ; body = strip body
         ; before_erased = strip_comments before_erased
-        ; after_args = strip_comments after_args
+        ; after_arg = strip_comments after_arg
         }
     | Apply { fn; arg } -> Apply { fn = strip fn; arg = strip arg }
     | Paren { expr } -> Paren { expr = strip expr }
@@ -212,11 +210,11 @@ module Expr = struct
   and strip_fun (f : fun_) : fun_ =
     { node =
         { f.node with
-          args = Nonempty_list.map f.node.args ~f:strip_arg
+          arg = strip_arg f.node.arg
         ; ret_ty = strip f.node.ret_ty
         ; body = strip f.node.body
         ; after_erased = strip_comments f.node.after_erased
-        ; after_args = strip_comments f.node.after_args
+        ; after_arg = strip_comments f.node.after_arg
         }
     ; loc = Lex.Location.empty
     ; before = strip_comments f.before
@@ -230,11 +228,10 @@ module Top_level = struct
     | Let of
         { var : Ident.Raw.t
         ; erased : Modes.Erasure.t
-        ; args : Expr.arg list
         ; bind : Expr.t
         ; before_erased : Lex.Comment.t list
         ; after_erased : Lex.Comment.t list
-        ; after_args : Lex.Comment.t list
+        ; after_var : Lex.Comment.t list
         }
     | Fun of { funs : Expr.fun_ Nonempty_list.t }
     | External of
@@ -255,15 +252,14 @@ module Top_level = struct
   let strip (tl : t) : t =
     { node =
         (match tl.node with
-         | Let { var; erased; args; bind; before_erased; after_erased; after_args } ->
+         | Let { var; erased; bind; before_erased; after_erased; after_var } ->
            Let
              { var
              ; erased
-             ; args = List.map args ~f:Expr.strip_arg
              ; bind = Expr.strip bind
              ; before_erased = Expr.strip_comments before_erased
              ; after_erased = Expr.strip_comments after_erased
-             ; after_args = Expr.strip_comments after_args
+             ; after_var = Expr.strip_comments after_var
              }
          | Fun { funs } -> Fun { funs = Nonempty_list.map funs ~f:Expr.strip_fun }
          | External { var; ty; symbol } -> External { var; ty = Expr.strip ty; symbol }

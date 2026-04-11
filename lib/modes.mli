@@ -50,6 +50,10 @@ module Maybe : sig
 
   val none : t
   val is_none : t -> bool
+  val is_erased : t -> bool
+  val is_unerased : t -> bool
+  val is_static : t -> bool
+  val is_dynamic : t -> bool
   val print : unit -> t -> string
 end
 
@@ -80,4 +84,5 @@ val is_erased : t -> bool
 val is_unerased : t -> bool
 val is_static : t -> bool
 val is_dynamic : t -> bool
+val is_parametric : t -> bool
 val print : unit -> t -> string

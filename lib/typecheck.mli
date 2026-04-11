@@ -26,6 +26,7 @@ module Error : sig
     | Static_failure of Builtin.Error.t
     | Inline_self of Ident.t Nonempty_list.t
     | Recursion_limit of int
+    | Dynamic_erased
     | Unreachable_reached
   [@@deriving sexp]
 end

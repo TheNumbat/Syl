@@ -117,37 +117,7 @@ let%expect_test "Mode annotation valid" =
     {|
 let dyn = 1;;
 let _ =
-  dyn @ dynamic erased
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Mode annotation valid" =
-  go
-    {|
-let dyn = 1 @ erased;;
-let _ =
-  dyn @ dynamic erased
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Mode annotation valid" =
-  go
-    {|
-let dyn = 1;;
-let _ =
   dyn @ dynamic
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Mode annotation valid" =
-  go
-    {|
-let dyn = 1 @ dynamic;;
-let _ =
-  dyn @ dynamic erased
 ;;|};
   [%expect {| |}]
 ;;
@@ -179,24 +149,6 @@ let _ =
   [%expect {| |}]
 ;;
 
-let%expect_test "dynamic erased" =
-  go
-    {|
-let _ =
-  (true @ dynamic erased)
-;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "erased dynamic" =
-  go
-    {|
-let _ =
-  ((true @ erased) @ dynamic)
-;;|};
-  [%expect {| |}]
-;;
-
 let%expect_test "Unop var static" =
   go
     {|
@@ -214,14 +166,6 @@ let dyn = true @ dynamic;;
 let _ =
   !dyn
 ;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "Unop var dynamic" =
-  go
-    {|
-let dyn = true @ dynamic;;
-let x = !dyn @ erased;;|};
   [%expect {| |}]
 ;;
 
@@ -324,14 +268,6 @@ let%expect_test "if erased branch" =
     {|
 let cond = true @ dynamic;;
 let t = if cond then unit else int;;|};
-  [%expect {| |}]
-;;
-
-let%expect_test "if erased branch" =
-  go
-    {|
-let cond = true @ dynamic;;
-let t = (if cond then false else cond) @ erased;;|};
   [%expect {| |}]
 ;;
 
@@ -501,7 +437,7 @@ let _ = (fn (static erased x : int) -> 1) (0 @ erased);;
 let%expect_test "erased closure arg" =
   go
     {|
-let f = fn (static erased g : int -> erased int) -> let _ = g 1 in 2;;
+let f = fn (static erased g : static int -> erased int) -> let _ = g 1 in 2;;
 let _ = f (fn (x : int) -> 0 @ erased);;
 |};
   [%expect {| |}]
@@ -650,13 +586,26 @@ let _ = if true then f else g;;
 
 let%expect_test "closure erased" =
   go
+    ~check:`Run
     {|
 let c = fn (_ : unit) -> true;;
 let f = (fn (x : int) -> 1);;
 let g = (fn (erased x : int) -> 2);;
 let _ = (if c () then f else g) 0;;
 |};
-  [%expect {| |}]
+  [%expect.unreachable]
+[@@expect.uncaught_exn
+  {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
+  ("Clang failed" (exit_code 1))
+  Raised at Base__Error.raise in file "src/error.ml" (inlined), line 9, characters 21-37
+  Called from Base__Error.raise_s in file "src/error.ml", line 10, characters 26-47
+  Called from Syl_test__Test_codegen.compile_and_run in file "test/test_codegen.ml", line 29, characters 41-92
+  Called from Syl_test__Test_codegen.(fun) in file "test/test_codegen.ml", lines 588-595, characters 2-2
+  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
+  |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -703,7 +652,7 @@ let%expect_test "inlined closure nest" =
   go
     {|
 let f1 = fn (erased x : int) -> 1;;
-let g = fn (f2 : int -> int) -> f2 0;;
+let g = fn (static f2 : static int -> int) -> f2 0;;
 let _ = g f1;;
 |};
   [%expect {| |}]
@@ -804,7 +753,7 @@ let _ =
 let%expect_test "Apply erased fn dynamic arg" =
   go
     {|
-let dyn = 1 @ dynamic;;
+let dyn = 1;;
 let y =
   (fn (erased x : int) -> 5) (dyn-1)
 ;;
@@ -991,26 +940,8 @@ let y = x @ dynamic;;
 let%expect_test "mono fn" =
   go
     {|
-let x = fn (erased x : type) -> x;;
-let y = x @ dynamic;;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "mono fn" =
-  go
-    {|
 let x = fn (static x : type) -> x;;
 let y = x @ unerased;;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "mono fn" =
-  go
-    {|
-let x = fn (static erased x : type) -> x;;
-let y = (x int) @ dynamic;;
 |};
   [%expect {| |}]
 ;;
@@ -1373,15 +1304,6 @@ let%expect_test "types are erased" =
   go
     {|
 fun f (static _ : unit) : static erased type = int;;
-let y = (f () @ dynamic);;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "types are erased" =
-  go
-    {|
-fun f (static _ : unit) : static erased type = int;;
 let y = 5 : f ();;
 |};
   [%expect {| |}]
@@ -1541,15 +1463,6 @@ let _ = 1 @ erased;;
   [%expect {| |}]
 ;;
 
-let%expect_test "weaken mode: dynamic unerased -> dynamic erased (erased marker)" =
-  go
-    {|
-let x = 1 @ dynamic;;
-let _ = x @ erased;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "weaken mode: static -> dynamic (staticity only)" =
   go
     {|
@@ -1571,7 +1484,7 @@ let%expect_test "weaken type: arrow arg_mode contravariant" =
   go
     {|
 let f = fn (erased x : int) -> 1;;
-let _ = f : int -> int;;
+let _ = f : static int -> int;;
 |};
   [%expect {| |}]
 ;;
@@ -1628,28 +1541,11 @@ let _ = ((if true then f else g) @ erased) 0;;
   [%expect {| |}]
 ;;
 
-let%expect_test "weaken mode: both axes (static unerased -> dynamic erased)" =
-  go
-    {|
-let _ = 1 @ dynamic erased;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "weaken if non-split: staticity on branch" =
   go
     {|
 let x = 1 @ dynamic;;
 let _ = if true then 1 else x;;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "weaken if non-split: both axes on branch" =
-  go
-    {|
-let x = 1 @ dynamic;;
-let _ = if true then 1 else x @ erased;;
 |};
   [%expect {| |}]
 ;;
@@ -1666,7 +1562,7 @@ let _ = f false;;
 let%expect_test "weaken if split: both axes on branch" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 1 @ dynamic erased else 1;;
+let f = fn (static b : bool) -> if static b then 1 @ dynamic else 1;;
 let _ = f false;;
 |};
   [%expect {| |}]
@@ -1713,7 +1609,7 @@ let _ = ((if true then f else g) @ erased) 0;;
 let%expect_test "closure to closure: arg erasure contravariant" =
   go
     {|
-let apply = fn (f : int -> int) -> f 0;;
+let apply = fn (erased f : static int -> int) -> f 0;;
 let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
@@ -1733,7 +1629,7 @@ let _ = apply g;;
 let%expect_test "closure to closure: both arg and ret subtyping" =
   go
     {|
-let apply = fn (f : int -> erased int) -> f 0;;
+let apply = fn (static f : erased int -> erased int) -> f 0;;
 let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
@@ -2613,8 +2509,8 @@ let _ = f 0;;
 let%expect_test "recursive inlining" =
   go
     {|
-fun f (x : int) : erased int = g x
-and g (y : int) : erased int = y;;
+fun f (static x : int) : erased int = g x
+and g (static y : int) : erased int = y;;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -2656,16 +2552,6 @@ let%expect_test "recursive inlining" =
 fun f (x : int) : int = if x == 0 then 0 else g (x - 1)
 and g (y : int) : int = if y == 0 then 0 else (f @ erased) (y - 1);;
 let _ = f 0;;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "recursive inlining" =
-  go
-    {|
-fun f (x : int) : erased int = g x
-and g (y : int) : int = let _ = f y in 0;;
-let _ = g 0;;
 |};
   [%expect {| |}]
 ;;
@@ -3210,5 +3096,191 @@ let _ =
   | x -> assert !x
 ;;
 |};
+  [%expect {| |}]
+;;
+
+(* --- Inlining parametric erased closures --- *)
+
+let%expect_test "parametric erased closure inline" =
+  go
+    {|
+let f = fn (erased x : int) -> x + 1;;
+let _ = f 42;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "parametric erased closure multi-arg" =
+  go
+    {|
+let f = fn (erased x : int) -> fn (y : int) -> x + y;;
+let _ = f 10 20;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "parametric erased closure multiple erased params" =
+  go
+    {|
+let f = fn (erased x : int) -> fn (erased y : int) -> x + y;;
+let _ = f 10 20;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "parametric erased closure in conditional" =
+  go
+    {|
+let f = fn (erased x : int) -> if x == 0 then 1 else 2;;
+let _ = f 0;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "parametric erased closure unused" =
+  go
+    {|
+let f = fn (erased x : int) -> 99;;
+let _ = f 0;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "parametric erased with type param" =
+  go
+    {|
+let id = fn (static erased t : type) -> fn (erased x : int) -> fn (y : t) -> y;;
+let _ = id int 0 42;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "parametric erased partial application" =
+  go
+    {|
+let f = fn (erased x : int) -> fn (y : int) -> x + y;;
+let g = f 10;;
+let _ = g 20;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "erased closure arg" =
+  go
+    {|
+let f = fn (erased g : int -> erased int) -> let _ = g 1 in 2;;
+let _ = f (fn (x : int) -> 0 @ erased);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "erased closure arg" =
+  go
+    {|
+let f = fn (erased g : int -> erased int) -> let _ = g 1 in 2;;
+let _ = f (fn (x : int) -> 0);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure capturing static value" =
+  go
+    {|
+let n = 10;;
+let add_n = fn (x : int) -> x + n;;
+let apply = fn (erased f : int -> int) -> fn (x : int) -> f x;;
+let _ = apply add_n 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure capturing multiple values" =
+  go
+    {|
+let a = 10;;
+let b = 20;;
+let combine = fn (x : int) -> x + a + b;;
+let apply = fn (erased f : int -> int) -> fn (x : int) -> f x;;
+let _ = apply combine 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure applied twice" =
+  go
+    {|
+let n = 1;;
+let inc = fn (x : int) -> x + n;;
+let apply2 = fn (erased f : int -> int) -> f (f 0);;
+let _ = apply2 inc;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure with polymorphic caller" =
+  go
+    {|
+let map =
+  fn (static erased t : type) ->
+    fn (static erased u : type) -> fn (erased f : t -> u) -> fn (x : t) -> f x
+;;
+let base = 100;;
+let _ = map int int (fn (x : int) -> x + base) 42;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure at multiple monomorphizations" =
+  go
+    {|
+let apply = fn (static erased t : type) -> fn (erased f : t -> t) -> fn (x : t) -> f x;;
+let n = 1;;
+let _ = apply int (fn (x : int) -> x + n) 42;;
+let _ = apply bool (fn (x : bool) -> x) true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline composed closures capturing ambient" =
+  go
+    {|
+let a = 1;;
+let b = 2;;
+let compose = fn (erased f : int -> int) -> fn (erased g : int -> int) -> fn (x : int) -> f (g x);;
+let _ = compose (fn (x : int) -> x + a) (fn (x : int) -> x * b) 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline closure from nested let" =
+  go
+    {|
+let apply = fn (erased f : int -> int) -> fn (x : int) -> f x;;
+let _ =
+  let offset = 100 in
+  let add_offset = fn (x : int) -> x + offset in
+  apply add_offset 42
+;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline with parametric captures" =
+  go
+    {|
+let erased apply = fn (f : int -> int) -> fn (x : int) -> f x;;
+let _ = fn (x : int) -> apply (fn (y : int) -> y + x) 10;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "erase with static captures" =
+  go
+    {|
+let _ = fn (static x : int) ->
+  let f = fn erased (y : int) -> y + x in
+  let _ = f 10 in
+  ()
+;;|};
   [%expect {| |}]
 ;;

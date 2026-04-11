@@ -6,7 +6,13 @@ let go ?(print = false) input =
   let dst = Desugar.desugar cst in
   match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
+  | Error { loc; here; reason } ->
+    if print
+    then
+      print_s
+        [%message
+          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
+    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
 let%expect_test "weaken mode: static unerased -> static erased (literal substitution)" =
@@ -23,7 +29,13 @@ let%expect_test "weaken mode: dynamic unerased -> dynamic erased (erased marker)
 let x = 1 @ dynamic;;
 let _ = x @ erased;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "weaken mode: static -> dynamic (staticity only)" =
@@ -49,7 +61,22 @@ let%expect_test "weaken type: arrow arg_mode contravariant" =
 let f = fn (erased x : int) -> 1;;
 let _ = f : int -> int;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Type_mismatch
+       (got
+        (Type
+         (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
+          (ret_ty (T (Type Int)))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (need
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
+          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+    |}]
 ;;
 
 let%expect_test "weaken if non-split: mode erasure on branch" =
@@ -109,7 +136,7 @@ let%expect_test "weaken mode: both axes (static unerased -> dynamic erased)" =
     {|
 let _ = 1 @ dynamic erased;;
 |};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 2) (column 10))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "weaken if non-split: staticity on branch" =
@@ -127,7 +154,13 @@ let%expect_test "weaken if non-split: both axes on branch" =
 let x = 1 @ dynamic;;
 let _ = if true then 1 else x @ erased;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 30)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "weaken if split: staticity on branch" =
@@ -145,7 +178,7 @@ let%expect_test "weaken if split: both axes on branch" =
 let f = fn (static b : bool) -> if static b then 1 @ dynamic erased else 1;;
 let _ = f false;;
 |};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 2) (column 51))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "weaken binder apply: erasure on body" =
@@ -193,7 +226,22 @@ let apply = fn (f : int -> int) -> f 0;;
 let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 8)))
+     (reason
+      (Type_mismatch
+       (got
+        (Type
+         (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
+          (ret_ty (T (Type Int)))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (need
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
+          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+    |}]
 ;;
 
 let%expect_test "closure to closure: ret erasure covariant" =
@@ -213,7 +261,22 @@ let apply = fn (f : int -> erased int) -> f 0;;
 let g = fn (erased x : int) -> 1;;
 let _ = apply g;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 8)))
+     (reason
+      (Type_mismatch
+       (got
+        (Type
+         (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
+          (ret_ty (T (Type Int)))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (need
+        (Type
+         (Arrow (arg_ty (Type Int))
+          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
+          (ret_mode ((staticity Static) (erasure Erased)))))))))
+    |}]
 ;;
 
 let%expect_test "closure where binder expected: Arrow leq Pi" =
@@ -476,7 +539,42 @@ let%expect_test "leq Pi/Pi function-type ret" =
 let f = fn (static g : static type \ t -> erased t) -> ();;
 let _ = f : static (static erased type \ t -> t) -> unit;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Type_mismatch
+       (got
+        (Type
+         (Pi
+          (arg_ty
+           (Type
+            (Pi (arg_ty (Type Type))
+             (arg_mode ((staticity Static) (erasure Unerased)))
+             (ret_ty
+              (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
+               (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
+               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 49)))))))
+             (ret_mode ((staticity Static) (erasure Erased))))))
+          (arg_mode ((staticity Static) (erasure Unerased)))
+          (ret_ty (T (Type Unit)))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (need
+        (Type
+         (Pi
+          (arg_ty
+           (Type
+            (Pi (arg_ty (Type Type))
+             (arg_mode ((staticity Static) (erasure Erased)))
+             (ret_ty
+              (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
+               (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
+               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 46)))))))
+             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+          (arg_mode ((staticity Static) (erasure Unerased)))
+          (ret_ty (T (Type Unit)))
+          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+    |}]
 ;;
 
 let%expect_test "join Pi/Pi function-type arg: different inner arg_mode" =

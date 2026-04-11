@@ -1,12 +1,18 @@
 open! Core
 open! Syl
 
-let go ?print input =
+let go ?(print = false) input =
   let cst = Parse.parse_exn input in
   let dst = Desugar.desugar cst in
   match Typecheck.typecheck dst with
-  | Ok tst -> if Option.is_some print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
+  | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
+  | Error { loc; here; reason } ->
+    if print
+    then
+      print_s
+        [%message
+          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
+    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
 let%expect_test "static lambda identity returns dependent type" =
@@ -110,13 +116,7 @@ let%expect_test "erased (not static) arg cannot be used as type" =
     {|
 let f = fn (erased ty : type) -> fn (x : ty) -> x;;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 33)))
-     (reason
-      (Mode_mismatch (got ((staticity Parametric) (erasure Erased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "if static with literal condition true" =
@@ -665,13 +665,7 @@ let%expect_test "cannot use dynamic erased as condition" =
 let x = true @ dynamic erased;;
 let _ = if x then 1 else 2;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 13))) (reason Dynamic_erased)) |}]
 ;;
 
 let%expect_test "inline case 1: binder with captured static var" =

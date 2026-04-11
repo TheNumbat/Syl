@@ -18,10 +18,10 @@ end
 exception Error of Error.t Loc.t [@@deriving sexp]
 
 module Fail = struct
-  let unexpected ~loc tok = raise (Error { loc; reason = Unexpected tok })
-  let duplicate_mode ~loc mode = raise (Error { loc; reason = Duplicate_mode mode })
-  let unexpected_modes ~loc mode = raise (Error { loc; reason = Unexpected_modes mode })
-  let fun_underscore ~loc = raise (Error { loc; reason = Fun_underscore })
+  let unexpected ~loc here tok = raise (Error { loc; here; reason = Unexpected tok })
+  let duplicate_mode ~loc here mode = raise (Error { loc; here; reason = Duplicate_mode mode })
+  let unexpected_modes ~loc here mode = raise (Error { loc; here; reason = Unexpected_modes mode })
+  let fun_underscore ~loc here = raise (Error { loc; here; reason = Fun_underscore })
 end
 
 let expect (type a) t ~(kind : a Kind.t) : a =
@@ -29,13 +29,13 @@ let expect (type a) t ~(kind : a Kind.t) : a =
   let tok = Tokenizer.next t.tokens in
   match Token.get ~kind tok with
   | Some k -> k
-  | None -> Fail.unexpected ~loc tok
+  | None -> Fail.unexpected [%here] ~loc tok
 ;;
 
 let expect_op t ~op =
   let loc = Tokenizer.loc t.tokens in
   let tok = Tokenizer.peek t.tokens in
-  if Lex.Op.equal (expect t ~kind:Op) op then () else Fail.unexpected ~loc tok
+  if Lex.Op.equal (expect t ~kind:Op) op then () else Fail.unexpected [%here] ~loc tok
 ;;
 
 let expect_ident t =
@@ -62,12 +62,12 @@ let expect_ident t =
          | Lte -> Ident.(binop Lte)
          | Gt -> Ident.(binop Gt)
          | Gte -> Ident.(binop Gte)
-         | op -> Fail.unexpected ~loc (Op op)
+         | op -> Fail.unexpected [%here] ~loc (Op op)
        in
        expect t ~kind:Rparen;
        id
-     | tok -> Fail.unexpected ~loc tok)
-  | tok -> Fail.unexpected ~loc tok
+     | tok -> Fail.unexpected [%here] ~loc tok)
+  | tok -> Fail.unexpected [%here] ~loc tok
 ;;
 
 let maybe_erased t : Modes.Erasure.t =
@@ -109,9 +109,9 @@ let maybe_modes ~required t : Modes.Maybe.t =
     | _ -> staticity, erasure, axes
   in
   let staticity, erasure, axes = aux [] in
-  if required && List.length axes = 0 then Fail.unexpected ~loc (Tokenizer.peek t.tokens);
+  if required && List.length axes = 0 then Fail.unexpected [%here] ~loc (Tokenizer.peek t.tokens);
   (match List.find_a_dup axes ~compare:Modes.Axis.compare with
-   | Some mode -> Fail.duplicate_mode ~loc mode
+   | Some mode -> Fail.duplicate_mode [%here] ~loc mode
    | None -> ());
   { staticity; erasure }
 ;;
@@ -168,7 +168,8 @@ and expr_arrow t : Expr.t =
       | expr -> expr, modes
     in
     with_loc ~loc:arg.loc (Arrow { arg; arg_id; arg_mode; ret; ret_mode })
-  | _ -> if Modes.Maybe.(equal arg_mode none) then arg else Fail.unexpected_modes ~loc arg_mode
+  | _ ->
+    if Modes.Maybe.(equal arg_mode none) then arg else Fail.unexpected_modes [%here] ~loc arg_mode
 
 and expr_comma t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
@@ -365,19 +366,6 @@ and parse_arg t : Expr.arg =
   expect t ~kind:Rparen;
   With_loc.create ~before ~loc Expr.{ var; mode; ty; after_open; after_mode; after_var }
 
-and require_args t : Expr.arg Nonempty_list.t =
-  let first = parse_arg t in
-  let rest = parse_args t in
-  Nonempty_list.create first rest
-
-and parse_args t : Expr.arg list =
-  let rec aux acc =
-    match Tokenizer.peek t.tokens with
-    | Lparen -> aux (parse_arg t :: acc)
-    | _ -> List.rev acc
-  in
-  aux []
-
 and parse_arm t : Expr.pattern * Expr.t =
   let loc, before = leading t in
   let id = expect_ident t in
@@ -432,23 +420,22 @@ and expr_primary t : Expr.t =
     | Fn ->
       let _, before_erased = leading t in
       let erased = maybe_erased t in
-      let args = require_args t in
-      let _, after_args = leading t in
+      let arg = parse_arg t in
+      let _, after_arg = leading t in
       expect_op t ~op:Arrow;
       let body = expr t in
-      Lambda { erased; args; body; before_erased; after_args }
+      Lambda { erased; arg; body; before_erased; after_arg }
     | Let ->
       let _, before_erased = leading t in
       let erased = maybe_erased t in
       let _, after_erased = leading t in
       let var = expect_ident t in
-      let args = parse_args t in
-      let _, after_args = leading t in
+      let _, after_var = leading t in
       expect t ~kind:Asn;
       let bind = expr t in
       expect t ~kind:In;
       let rest = expr t in
-      Let { var; erased; args; bind; rest; before_erased; after_erased; after_args }
+      Let { var; erased; bind; rest; before_erased; after_erased; after_var }
     | Lparen ->
       let exp = expr t in
       expect t ~kind:Rparen;
@@ -457,7 +444,7 @@ and expr_primary t : Expr.t =
     | Bool value -> Literal { value = Bool value }
     | Int value -> Literal { value = Int value }
     | Ident id -> Var { id = Ident.id id }
-    | tok -> Fail.unexpected ~loc tok
+    | tok -> Fail.unexpected [%here] ~loc tok
   in
   with_loc ~loc ~before:comments node
 
@@ -467,23 +454,26 @@ and expr_fun t : Expr.fun_ =
   let _, after_erased = leading t in
   let var =
     let name = expect t ~kind:Ident in
-    if String.equal name "_" then Fail.fun_underscore ~loc else Ident.id name
+    if String.equal name "_" then Fail.fun_underscore [%here] ~loc else Ident.id name
   in
-  let args = require_args t in
-  let _, after_args = leading t in
+  let arg = parse_arg t in
+  let _, after_arg = leading t in
   expect t ~kind:Colon;
   let ret_mode = maybe_modes ~required:false t in
   let ret_ty = expr t in
   expect t ~kind:Asn;
   let body = expr t in
-  With_loc.create ~before ~loc { Expr.var; erased; args; ret_mode; ret_ty; body; after_erased; after_args }
+  With_loc.create
+    ~before
+    ~loc
+    { Expr.var; erased; arg; ret_mode; ret_ty; body; after_erased; after_arg }
 
 and expr_funs ~loc t fs : Expr.fun_ Nonempty_list.t =
   let f = expr_fun t in
   match Tokenizer.next t.tokens with
   | And -> expr_funs ~loc t (f :: fs)
   | In -> Nonempty_list.reverse (f :: fs)
-  | tok -> Fail.unexpected ~loc tok
+  | tok -> Fail.unexpected [%here] ~loc tok
 ;;
 
 let rec top_level_funs ~loc t fs : Top_level.t =
@@ -492,7 +482,7 @@ let rec top_level_funs ~loc t fs : Top_level.t =
   | And -> top_level_funs ~loc t (f :: fs)
   | Double_semicolon ->
     With_loc.create ~loc (Top_level.Fun { funs = Nonempty_list.reverse (f :: fs) })
-  | tok -> Fail.unexpected ~loc tok
+  | tok -> Fail.unexpected [%here] ~loc tok
 ;;
 
 let top_level t : Top_level.t =
@@ -505,12 +495,13 @@ let top_level t : Top_level.t =
       let erased = maybe_erased t in
       let _, after_erased = leading t in
       let var = expect_ident t in
-      let args = parse_args t in
-      let _, after_args = leading t in
+      let _, after_var = leading t in
       expect t ~kind:Asn;
       let bind = expr t in
       expect t ~kind:Double_semicolon;
-      With_loc.create ~loc (Top_level.Let { var; erased; args; bind; before_erased; after_erased; after_args })
+      With_loc.create
+        ~loc
+        (Top_level.Let { var; erased; bind; before_erased; after_erased; after_var })
     | External ->
       let var = expect_ident t in
       expect t ~kind:Colon;
@@ -525,7 +516,7 @@ let top_level t : Top_level.t =
       let name = expect t ~kind:Ident in
       expect t ~kind:Double_semicolon;
       With_loc.create ~loc (Top_level.Builtin { var; name })
-    | tok -> Fail.unexpected ~loc tok
+    | tok -> Fail.unexpected [%here] ~loc tok
   in
   if List.is_empty comments then tl else { tl with before = comments }
 ;;
@@ -549,5 +540,5 @@ let parse_exn input : Program.t =
 let parse input =
   try Ok (parse_exn input) with
   | Error err -> Error err
-  | Lex.Unterminated_comment loc -> Error { loc; reason = Unterminated_comment }
+  | Lex.Unterminated_comment loc -> Error { loc; here = [%here]; reason = Unterminated_comment }
 ;;

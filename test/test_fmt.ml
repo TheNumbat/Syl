@@ -14,17 +14,12 @@ let fmt ?(width = 100) input =
     then (
       print_endline "\nROUND-TRIP FAILED";
       print_s [%message (s1 : Sexp.t) (s2 : Sexp.t)])
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Parse.Error.t)]
+  | Error { loc; reason; _ } -> print_s [%message (loc : Lex.Location.t) (reason : Parse.Error.t)]
 ;;
 
 let%expect_test "simple let" =
   fmt "let x = 42;;";
   [%expect {| let x = 42;; |}]
-;;
-
-let%expect_test "let with args" =
-  fmt "let add (x : int) (y : int) = x + y;;";
-  [%expect {| let add (x : int) (y : int) = x + y;; |}]
 ;;
 
 let%expect_test "fun" =
@@ -300,27 +295,22 @@ fun collatz (x : int) : int =
     |}]
 ;;
 
-let%expect_test "multi-arg fn" =
-  fmt "let _ = fn (x : int) (y : bool) -> x;;";
-  [%expect {| let _ = fn (x : int) (y : bool) -> x;; |}]
-;;
-
 let%expect_test "fn erased" =
   fmt "let _ = fn erased (x : int) -> x;;";
   [%expect {| let _ = fn erased (x : int) -> x;; |}]
 ;;
 
 let%expect_test "let erased" =
-  fmt "let erased f (x : int) = x;;";
-  [%expect {| let erased f (x : int) = x;; |}]
+  fmt "let erased f = fn (x : int) -> x;;";
+  [%expect {| let erased f = fn (x : int) -> x;; |}]
 ;;
 
-let%expect_test "modes on args" =
-  fmt "fun id (static erased t : type) (x : t) : t = x;;";
+let%expect_test "modes on arg" =
+  fmt "fun id (static erased t : type) : t -> t = fn (x : t) -> x;;";
   [%expect
     {|
-    fun id (static erased t : type) (x : t) : t =
-      x
+    fun id (static erased t : type) : t -> t =
+      fn (x : t) -> x
     ;;
     |}]
 ;;
@@ -451,22 +441,17 @@ let%expect_test "comment after last app arg" =
 
 (* Comment preservation on args, patterns, and funs *)
 
-let%expect_test "comment between fn args" =
-  fmt "let _ = fn (x : int) (* c *) (y : int) -> x + y;;";
-  [%expect {| let _ = fn (x : int) (* c *) (y : int) -> x + y;; |}]
+let%expect_test "comment after fn arg" =
+  fmt "let _ = fn (x : int) (* c *) -> x + 1;;";
+  [%expect {| let _ = fn (x : int) (* c *) -> x + 1;; |}]
 ;;
 
-let%expect_test "comment between let args" =
-  fmt "let f (x : int) (* c *) (y : int) = x + y;;";
-  [%expect {| let f (x : int) (* c *) (y : int) = x + y;; |}]
-;;
-
-let%expect_test "comment between fun args" =
-  fmt "fun f (x : int) (* c *) (y : int) : int = x + y;;";
+let%expect_test "comment after fun arg" =
+  fmt "fun f (x : int) (* c *) : int = x + 1;;";
   [%expect
     {|
-    fun f (x : int) (* c *) (y : int) : int =
-      x + y
+    fun f (x : int) (* c *) : int =
+      x + 1
     ;;
     |}]
 ;;
@@ -522,11 +507,6 @@ let%expect_test "comment before local mutual fun" =
     |}]
 ;;
 
-let%expect_test "comment in local let arg" =
-  fmt "let _ = let f (* c *) (x : int) = x in f 0;;";
-  [%expect {| let _ = let f (* c *) (x : int) = x in f 0;; |}]
-;;
-
 let%expect_test "comment before match pattern in static match" =
   fmt "let _ = match static x with | (* c *) a -> 1 | b -> 2;;";
   [%expect
@@ -562,36 +542,6 @@ let%expect_test "fn arg comment before type" =
 let%expect_test "fn arg comment after type" =
   fmt "let _ = fn (x : int (* c *)) -> x;;";
   [%expect {| let _ = fn (x : int (* c *)) -> x;; |}]
-;;
-
-let%expect_test "let arg comment before paren" =
-  fmt "let f (* c *) (x : int) = x;;";
-  [%expect {| let f (* c *) (x : int) = x;; |}]
-;;
-
-let%expect_test "let arg comment after mode" =
-  fmt "let f (static (* c *) x : int) = x;;";
-  [%expect {| let f (static (* c *) x : int) = x;; |}]
-;;
-
-let%expect_test "let arg comment before mode" =
-  fmt "let f ((* c *) static x : int) = x;;";
-  [%expect {| let f ((* c *) static x : int) = x;; |}]
-;;
-
-let%expect_test "let arg comment after ident" =
-  fmt "let f (x (* c *) : int) = x;;";
-  [%expect {| let f (x (* c *) : int) = x;; |}]
-;;
-
-let%expect_test "let arg comment before type" =
-  fmt "let f (x : (* c *) int) = x;;";
-  [%expect {| let f (x : (* c *) int) = x;; |}]
-;;
-
-let%expect_test "let arg comment after type" =
-  fmt "let f (x : int (* c *)) = x;;";
-  [%expect {| let f (x : int (* c *)) = x;; |}]
 ;;
 
 let%expect_test "fun arg comment before paren" =
@@ -763,11 +713,6 @@ let%expect_test "let expr: comment after var before equals" =
   [%expect {| let _ = let x (* c *) = 1 in x;; |}]
 ;;
 
-let%expect_test "let expr: comment after args before equals" =
-  fmt "let _ = let f (x : int) (* c *) = x in f 0;;";
-  [%expect {| let _ = let f (x : int) (* c *) = x in f 0;; |}]
-;;
-
 let%expect_test "fn: comment before erased" =
   fmt "let _ = fn (* c *) erased (x : int) -> x;;";
   [%expect {| let _ = fn (* c *) erased (x : int) -> x;; |}]
@@ -807,11 +752,6 @@ let%expect_test "assert: comment after static" =
 let%expect_test "top-level let: comment before erased" =
   fmt "let (* c *) erased x = 1;;";
   [%expect {| let (* c *) erased x = 1;; |}]
-;;
-
-let%expect_test "top-level let: comment after args before equals" =
-  fmt "let f (x : int) (* c *) = x;;";
-  [%expect {| let f (x : int) (* c *) = x;; |}]
 ;;
 
 (* Line-breaking tests *)
@@ -942,16 +882,14 @@ let%expect_test "lambda breaks body" =
     |}]
 ;;
 
-let%expect_test "lambda many args breaks" =
-  fmt ~width:30 "let _ = fn (x : int) (y : bool) (z : unit) -> x;;";
+let%expect_test "lambda long arg breaks" =
+  fmt ~width:25 "let _ = fn (some_long_name : int) -> some_long_name + 1;;";
   [%expect
     {|
     let _ =
       fn
-        (x : int)
-        (y : bool)
-        (z : unit) ->
-        x
+        (some_long_name : int) ->
+        some_long_name + 1
     ;;
     |}]
 ;;
@@ -966,15 +904,13 @@ let%expect_test "top-level let ;; on new line" =
     |}]
 ;;
 
-let%expect_test "fun many args breaks" =
-  fmt ~width:30 "fun f (a : int) (b : int) (c : int) : int = a + b + c;;";
+let%expect_test "fun long arg breaks" =
+  fmt ~width:30 "fun f (some_long_arg_name : int) : int = some_long_arg_name + 1;;";
   [%expect
     {|
     fun f
-      (a : int)
-      (b : int)
-      (c : int) : int =
-      a + b + c
+      (some_long_arg_name : int) : int =
+      some_long_arg_name + 1
     ;;
     |}]
 ;;
@@ -1216,18 +1152,6 @@ and odd (n : int) : bool = if n == 0 then false else even (n - 1);;
       if n == 0
       then false
       else even (n - 1)
-    ;;
-    |}]
-;;
-
-let%expect_test "let with args breaks" =
-  fmt ~width:25 "let add (x : int) (y : int) = x + y;;";
-  [%expect
-    {|
-    let add
-      (x : int)
-      (y : int) =
-      x + y
     ;;
     |}]
 ;;

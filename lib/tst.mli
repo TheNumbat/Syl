@@ -304,11 +304,6 @@ and Expr : sig
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-    | Erased of
-        { ty : Value.t
-        ; mode : Modes.t
-        ; loc : Lex.Location.t
-        }
   [@@deriving sexp]
 
   val free_vars : t -> Ident.Set.t

@@ -240,11 +240,6 @@ and expr =
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
-  | Erased of
-      { ty : value
-      ; mode : Modes.t
-      ; loc : Lex.Location.t
-      }
 [@@deriving sexp]
 
 let rec is_concrete_value : value -> _ = function
@@ -897,11 +892,6 @@ module Expr = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-    | Erased of
-        { ty : value
-        ; mode : Modes.t
-        ; loc : Lex.Location.t
-        }
   [@@deriving sexp]
 
   type nonrec fun_ = fun_ =
@@ -926,7 +916,7 @@ module Expr = struct
 
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
-    | Literal _ | Erased _ | Builtin _ -> Ident.Set.empty
+    | Literal _ | Builtin _ -> Ident.Set.empty
     | Var { id; _ } -> Ident.Set.singleton id
     | Symbol { fn; _ } -> free_vars fn
     | Tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
@@ -961,7 +951,6 @@ module Expr = struct
     | Var { ty; _ }
     | Lambda { ty; _ }
     | Binder { ty; _ }
-    | Erased { ty; _ }
     | Let { ty; _ }
     | Fun { ty; _ }
     | Symbol { ty; _ }
@@ -976,7 +965,6 @@ module Expr = struct
     | Var { mode; _ }
     | Lambda { mode; _ }
     | Binder { mode; _ }
-    | Erased { mode; _ }
     | Let { mode; _ }
     | Fun { mode; _ }
     | Symbol { mode; _ }
@@ -991,7 +979,6 @@ module Expr = struct
     | Var { loc; _ }
     | Lambda { loc; _ }
     | Binder { loc; _ }
-    | Erased { loc; _ }
     | Let { loc; _ }
     | Fun { loc; _ }
     | Symbol { loc; _ }
@@ -1009,7 +996,6 @@ module Expr = struct
     | Var t -> Var { t with ty; mode }
     | Lambda t -> Lambda { t with ty; mode }
     | Binder t -> Binder { t with ty; mode }
-    | Erased t -> Erased { t with ty; mode }
     | Let t -> Let { t with ty; mode }
     | Fun t -> Fun { t with ty; mode }
     | Symbol t -> Symbol { t with ty; mode }
@@ -1025,7 +1011,6 @@ module Expr = struct
     | Var t -> Var { t with ty }
     | Lambda t -> Lambda { t with ty }
     | Binder t -> Binder { t with ty }
-    | Erased t -> Erased { t with ty }
     | Let t -> Let { t with ty }
     | Fun t -> Fun { t with ty }
     | Symbol t -> Symbol { t with ty }
@@ -1041,7 +1026,6 @@ module Expr = struct
     | Var t -> Var { t with mode }
     | Lambda t -> Lambda { t with mode }
     | Binder t -> Binder { t with mode }
-    | Erased t -> Erased { t with mode }
     | Let t -> Let { t with mode }
     | Fun t -> Fun { t with mode }
     | Symbol t -> Symbol { t with mode }

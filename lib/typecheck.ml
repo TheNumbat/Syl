@@ -27,6 +27,7 @@ module Error = struct
     | Static_failure of Builtin.Error.t
     | Inline_self of Ident.t Nonempty_list.t
     | Recursion_limit of int
+    | Dynamic_erased
     | Unreachable_reached
   [@@deriving sexp]
 end
@@ -34,18 +35,42 @@ end
 exception Error of Error.t Loc.t [@@deriving sexp]
 
 module Fail = struct
-  let mode_mismatch ~loc got need = raise (Error { loc; reason = Mode_mismatch { got; need } })
-  let type_mismatch ~loc got need = raise (Error { loc; reason = Type_mismatch { got; need } })
-  let cannot_unify ~loc lhs rhs = raise (Error { loc; reason = Cannot_unify { lhs; rhs } })
-  let unbound_ident ~loc id = raise (Error { loc; reason = Unbound_ident id })
-  let recursion_limit ~loc limit = raise (Error { loc; reason = Recursion_limit limit })
-  let inline_self ~loc id = raise (Error { loc; reason = Inline_self id })
-  let static_external ~loc id sym = raise (Error { loc; reason = Static_external (id, sym) })
-  let unknown_builtin ~loc id name = raise (Error { loc; reason = Unknown_builtin (id, name) })
-  let static_failure ~loc err = raise (Error { loc; reason = Static_failure err })
-  let unreachable_reached ~loc = raise (Error { loc; reason = Unreachable_reached })
-  let expected_function ~loc fn arg = raise (Error { loc; reason = Expected_function { fn; arg } })
-  let redundant_patterns ~loc patterns = raise (Error { loc; reason = Redundant_patterns patterns })
+  let mode_mismatch ~loc here got need =
+    raise (Error { loc; here; reason = Mode_mismatch { got; need } })
+  ;;
+
+  let type_mismatch ~loc here got need =
+    raise (Error { loc; here; reason = Type_mismatch { got; need } })
+  ;;
+
+  let cannot_unify ~loc here lhs rhs =
+    raise (Error { loc; here; reason = Cannot_unify { lhs; rhs } })
+  ;;
+
+  let unbound_ident ~loc here id = raise (Error { loc; here; reason = Unbound_ident id })
+  let recursion_limit ~loc here limit = raise (Error { loc; here; reason = Recursion_limit limit })
+  let inline_self ~loc here id = raise (Error { loc; here; reason = Inline_self id })
+
+  let static_external ~loc here id name =
+    raise (Error { loc; here; reason = Static_external (id, name) })
+  ;;
+
+  let unknown_builtin ~loc here id name =
+    raise (Error { loc; here; reason = Unknown_builtin (id, name) })
+  ;;
+
+  let static_failure ~loc here err = raise (Error { loc; here; reason = Static_failure err })
+  let unreachable_reached ~loc here = raise (Error { loc; here; reason = Unreachable_reached })
+
+  let expected_function ~loc here fn arg =
+    raise (Error { loc; here; reason = Expected_function { fn; arg } })
+  ;;
+
+  let redundant_patterns ~loc here patterns =
+    raise (Error { loc; here; reason = Redundant_patterns patterns })
+  ;;
+
+  let dynamic_erased ~loc here = raise (Error { loc; here; reason = Dynamic_erased })
 
   let unreachable here ~loc =
     Lazy.from_fun (fun () ->
@@ -69,7 +94,7 @@ module State = struct
 
   let recur ~loc t ~f =
     if t.depth > recursion_limit
-    then Fail.recursion_limit ~loc recursion_limit
+    then Fail.recursion_limit [%here] ~loc recursion_limit
     else (
       t.depth <- t.depth + 1;
       Exn.protect ~f ~finally:(fun () -> t.depth <- t.depth - 1))
@@ -120,29 +145,47 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
 
 let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
   let expr : Expr.t =
-    if Modes.is_unerased src_mode && not (Modes.is_unerased dst_mode)
-    then (
-      let loc = Expr.loc expr in
-      if Modes.is_static dst_mode
-      then Literal { value = Lazy.force static; ty = src_ty; mode = src_mode; loc }
-      else Erased { ty = src_ty; mode = src_mode; loc })
+    if (not (Modes.is_erased src_mode)) && Modes.is_erased dst_mode
+    then Literal { value = Lazy.force static; ty = src_ty; mode = src_mode; loc = Expr.loc expr }
     else expr
   in
   let static =
-    if Modes.is_static src_mode && not (Modes.is_static dst_mode)
+    if (not (Modes.is_dynamic src_mode)) && Modes.is_dynamic dst_mode
     then Fail.unreachable [%here] ~loc
     else static
   in
   Expr.with_ expr ~ty:dst_ty ~mode:dst_mode, { Desc.ty = dst_ty; mode = dst_mode; static }
 ;;
 
-let require_mode ~loc src dst = if not (Modes.leq src dst) then Fail.mode_mismatch ~loc src dst
+let resolve_body_mode arg_mode (body_desc : Desc.t) =
+  let mode =
+    if not (Modes.is_dynamic arg_mode)
+    then { body_desc.mode with staticity = Modes.Staticity.resolve body_desc.mode.staticity }
+    else body_desc.mode
+  in
+  { body_desc with mode }
+;;
 
-let require_dynamic_arrow ~loc var sym (ty : Value.t) =
-  match ty with
-  | Type (Arrow { arg_mode; ret_mode; _ } | Pi { arg_mode; ret_mode; _ }) ->
-    if Modes.is_static arg_mode || Modes.is_static ret_mode then Fail.static_external ~loc var sym
-  | _ -> Fail.static_external ~loc var sym
+let require_mode ~loc src dst =
+  if not (Modes.leq src dst) then Fail.mode_mismatch [%here] ~loc src dst
+;;
+
+let require_mode_annotation ~loc src annot =
+  let annot =
+    if Modes.Maybe.is_erased annot
+    then (
+      if Modes.Maybe.is_dynamic annot then Fail.dynamic_erased [%here] ~loc;
+      { annot with staticity = Some Static })
+    else annot
+  in
+  let annot =
+    if Modes.Maybe.is_dynamic annot
+    then (
+      if Modes.Maybe.is_erased annot then Fail.dynamic_erased [%here] ~loc;
+      { annot with erasure = Some Unerased })
+    else annot
+  in
+  Modes.annotate src annot
 ;;
 
 let require_static ~loc (desc : Desc.t) =
@@ -154,13 +197,21 @@ let require_unerased ~loc (desc : Desc.t) =
 ;;
 
 let require_not_dynamic_erased ~loc (desc : Desc.t) =
-  if not (Modes.is_static desc.mode) then require_unerased ~loc desc
+  if Modes.is_dynamic desc.mode then require_unerased ~loc desc
+;;
+
+let require_dynamic_arrow ~loc var sym (ty : Value.t) =
+  match ty with
+  | Type (Arrow { arg_mode; ret_mode; _ } | Pi { arg_mode; ret_mode; _ }) ->
+    if Modes.is_static arg_mode || Modes.is_static ret_mode
+    then Fail.static_external [%here] ~loc var sym
+  | _ -> Fail.static_external [%here] ~loc var sym
 ;;
 
 let require_var ~loc env id =
   match Env.find env id with
   | Some value -> value
-  | None -> Fail.unbound_ident ~loc id
+  | None -> Fail.unbound_ident [%here] ~loc id
 ;;
 
 let inline ~loc ~(env : Env.t) ~arg_id ~arg ~arg_mode body =
@@ -173,10 +224,8 @@ let inline ~loc ~(env : Env.t) ~arg_id ~arg ~arg_mode body =
     else Expr.Let { var = arg_id; bind = arg; rest = body; ty; mode; loc }
   in
   Set.fold fvs ~init:body ~f:(fun acc id ->
-    (* TODO allow inlining with dynamics if they're in scope at the call site *)
     match Map.find env id with
     | Some (desc : Desc.t) when not (Modes.is_erased desc.mode) ->
-      require_static ~loc desc;
       (try
          let value = Lazy.force desc.static in
          let bind = Expr.Literal { value; ty = desc.ty; mode = desc.mode; loc } in
@@ -194,12 +243,12 @@ let rebind_if_var env (expr : Expr.t) value =
 ;;
 
 let rec require_leq state ~loc src dst =
-  if not (leq_value state src dst) then Fail.type_mismatch ~loc src dst
+  if not (leq_value state src dst) then Fail.type_mismatch [%here] ~loc src dst
 
 and require_join state ~loc ty1 ty2 =
   match join_value state ty1 ty2 with
   | Some ty -> ty
-  | None -> Fail.cannot_unify ~loc ty1 ty2
+  | None -> Fail.cannot_unify [%here] ~loc ty1 ty2
 
 and require_static_type ~loc state (desc : Desc.t) =
   require_static ~loc desc;
@@ -703,11 +752,10 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     Builtin { builtin; ty = desc.ty; mode = desc.mode; loc }, desc
   | Var { id; loc } ->
     let desc = require_var ~loc env id in
-    (match desc.mode.staticity, desc.mode.erasure with
-     | Static, Erased ->
+    (match desc.mode.erasure with
+     | Erased ->
        Literal { value = Lazy.force desc.static; ty = desc.ty; mode = desc.mode; loc }, desc
-     | (Dynamic | Parametric), Erased -> Erased { ty = desc.ty; mode = desc.mode; loc }, desc
-     | _ -> Var { id; ty = desc.ty; mode = desc.mode; loc }, desc)
+     | Unerased -> Var { id; ty = desc.ty; mode = desc.mode; loc }, desc)
   | Let { var; bind; rest; loc } ->
     let bind, bind_desc = typecheck state env bind in
     let env = Env.bind env var bind_desc in
@@ -736,7 +784,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
   | Mode_annotation { expr; mode; loc } ->
     let expr, desc = typecheck state env expr in
-    let mode = Modes.annotate desc.mode mode in
+    let mode = require_mode_annotation ~loc desc.mode mode in
     require_mode ~loc desc.mode mode;
     weaken ~loc expr desc ~ty:desc.ty ~mode
   | Type_annotation { expr; ty; loc } ->
@@ -747,7 +795,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     weaken ~loc expr desc ~ty ~mode:desc.mode
   | Unreachable { loc } ->
     if State.concrete state
-    then Fail.unreachable_reached ~loc
+    then Fail.unreachable_reached [%here] ~loc
     else (
       let mode = Modes.bottom () in
       let ty = Value.Bottom in
@@ -769,8 +817,8 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
 
 and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode : Value.t =
   let arg_desc = reduce state env arg_ty in
-  let arg_mode = Modes.annotate (Modes.default ()) arg_mode in
-  let ret_mode = Modes.annotate (Modes.default ()) ret_mode in
+  let arg_mode = require_mode_annotation ~loc (Modes.default ()) arg_mode in
+  let ret_mode = require_mode_annotation ~loc (Modes.default ()) ret_mode in
   let arg_ty = require_static_type state ~loc arg_desc in
   match arg_mode.staticity with
   | Dynamic | Parametric ->
@@ -829,10 +877,8 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
             in
             { ty; mode = fun_mode; static }
           | Type (Arrow { arg_ty; ret_ty; ret_mode; _ }) ->
-            let is_unannotated = Option.is_none arg_mode.staticity in
-            let arg_mode = Modes.annotate (Modes.default ()) arg_mode in
             let arg_mode =
-              if is_unannotated then { arg_mode with staticity = Parametric } else arg_mode
+              require_mode_annotation ~loc (Modes.default ~staticity:Parametric ()) arg_mode
             in
             let fun_mode = Modes.return fun_mode ~ret:ret_mode in
             let static =
@@ -846,15 +892,9 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
                   in
                   typecheck state env body_dst
                 in
-                let body_mode =
-                  if is_unannotated
-                  then
-                    { body_desc.mode with
-                      staticity = Modes.Staticity.resolve body_desc.mode.staticity
-                    }
-                  else body_desc.mode
-                in
-                require_mode ~loc body_mode ret_mode;
+                if Modes.is_erased ret_mode then require_static ~loc body_desc;
+                let body_desc = resolve_body_mode arg_mode body_desc in
+                require_mode ~loc body_desc.mode ret_mode;
                 require_leq state ~loc body_desc.ty ret_ty;
                 Value.Closure { arg; ty; body; body_dst; env = !env_rec })
             in
@@ -880,20 +920,22 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
             Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
           in
           let body_desc = reduce state env body in
+          if Modes.is_erased ret_mode then require_static ~loc body_desc;
+          let body_desc = resolve_body_mode arg_mode body_desc in
           require_mode ~loc body_desc.mode ret_mode;
           require_leq state ~loc body_desc.ty (eval state ret_ty arg_val);
           Binder { var; arg; body; mono; ty; mode; loc }
         | _ -> raise_s [%message "Bug: expected function type"]
       with
-      | Lazy.Undefined -> Fail.inline_self ~loc (Nonempty_list.map funs ~f:(fun { var; _ } -> var)))
+      | Lazy.Undefined ->
+        Fail.inline_self [%here] ~loc (Nonempty_list.map funs ~f:(fun { var; _ } -> var)))
   in
   funs, env
 
 and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
   let arg_ty_desc = reduce state env arg_ty in
   let arg_ty = require_static_type state ~loc arg_ty_desc in
-  let arg_static = arg_mode.staticity in
-  let arg_mode = Modes.annotate (Modes.default ()) arg_mode in
+  let arg_mode = require_mode_annotation ~loc (Modes.default ~staticity:Parametric ()) arg_mode in
   let fn_mode =
     Set.remove (Dst.Expr.free_vars body_dst) arg
     |> Set.fold ~init:(Modes.bottom ()) ~f:(fun acc id ->
@@ -901,27 +943,23 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
       | Some desc -> Modes.capture acc ~fv:desc.mode
       | None -> acc)
   in
-  match arg_static with
-  | Some (Dynamic | Parametric) | None ->
-    let is_unannotated = Option.is_none arg_static in
-    let arg_mode = if is_unannotated then { arg_mode with staticity = Parametric } else arg_mode in
+  match arg_mode.staticity with
+  | Dynamic | Parametric ->
     let body, body_desc =
       let env =
         Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Fail.unreachable [%here] ~loc }
       in
       typecheck state env body_dst
     in
+    let body_desc = resolve_body_mode arg_mode body_desc in
     let arg_mode = { arg_mode with staticity = Dynamic } in
-    let ret_mode =
-      if is_unannotated
-      then { body_desc.mode with staticity = Modes.Staticity.resolve body_desc.mode.staticity }
-      else body_desc.mode
+    let ty =
+      Value.Type (Arrow { arg_ty; arg_mode; ret_ty = body_desc.ty; ret_mode = body_desc.mode })
     in
-    let ty = Value.Type (Arrow { arg_ty; arg_mode; ret_ty = body_desc.ty; ret_mode }) in
     let fn_mode = Modes.return fn_mode ~ret:body_desc.mode in
     let static = Lazy.from_val (Value.Closure { arg; ty; body; body_dst; env }) in
     Expr.Lambda { arg; ty; body; mode = fn_mode; loc }, { Desc.ty; mode = fn_mode; static }
-  | Some Static ->
+  | Static ->
     let body_desc =
       let env =
         Env.bind
@@ -931,12 +969,10 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
       in
       reduce state env body_dst
     in
-    let ret_mode =
-      { body_desc.mode with staticity = Modes.Staticity.resolve body_desc.mode.staticity }
-    in
+    let body_desc = resolve_body_mode arg_mode body_desc in
     let ty =
       let ret_ty = Dependent.typecheck body_desc.ty ~env ~arg ~arg_ty ~arg_mode ~body:body_dst in
-      Value.Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode })
+      Value.Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode = body_desc.mode })
     in
     let fn_mode = Modes.return fn_mode ~ret:body_desc.mode in
     let mono = Hashtbl.create (module Value.Concrete) in
@@ -982,16 +1018,23 @@ and typecheck_apply state env ~fn ~arg ~loc =
             ( Symbol { fn; key = arg_concrete; ty = body_desc.ty; mode = body_desc.mode; loc }
             , body_desc )
         | None ->
+          let static =
+            if Modes.is_static ret_mode
+            then Lazy.from_val (Value.reduce (Apply { fn = Binder binder; arg = arg_val }))
+            else Fail.unreachable [%here] ~loc
+          in
           ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-          , { ty = ret_ty
-            ; mode = ret_mode
-            ; static = Lazy.from_val (Value.Apply { fn = Binder binder; arg = arg_val })
-            } ))
+          , { ty = ret_ty; mode = ret_mode; static } ))
      | Closure closure ->
        let static =
          if Modes.is_static ret_mode
          then (
-           let env = Env.bind closure.env closure.arg arg_desc in
+           let env =
+             Env.bind
+               closure.env
+               closure.arg
+               { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
+           in
            let desc = reduce state env closure.body_dst in
            desc.static)
          else Fail.unreachable [%here] ~loc
@@ -999,12 +1042,10 @@ and typecheck_apply state env ~fn ~arg ~loc =
        if Modes.is_erased fn_desc.mode
        then (
          let body, body_desc =
-           weaken
-             ~loc
-             closure.body
-             { ty = Expr.ty closure.body; mode = Expr.mode closure.body; static }
-             ~ty:ret_ty
-             ~mode:ret_mode
+           let body_desc =
+             { Desc.ty = Expr.ty closure.body; mode = Expr.mode closure.body; static }
+           in
+           weaken ~loc closure.body body_desc ~ty:ret_ty ~mode:ret_mode
          in
          let body = inline ~loc ~env:closure.env ~arg_id:closure.arg ~arg ~arg_mode body in
          body, body_desc)
@@ -1013,9 +1054,12 @@ and typecheck_apply state env ~fn ~arg ~loc =
          , { ty = ret_ty; mode = ret_mode; static } )
      | Prim prim ->
        let static =
-         Lazy.from_fun (fun () ->
-           try Builtin.eval prim arg_val with
-           | Builtin.Error err -> Fail.static_failure ~loc err)
+         if Modes.is_static ret_mode
+         then
+           Lazy.from_fun (fun () ->
+             try Builtin.eval prim arg_val with
+             | Builtin.Error err -> Fail.static_failure [%here] ~loc err)
+         else Fail.unreachable [%here] ~loc
        in
        let desc = { Desc.ty = ret_ty; mode = ret_mode; static } in
        if Modes.is_erased fn_desc.mode
@@ -1025,9 +1069,8 @@ and typecheck_apply state env ~fn ~arg ~loc =
        let static =
          if Modes.is_static ret_mode
          then (
-           let%map fn = fn_desc.static
-           and arg = arg_desc.static in
-           Value.reduce (Apply { fn; arg }))
+           let%map fn = fn_desc.static in
+           Value.reduce (Apply { fn; arg = arg_val }))
          else Fail.unreachable [%here] ~loc
        in
        ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
@@ -1053,25 +1096,22 @@ and typecheck_apply state env ~fn ~arg ~loc =
         | Prim prim ->
           Lazy.map arg_desc.static ~f:(fun arg ->
             try Builtin.eval prim arg with
-            | Builtin.Error err -> Fail.static_failure ~loc err)
+            | Builtin.Error err -> Fail.static_failure [%here] ~loc err)
         | _ -> Lazy.map arg_desc.static ~f:(fun arg -> Value.reduce (Apply { fn; arg })))
       else Fail.unreachable [%here] ~loc
     in
     if Modes.is_erased fn_desc.mode
     then (
-      require_static ~loc fn_desc;
       match Lazy.force fn_desc.static with
       | Closure closure ->
         let body, body_desc =
-          weaken
-            ~loc
-            closure.body
-            { ty = ret_ty; mode = ret_mode; static }
-            ~ty:ret_ty
-            ~mode:ret_mode
+          let body_desc =
+            { Desc.ty = Expr.ty closure.body; mode = Expr.mode closure.body; static }
+          in
+          weaken ~loc closure.body body_desc ~ty:ret_ty ~mode:ret_mode
         in
         let body = inline ~loc ~env:closure.env ~arg_id:closure.arg ~arg ~arg_mode body in
-        body, { body_desc with mode = ret_mode }
+        body, body_desc
       | Prim _ ->
         (* If we have inlined prims, they need to be implemented here. *)
         raise_s [%message "Bug: TODO"]
@@ -1081,7 +1121,7 @@ and typecheck_apply state env ~fn ~arg ~loc =
     else (
       let desc = { Desc.ty = ret_ty; mode = ret_mode; static } in
       Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }, desc)
-  | _ -> Fail.expected_function ~loc fn_desc.ty arg_desc.ty
+  | _ -> Fail.expected_function [%here] ~loc fn_desc.ty arg_desc.ty
 
 and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
   let open Lazy.Let_syntax in
@@ -1144,7 +1184,7 @@ and match_redundant ~loc arms =
   | 1 -> ()
   | _ ->
     let patterns = Nonempty_list.map arms ~f:(fun (pattern, _) -> pattern) in
-    Fail.redundant_patterns ~loc patterns
+    Fail.redundant_patterns [%here] ~loc patterns
 
 and typecheck_match state env ~cond ~arms ~static ~loc =
   let cond, cond_desc = typecheck state env cond in
@@ -1187,7 +1227,7 @@ let typecheck_top_level state env (dst : Dst.Top_level.t) : Top_level.t * Env.t 
     let builtin =
       match Builtin.find name with
       | Some builtin -> builtin
-      | None -> Fail.unknown_builtin ~loc var name
+      | None -> Fail.unknown_builtin [%here] ~loc var name
     in
     let desc = Builtin.desc builtin in
     Builtin { var; builtin; ty = desc.ty; loc }, Env.bind env var desc

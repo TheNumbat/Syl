@@ -42,12 +42,12 @@ module Expr : sig
   and fun_node =
     { var : Ident.Raw.t
     ; erased : Modes.Erasure.t
-    ; args : arg Nonempty_list.t
+    ; arg : arg
     ; ret_mode : Modes.Maybe.t
     ; ret_ty : t
     ; body : t
     ; after_erased : Lex.Comment.t list
-    ; after_args : Lex.Comment.t list
+    ; after_arg : Lex.Comment.t list
     }
 
   and node =
@@ -67,12 +67,11 @@ module Expr : sig
     | Let of
         { var : Ident.Raw.t
         ; erased : Modes.Erasure.t
-        ; args : arg list
         ; bind : t
         ; rest : t
         ; before_erased : Lex.Comment.t list
         ; after_erased : Lex.Comment.t list
-        ; after_args : Lex.Comment.t list
+        ; after_var : Lex.Comment.t list
         }
     | Fun of
         { funs : fun_ Nonempty_list.t
@@ -80,10 +79,10 @@ module Expr : sig
         }
     | Lambda of
         { erased : Modes.Erasure.t
-        ; args : arg Nonempty_list.t
+        ; arg : arg
         ; body : t
         ; before_erased : Lex.Comment.t list
-        ; after_args : Lex.Comment.t list
+        ; after_arg : Lex.Comment.t list
         }
     | Apply of
         { fn : t
@@ -139,11 +138,10 @@ module Top_level : sig
     | Let of
         { var : Ident.Raw.t
         ; erased : Modes.Erasure.t
-        ; args : Expr.arg list
         ; bind : Expr.t
         ; before_erased : Lex.Comment.t list
         ; after_erased : Lex.Comment.t list
-        ; after_args : Lex.Comment.t list
+        ; after_var : Lex.Comment.t list
         }
     | Fun of { funs : Expr.fun_ Nonempty_list.t }
     | External of

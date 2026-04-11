@@ -6,7 +6,13 @@ let go ?(print = false) input =
   let dst = Desugar.desugar cst in
   match Typecheck.typecheck dst with
   | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; reason } -> print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
+  | Error { loc; here; reason } ->
+    if print
+    then
+      print_s
+        [%message
+          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
+    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
 ;;
 
 let%expect_test "is type" =
@@ -192,14 +198,14 @@ let%expect_test "abstract tuple type get" =
   go
     {|
 builtin get = syl_type_tuple_get;;
-let get (static erased t : type) (static erased idx : int) = get (t, idx);;
+let get = fn (static erased t : type) -> fn (static erased idx : int) -> get (t, idx);;
 let get = get (int ^ bool);;
 let _ = 0 : get 0;;
 let _ = true : get 1;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 61)))
+    ((loc ((line 3) (column 73)))
      (reason (Static_failure (Expected_tuple (Var (Anon <opaque>))))))
     |}]
 ;;
