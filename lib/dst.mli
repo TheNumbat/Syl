@@ -19,6 +19,19 @@ module Expr : sig
         { id : Ident.t
         ; loc : Lex.Location.t
         }
+    | Literal of
+        { value : Literal.t
+        ; loc : Lex.Location.t
+        }
+    | Tuple of
+        { elts : pattern Nonempty_list.t
+        ; loc : Lex.Location.t
+        }
+    | Or of
+        { left : pattern
+        ; right : pattern
+        ; loc : Lex.Location.t
+        }
 
   and t =
     | If of
@@ -74,11 +87,11 @@ module Expr : sig
         ; loc : Lex.Location.t
         }
     | Tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
         }
     | Make_tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
         }
     | Builtin of

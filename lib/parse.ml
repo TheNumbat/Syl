@@ -182,10 +182,10 @@ and expr_comma t : Expr.t =
       | Op Comma ->
         Tokenizer.skip t.tokens;
         let e = expr_caret t in
-        aux (trailing t e :: acc)
-      | _ -> List.rev acc
+        aux (Nonempty_list.cons (trailing t e) acc)
+      | _ -> Nonempty_list.reverse acc
     in
-    with_loc ~loc (Make_tuple { elts = aux [ first ] })
+    with_loc ~loc (Make_tuple { elts = aux (Nonempty_list.singleton first) })
   | _ -> first
 
 and expr_caret t : Expr.t =
@@ -199,10 +199,10 @@ and expr_caret t : Expr.t =
       | Op Caret ->
         Tokenizer.skip t.tokens;
         let e = expr_lor t in
-        aux (trailing t e :: acc)
-      | _ -> List.rev acc
+        aux (Nonempty_list.cons (trailing t e) acc)
+      | _ -> Nonempty_list.reverse acc
     in
-    with_loc ~loc (Tuple { elts = aux [ first ] })
+    with_loc ~loc (Tuple { elts = aux (Nonempty_list.singleton first) })
   | _ -> first
 
 and expr_lor t : Expr.t =
@@ -353,40 +353,6 @@ and expr_lnot t : Expr.t =
     let expr = expr_primary t in
     if List.is_empty comments then expr else { expr with before = comments @ expr.before }
 
-and parse_arg t : Expr.arg =
-  let loc, before = leading t in
-  expect t ~kind:Lparen;
-  let _, after_open = leading t in
-  let mode = maybe_modes ~required:false t in
-  let _, after_mode = leading t in
-  let var = expect_ident t in
-  let _, after_var = leading t in
-  expect t ~kind:Colon;
-  let ty = expr t in
-  expect t ~kind:Rparen;
-  With_loc.create ~before ~loc Expr.{ var; mode; ty; after_open; after_mode; after_var }
-
-and parse_arm t : Expr.pattern * Expr.t =
-  let loc, before = leading t in
-  let id = expect_ident t in
-  let _, after = leading t in
-  expect_op t ~op:Arrow;
-  let rhs = expr t in
-  let pat : Expr.pattern_node = Var { id } in
-  With_loc.create ~before ~after ~loc pat, rhs
-
-and parse_arms t : (Expr.pattern * Expr.t) Nonempty_list.t =
-  expect t ~kind:Pipe;
-  let first = parse_arm t in
-  let rec aux acc =
-    match Tokenizer.peek t.tokens with
-    | Pipe ->
-      Tokenizer.skip t.tokens;
-      aux (parse_arm t :: acc)
-    | _ -> Nonempty_list.of_list_exn (List.rev acc)
-  in
-  aux [ first ]
-
 and expr_primary t : Expr.t =
   let loc, comments = leading t in
   let node =
@@ -402,7 +368,7 @@ and expr_primary t : Expr.t =
       let static = maybe_static t in
       let cond = expr t in
       expect t ~kind:With;
-      let arms = parse_arms t in
+      let arms = match_arms t in
       Match { cond; arms; static; before_static }
     | If ->
       let _, before_static = leading t in
@@ -474,6 +440,83 @@ and expr_funs ~loc t fs : Expr.fun_ Nonempty_list.t =
   | And -> expr_funs ~loc t (f :: fs)
   | In -> Nonempty_list.reverse (f :: fs)
   | tok -> Fail.unexpected [%here] ~loc tok
+
+and parse_arg t : Expr.arg =
+  let loc, before = leading t in
+  expect t ~kind:Lparen;
+  let _, after_open = leading t in
+  let mode = maybe_modes ~required:false t in
+  let _, after_mode = leading t in
+  let var = expect_ident t in
+  let _, after_var = leading t in
+  expect t ~kind:Colon;
+  let ty = expr t in
+  expect t ~kind:Rparen;
+  With_loc.create ~before ~loc Expr.{ var; mode; ty; after_open; after_mode; after_var }
+
+and pattern_atom t : Expr.pattern =
+  let loc, before = leading t in
+  let node : Expr.pattern_node =
+    match Tokenizer.next t.tokens with
+    | Unit -> Literal { value = Unit }
+    | Bool value -> Literal { value = Bool value }
+    | Int value -> Literal { value = Int value }
+    | Ident id -> Var { id = Ident.id id }
+    | Lparen ->
+      let inner = parse_pattern t in
+      expect t ~kind:Rparen;
+      inner.node
+    | tok -> Fail.unexpected [%here] ~loc tok
+  in
+  With_loc.create ~before ~loc node
+
+and pattern_tuple t : Expr.pattern =
+  let first = pattern_atom t in
+  match Tokenizer.peek t.tokens with
+  | Op Comma ->
+    let rec aux acc =
+      match Tokenizer.peek t.tokens with
+      | Op Comma ->
+        Tokenizer.skip t.tokens;
+        aux (Nonempty_list.cons (pattern_atom t) acc)
+      | _ -> Nonempty_list.reverse acc
+    in
+    let elts = aux (Nonempty_list.singleton first) in
+    let node : Expr.pattern_node = Tuple { elts } in
+    With_loc.create ~loc:first.loc node
+  | _ -> first
+
+and parse_pattern t : Expr.pattern =
+  let first = pattern_tuple t in
+  let rec aux left =
+    match Tokenizer.peek t.tokens with
+    | Pipe ->
+      Tokenizer.skip t.tokens;
+      let right = pattern_tuple t in
+      let node : Expr.pattern_node = Or { left; right } in
+      aux (With_loc.create ~loc:first.loc node)
+    | _ -> left
+  in
+  aux first
+
+and match_arm t : Expr.pattern * Expr.t =
+  let pat = parse_pattern t in
+  let _, after = leading t in
+  expect_op t ~op:Arrow;
+  let rhs = expr t in
+  { pat with after = pat.after @ after }, rhs
+
+and match_arms t : (Expr.pattern * Expr.t) Nonempty_list.t =
+  expect t ~kind:Pipe;
+  let first = match_arm t in
+  let rec aux acc =
+    match Tokenizer.peek t.tokens with
+    | Pipe ->
+      Tokenizer.skip t.tokens;
+      aux (match_arm t :: acc)
+    | _ -> Nonempty_list.of_list_exn (List.rev acc)
+  in
+  aux [ first ]
 ;;
 
 let rec top_level_funs ~loc t fs : Top_level.t =

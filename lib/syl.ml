@@ -10,6 +10,7 @@ module Loc = Loc
 module Lex = Lex
 module Parse = Parse
 module Desugar = Desugar
+module Match = Match
 module Typecheck = Typecheck
 module Simplify = Simplify
 module Linearize = Linearize

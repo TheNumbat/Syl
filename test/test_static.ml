@@ -115,7 +115,7 @@ let _ = assert static (f 0 == 0);;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8))) (here lib/typecheck.ml:170:53)
+    ((loc ((line 3) (column 8))) (here lib/typecheck.ml:197:53)
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))

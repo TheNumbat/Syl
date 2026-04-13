@@ -33,7 +33,7 @@ module Ty = struct
         ; ret_ty : t
         }
     | Thunk of t
-    | Tuple of t list
+    | Tuple of t Nonempty_list.t
     | Pack of ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
   [@@deriving sexp]
 
@@ -50,7 +50,7 @@ module Ty = struct
     | Closure _ -> 16
     | Thunk _ -> 16
     | Tuple elts ->
-      List.fold elts ~init:0 ~f:(fun acc elt ->
+      Nonempty_list.fold elts ~init:0 ~f:(fun acc elt ->
         match size_in_mem elt with
         | 0 -> acc
         | size ->
@@ -65,7 +65,7 @@ module Ty = struct
     | Closure _ -> 8
     | Thunk _ -> 8
     | Tuple elts ->
-      List.fold elts ~init:1 ~f:(fun acc elt ->
+      Nonempty_list.fold elts ~init:1 ~f:(fun acc elt ->
         match size_in_mem elt with
         | 0 -> acc
         | _ -> Int.max acc (align_in_mem elt))
@@ -131,6 +131,12 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Tuple_get of
+        { tuple : Path.t
+        ; index : int
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   let ty = function
@@ -140,7 +146,8 @@ module Expr = struct
     | Apply_thunk { ty; _ }
     | Scalar { ty; _ }
     | Make_tuple { ty; _ }
-    | Ident { ty; _ } -> ty
+    | Ident { ty; _ }
+    | Tuple_get { ty; _ } -> ty
   ;;
 
   let with_ty t ty =
@@ -152,6 +159,7 @@ module Expr = struct
     | Scalar expr -> Scalar { expr with ty }
     | Make_tuple expr -> Make_tuple { expr with ty }
     | Ident expr -> Ident { expr with ty }
+    | Tuple_get expr -> Tuple_get { expr with ty }
   ;;
 end
 

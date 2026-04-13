@@ -3,12 +3,20 @@ open Tst
 open Option.Let_syntax
 
 module Error = struct
+  module Match = struct
+    type t =
+      | Multiple_bindings of Ident.t
+      | Expected_tuple of Value.t
+      | Redundant of Dst.Expr.pattern Nonempty_list.t
+      | Non_exhaustive of Match.Result.Missing.t Nonempty_list.t
+    [@@deriving sexp]
+  end
+
   type t =
     | Unbound_ident of Ident.t
-    | Unknown_builtin of Ident.t * string
     | Mode_mismatch of
         { got : Modes.t
-        ; need : Modes.t (* TODO why *)
+        ; need : Modes.t
         }
     | Type_mismatch of
         { got : Value.t
@@ -22,7 +30,8 @@ module Error = struct
         { lhs : Value.t
         ; rhs : Value.t
         }
-    | Redundant_patterns of Dst.Expr.pattern Nonempty_list.t
+    | Match of Match.t
+    | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
     | Static_failure of Builtin.Error.t
     | Inline_self of Ident.t Nonempty_list.t
@@ -35,6 +44,24 @@ end
 exception Error of Error.t Loc.t [@@deriving sexp]
 
 module Fail = struct
+  module Match = struct
+    let multiple_bindings ~loc here id =
+      raise (Error { loc; here; reason = Match (Multiple_bindings id) })
+    ;;
+
+    let redundant ~loc here patterns =
+      raise (Error { loc; here; reason = Match (Redundant patterns) })
+    ;;
+
+    let expected_tuple ~loc here got =
+      raise (Error { loc; here; reason = Match (Expected_tuple got) })
+    ;;
+
+    let non_exhaustive ~loc here missing =
+      raise (Error { loc; here; reason = Match (Non_exhaustive missing) })
+    ;;
+  end
+
   let mode_mismatch ~loc here got need =
     raise (Error { loc; here; reason = Mode_mismatch { got; need } })
   ;;
@@ -64,10 +91,6 @@ module Fail = struct
 
   let expected_function ~loc here fn arg =
     raise (Error { loc; here; reason = Expected_function { fn; arg } })
-  ;;
-
-  let redundant_patterns ~loc here patterns =
-    raise (Error { loc; here; reason = Redundant_patterns patterns })
   ;;
 
   let dynamic_erased ~loc here = raise (Error { loc; here; reason = Dynamic_erased })
@@ -125,8 +148,10 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
   | Bool (T b) -> Some (Bool b)
   | Int (T i) -> Some (Int i)
   | Tuple elts ->
-    let elts = List.map elts ~f:(concrete state) in
-    Option.map (Option.all elts) ~f:(fun elts -> Value.Concrete.Tuple elts)
+    Nonempty_list.map elts ~f:(concrete state)
+    |> Nonempty_list.to_list
+    |> Option.all
+    |> Option.map ~f:(fun elts -> Value.Concrete.Tuple (Nonempty_list.of_list_exn elts))
   | Closure _ | Binder _ | Prim _ -> Some (Closure (State.fresh_id state))
   | Type Unit -> Some (Scalar Unit)
   | Type Bool -> Some (Scalar Bool)
@@ -138,8 +163,10 @@ let rec concrete state (v : Value.t) : Value.Concrete.t option =
     and ret = concrete state ret_ty in
     Value.Concrete.Arrow { arg; arg_mode; ret; ret_mode }
   | Type (Tuple elts) ->
-    let%map elts = Option.all (List.map elts ~f:(concrete state)) in
-    Value.Concrete.Tuple elts
+    let%map elts =
+      Nonempty_list.map elts ~f:(concrete state) |> Nonempty_list.to_list |> Option.all
+    in
+    Value.Concrete.Tuple (Nonempty_list.of_list_exn elts)
   | Bottom | Bool _ | Int _ | Var _ | If _ | Apply _ | External _ | Type (Pi _) -> None
 ;;
 
@@ -250,6 +277,18 @@ and require_join state ~loc ty1 ty2 =
   | Some ty -> ty
   | None -> Fail.cannot_unify [%here] ~loc ty1 ty2
 
+and require_join_desc state ~loc (desc1 : Desc.t) (desc2 : Desc.t) =
+  let open Lazy.Let_syntax in
+  let ty = require_join state ~loc desc1.ty desc2.ty in
+  let mode = Modes.join desc1.mode desc2.mode in
+  (* TODO do we need to join the static values? *)
+  let static =
+    let%map static1 = desc1.static
+    and static2 = desc2.static in
+    require_join state ~loc static1 static2
+  in
+  { Desc.ty; mode; static }
+
 and require_static_type ~loc state (desc : Desc.t) =
   require_static ~loc desc;
   require_leq state ~loc desc.ty (Type Type);
@@ -299,8 +338,8 @@ and leq_value state (a : Value.t) (b : Value.t) =
   | Var a, Var b -> Ident.equal a b
   | Prim a, Prim b -> Builtin.Prim.equal a b
   | Tuple a_elts, Tuple b_elts ->
-    (match List.for_all2 a_elts b_elts ~f:(leq_value state) with
-     | Ok leq -> leq
+    (match Nonempty_list.zip a_elts b_elts with
+     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> leq_value state a b)
      | Unequal_lengths -> false)
   | External a, External b -> String.equal a.symbol b.symbol
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
@@ -336,8 +375,8 @@ and geq_value state (a : Value.t) (b : Value.t) =
   | Var a, Var b -> Ident.equal a b
   | Prim a, Prim b -> Builtin.Prim.equal a b
   | Tuple a_elts, Tuple b_elts ->
-    (match List.for_all2 a_elts b_elts ~f:(geq_value state) with
-     | Ok leq -> leq
+    (match Nonempty_list.zip a_elts b_elts with
+     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> geq_value state a b)
      | Unequal_lengths -> false)
   | External a, External b -> String.equal a.symbol b.symbol
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
@@ -373,8 +412,11 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Var a, Var b when Ident.equal a b -> Some (Var a)
   | Prim a, Prim b when Builtin.Prim.equal a b -> Some (Prim a)
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:(join_value state) with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Value.Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:(join_value state) with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts -> Value.Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
@@ -420,8 +462,11 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Var a, Var b when Ident.equal a b -> Some (Var a)
   | Prim a, Prim b when Builtin.Prim.equal a b -> Some (Prim a)
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:(meet_value state) with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Value.Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:(meet_value state) with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts -> Value.Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
@@ -547,8 +592,8 @@ and leq_ty state a b =
   match a, b with
   | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
   | Tuple a_elts, Tuple b_elts ->
-    (match List.for_all2 a_elts b_elts ~f:(leq_value state) with
-     | Ok leq -> leq
+    (match Nonempty_list.zip a_elts b_elts with
+     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> leq_value state a b)
      | Unequal_lengths -> false)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
@@ -584,8 +629,8 @@ and geq_ty state a b =
   match a, b with
   | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
   | Tuple a_elts, Tuple b_elts ->
-    (match List.for_all2 a_elts b_elts ~f:(geq_value state) with
-     | Ok leq -> leq
+    (match Nonempty_list.zip a_elts b_elts with
+     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> geq_value state a b)
      | Unequal_lengths -> false)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
@@ -624,8 +669,11 @@ and join_ty state a b =
   | Int, Int -> Some Int
   | Type, Type -> Some Type
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:(join_value state) with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Ty.Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:(join_value state) with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts -> Ty.Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
@@ -679,8 +727,11 @@ and meet_ty state a b =
   | Int, Int -> Some Int
   | Type, Type -> Some Type
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:(meet_value state) with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Ty.Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:(meet_value state) with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts -> Ty.Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
@@ -738,7 +789,8 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
   match expr with
   | If { cond; then_; else_; static; loc } ->
     typecheck_if state env ~cond ~then_ ~else_ ~static ~loc
-  | Match { cond; arms; static; loc } -> typecheck_match state env ~cond ~arms ~static ~loc
+  | Match { cond; arms; static; loc } ->
+    typecheck_match state env ~scrutinee:cond ~arms ~static ~loc
   | Lambda { arg; arg_mode; arg_ty; body = body_dst; loc } ->
     typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc
   | Apply { fn; arg; loc } -> typecheck_apply state env ~fn ~arg ~loc
@@ -776,7 +828,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     let ty = Value.Type Type in
     let mode = Modes.create ~staticity:Static ~erasure:Erased in
     let elts =
-      List.map elts ~f:(fun elt ->
+      Nonempty_list.map elts ~f:(fun elt ->
         let elt_desc = reduce state env elt in
         require_static_type state ~loc elt_desc)
     in
@@ -803,15 +855,18 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
       Literal { value; ty; mode; loc }, { Desc.ty; mode; static = Lazy.from_val value })
   | Make_tuple { elts; loc } ->
     (* TODO could maybe be a primitive *)
-    let elts, descs = List.map elts ~f:(fun elt -> typecheck state env elt) |> List.unzip in
-    let mode =
-      List.fold descs ~init:(Modes.bottom ()) ~f:(fun acc desc -> Modes.join acc desc.mode)
+    let elts, descs =
+      Nonempty_list.map elts ~f:(fun elt -> typecheck state env elt) |> Nonempty_list.unzip
     in
-    let ty = Value.Type (Tuple (List.map descs ~f:(fun desc -> desc.ty))) in
+    let mode =
+      Nonempty_list.fold descs ~init:(Modes.bottom ()) ~f:(fun acc desc -> Modes.join acc desc.mode)
+    in
+    let ty = Value.Type (Tuple (Nonempty_list.map descs ~f:(fun desc -> desc.ty))) in
     let static =
-      List.map descs ~f:(fun desc -> desc.static)
+      Nonempty_list.map descs ~f:(fun desc -> desc.static)
+      |> Nonempty_list.to_list
       |> Lazy.all
-      |> Lazy.map ~f:(fun elts -> Value.Tuple elts)
+      |> Lazy.map ~f:(fun elts -> Value.Tuple (Nonempty_list.of_list_exn elts))
     in
     Tuple { elts; ty; mode; loc }, { ty; mode; static }
 
@@ -1179,32 +1234,112 @@ and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
     let ty = require_join state ~loc then_desc.ty else_desc.ty in
     If { cond; then_; else_; ty; mode; loc }, { ty; mode; static }
 
-and match_redundant ~loc arms =
-  match Nonempty_list.length arms with
-  | 1 -> ()
-  | _ ->
-    let patterns = Nonempty_list.map arms ~f:(fun (pattern, _) -> pattern) in
-    Fail.redundant_patterns [%here] ~loc patterns
+and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map.t =
+  (* TODO dependent match *)
+  match pattern with
+  | Var { id; loc } ->
+    let _ = loc in
+    Ident.Map.singleton id desc
+  | Literal { value; loc } ->
+    require_leq ~loc state desc.ty (Value.Type (Ty.of_literal value));
+    Ident.Map.empty
+  | Tuple { elts; loc } ->
+    (match desc.ty with
+     | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = Nonempty_list.length elts ->
+       Nonempty_list.zip_exn elts elt_tys
+       |> Nonempty_list.mapi ~f:(fun index (elt, ty) ->
+         let static =
+           Lazy.map desc.static ~f:(function
+             | Tuple elts -> Nonempty_list.nth_exn elts index
+             | value ->
+               raise_s [%message "Bug: expected tuple" (value : Value.t) (loc : Lex.Location.t)])
+         in
+         elt, { Desc.ty; mode = desc.mode; static })
+       |> Nonempty_list.fold ~init:Ident.Map.empty ~f:(fun acc (elt, elt_desc) ->
+         pattern_bindings state ~desc:elt_desc elt
+         |> Map.merge_skewed acc ~combine:(fun ~key _ _ ->
+           Fail.Match.multiple_bindings [%here] ~loc key))
+     | _ -> Fail.Match.expected_tuple [%here] ~loc desc.ty)
+  | Or { left; right; loc } ->
+    let lhs = pattern_bindings state ~desc left in
+    let rhs = pattern_bindings state ~desc right in
+    Map.merge_skewed lhs rhs ~combine:(fun ~key:_ lhs rhs -> require_join_desc state ~loc lhs rhs)
 
-and typecheck_match state env ~cond ~arms ~static ~loc =
-  let cond, cond_desc = typecheck state env cond in
-  let cond_desc =
-    let static =
-      match static with
-      | Static ->
-        require_static ~loc cond_desc;
-        Lazy.from_val (Lazy.force cond_desc.static)
-      | Dynamic | Parametric ->
-        require_not_dynamic_erased ~loc cond_desc;
-        cond_desc.static
-    in
-    { cond_desc with static }
+and build_condition ~loc ~scrutinee (literal : Dst.Literal.t) : Expr.t =
+  match literal with
+  | Unit -> Expr.literal ~loc (Bool true)
+  | Bool true -> scrutinee
+  | Bool false -> Builtin.apply ~loc (Bool Not) [ scrutinee ]
+  | Int i -> Builtin.apply ~loc (Int Eq) [ scrutinee; Expr.literal ~loc (Int i) ]
+
+and typecheck_match state env ~scrutinee ~arms ~static:_ ~loc =
+  (* TODO dependent match, also probably rewrite this *)
+  let scrutinee, scrutinee_desc = typecheck state env scrutinee in
+  require_not_dynamic_erased ~loc scrutinee_desc;
+  let arm_bodies =
+    Nonempty_list.map arms ~f:(fun (pattern, body) ->
+      let bindings = pattern_bindings state ~desc:scrutinee_desc pattern in
+      let env = Map.fold bindings ~init:env ~f:(fun ~key ~data env -> Env.bind env key data) in
+      let body, body_desc = typecheck state env body in
+      bindings, body, body_desc)
   in
-  match_redundant ~loc arms;
-  let Var { id; _ }, case = Nonempty_list.hd arms in
-  let case, case_desc = typecheck state (Env.bind env id cond_desc) case in
-  ( Let { var = id; bind = cond; rest = case; ty = case_desc.ty; mode = case_desc.mode; loc }
-  , case_desc )
+  let ty, arm_mode =
+    let ((_, _, { ty; mode; _ }) :: rest) = arm_bodies in
+    List.fold rest ~init:(ty, mode) ~f:(fun (ty, mode) (_, _, desc) ->
+      require_join state ~loc ty desc.ty, Modes.join mode desc.mode)
+  in
+  let mode = Modes.cond ~cond:scrutinee_desc.mode [ arm_mode ] in
+  let compiled =
+    let cases =
+      Nonempty_list.map2_exn arms arm_bodies ~f:(fun (pattern, _) (bindings, body, _body_desc) ->
+        { Match.Case.pattern; body; bindings })
+    in
+    Match.compile ~ty:scrutinee_desc.ty cases
+  in
+  (match compiled.redundant with
+   | [] -> ()
+   | first :: rest -> Fail.Match.redundant [%here] ~loc (Nonempty_list.create first rest));
+  (match compiled.missing with
+   | [] -> ()
+   | first :: rest -> Fail.Match.non_exhaustive [%here] ~loc (Nonempty_list.create first rest));
+  let project path =
+    let indices = Vec.to_list path in
+    let rec aux expr (ty : Value.t) = function
+      | [] -> expr
+      | index :: rest ->
+        (match ty with
+         | Type (Tuple elt_tys) ->
+           let ty = Nonempty_list.nth_exn elt_tys index in
+           let get = Expr.Tuple_get { tuple = expr; index; ty; mode = scrutinee_desc.mode; loc } in
+           aux get ty rest
+         | _ -> raise_s [%message "Bug: expected tuple" (ty : Value.t) (loc : Lex.Location.t)])
+    in
+    aux scrutinee scrutinee_desc.ty indices
+  in
+  let rec lower (tree : Match.Tree.t) : Expr.t =
+    match tree with
+    | Fail -> Builtin.apply ~loc Assert [ Expr.literal ~loc (Bool false) ]
+    | Leaf { action; bindings } ->
+      Map.fold bindings ~init:action ~f:(fun ~key ~data:{ Match.Tree.Binding.occurrence; _ } acc ->
+        let bind = project occurrence.path in
+        Expr.Let { var = key; bind; rest = acc; ty = Expr.ty acc; mode = Expr.mode acc; loc })
+    | Switch { occurrence; cases; default } ->
+      let target = project occurrence.path in
+      let default =
+        Option.map default ~f:lower
+        |> Option.value_or_thunk ~default:(fun () ->
+          (* TODO needs some kind of unreachable, assert returns unit *)
+          Builtin.apply ~loc Assert [ Expr.literal ~loc (Bool false) ])
+      in
+      Array.fold_right cases ~init:default ~f:(fun (constructor, body) acc ->
+        match constructor with
+        | Literal value ->
+          let test = build_condition ~loc ~scrutinee:target value in
+          let body = lower body in
+          Expr.If { cond = test; then_ = body; else_ = acc; ty; mode; loc }
+        | Tuple _ -> lower body)
+  in
+  lower compiled.tree, { Desc.ty; mode; static = Fail.unreachable [%here] ~loc }
 ;;
 
 let typecheck_top_level state env (dst : Dst.Top_level.t) : Top_level.t * Env.t =

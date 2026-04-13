@@ -19,6 +19,19 @@ module Expr = struct
         { id : Ident.t
         ; loc : Lex.Location.t
         }
+    | Literal of
+        { value : Literal.t
+        ; loc : Lex.Location.t
+        }
+    | Tuple of
+        { elts : pattern Nonempty_list.t
+        ; loc : Lex.Location.t
+        }
+    | Or of
+        { left : pattern
+        ; right : pattern
+        ; loc : Lex.Location.t
+        }
 
   and t =
     | If of
@@ -74,11 +87,11 @@ module Expr = struct
         ; loc : Lex.Location.t
         }
     | Tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
         }
     | Make_tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
         }
     | Builtin of
@@ -101,11 +114,11 @@ module Expr = struct
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
     | Arrow { arg; ret; _ } -> Set.union (free_vars arg) (free_vars ret)
-    | Tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
+    | Tuple { elts; _ } | Make_tuple { elts; _ } ->
+      Nonempty_list.map elts ~f:free_vars |> Nonempty_list.to_list |> Ident.Set.union_list
     | Var { id; _ } -> Ident.Set.singleton id
     | Mode_annotation { expr; _ } -> free_vars expr
     | Type_annotation { expr; ty; _ } -> Set.union (free_vars expr) (free_vars ty)
-    | Make_tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
     | Unreachable _ | Literal _ | Builtin _ -> Ident.Set.empty
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
@@ -141,6 +154,10 @@ module Expr = struct
 
   and free_vars_pattern = function
     | Var { id; _ } -> Ident.Set.singleton id
+    | Literal _ -> Ident.Set.empty
+    | Tuple { elts; _ } ->
+      Nonempty_list.map elts ~f:free_vars_pattern |> Nonempty_list.to_list |> Ident.Set.union_list
+    | Or { left; right; _ } -> Set.union (free_vars_pattern left) (free_vars_pattern right)
   ;;
 
   let loc = function

@@ -19,7 +19,7 @@ let rec simplify_ty ~loc (ty : Tst.Value.t) : Ty.t =
   | Type Type -> Unit
   | Type (Arrow { arg_ty; ret_ty; _ }) ->
     Arrow { arg_ty = simplify_ty ~loc arg_ty; ret_ty = simplify_ty ~loc ret_ty }
-  | Type (Tuple elts) -> Tuple (List.map elts ~f:(simplify_ty ~loc))
+  | Type (Tuple elts) -> Tuple (Nonempty_list.map elts ~f:(simplify_ty ~loc))
   | Bottom
   | Unit
   | Bool _
@@ -68,19 +68,27 @@ let rec union_ty (ty1 : Ty.t) (ty2 : Ty.t) : Ty.t =
         | Some ty2 -> union_ty ty1 ty2
         | None -> ty1));
     Pack merge
-  | Tuple a, Tuple b -> Tuple (List.map2_exn a b ~f:union_ty)
+  | Tuple a, Tuple b -> Tuple (Nonempty_list.map2_exn a b ~f:union_ty)
   | (Unit | Bool | Int | Arrow _ | Pack _ | Tuple _), _ ->
     raise_s [%message "Bug: cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]
 ;;
 
+let rec narrow_ty (ty : Ty.t) (access : Access.t) : Ty.t =
+  match access with
+  | Base -> ty
+  | Keys keys ->
+    (match ty with
+     | Ty.Pack pack ->
+       let narrow = Hashtbl.create (module Tst.Value.Concrete) in
+       Map.iteri keys ~f:(fun ~key ~data:access ->
+         let ty = Hashtbl.find_exn pack key in
+         Hashtbl.add_exn narrow ~key ~data:(narrow_ty ty access));
+       Ty.Pack narrow
+     | _ -> raise_s [%message "Bug: expected pack" (ty : Ty.t) (access : Access.t)])
+;;
+
 let collect_free_keys env free_keys =
-  Map.mapi free_keys ~f:(fun ~key:id ~data:keys ->
-    match Env.find env id with
-    | Ty.Pack pack ->
-      let narrow = Hashtbl.create (module Tst.Value.Concrete) in
-      Set.iter keys ~f:(fun key -> Hashtbl.add_exn narrow ~key ~data:(Hashtbl.find_exn pack key));
-      Ty.Pack narrow
-    | ty -> ty)
+  Map.mapi free_keys ~f:(fun ~key:id ~data:access -> narrow_ty (Env.find env id) access)
 ;;
 
 let free_vars env arg body =
@@ -106,8 +114,8 @@ let rec simplify_value ~loc env (value : Tst.Value.t) : Expr.t =
     let desc = Builtin.desc (Prim prim) in
     External { symbol = Builtin.Prim.symbol prim; ty = simplify_ty ~loc desc.ty; loc }
   | Tuple elts ->
-    let elts = List.map elts ~f:(simplify_value ~loc env) in
-    Tuple { elts; ty = Tuple (List.map elts ~f:Expr.ty); loc }
+    let elts = Nonempty_list.map elts ~f:(simplify_value ~loc env) in
+    Tuple { elts; ty = Tuple (Nonempty_list.map elts ~f:Expr.ty); loc }
   | Bottom | Type _ | Var _ | If _ | Apply _ ->
     raise_s [%message "Bug: cannot simplify literal" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
@@ -127,7 +135,7 @@ and simplify_mono ~loc env mono =
   in
   let free_keys =
     Hashtbl.fold pack ~init:Ident.Map.empty ~f:(fun ~key:_ ~data:(body, _) acc ->
-      Map.merge_skewed acc (Expr.free_keys body) ~combine:(fun ~key:_ -> Set.union))
+      Map.merge_skewed acc (Expr.free_keys body) ~combine:(fun ~key:_ -> Access.union))
   in
   let ty = Hashtbl.map pack ~f:(fun (expr, _) -> Expr.ty expr) in
   pack, collect_free_keys env free_keys, Ty.Pack ty
@@ -174,7 +182,7 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
       let rest = simplify (Env.bind env var (Expr.ty bind)) rest in
       Let { var; bind; rest; ty = Expr.ty rest; loc })
   | Tuple { elts; ty; loc; _ } ->
-    let elts = List.map elts ~f:(simplify env) in
+    let elts = Nonempty_list.map elts ~f:(simplify env) in
     Tuple { elts; ty = simplify_ty ~loc ty; loc }
   | If { cond; then_; else_; loc; _ } ->
     let cond = simplify env cond in
@@ -183,11 +191,19 @@ and simplify env (expr : Tst.Expr.t) : Expr.t =
      | _ ->
        let then_ = simplify env then_ in
        let else_ = simplify env else_ in
-       If { cond; then_; else_; ty = Expr.ty then_; loc })
+       (match Expr.ty then_, Expr.ty else_ with
+        | Pack pack, _ when Hashtbl.is_empty pack ->
+          Sequence { first = cond; second = else_; ty = Expr.ty else_; loc }
+        | _, Pack pack when Hashtbl.is_empty pack ->
+          Sequence { first = cond; second = then_; ty = Expr.ty then_; loc }
+        | _ -> If { cond; then_; else_; ty = Expr.ty then_; loc }))
   | Var { id; loc; _ } -> Var { id; ty = Env.find env id; loc }
   | Binder { mono; loc; _ } ->
     let pack, fvs, ty = simplify_mono ~loc env mono in
     Pack { pack; fvs; ty; loc }
+  | Tuple_get { tuple; index; ty; loc; _ } ->
+    let tuple = simplify env tuple in
+    Tuple_get { tuple; index; ty = simplify_ty ~loc ty; loc }
   | Builtin { builtin; loc; ty; _ } ->
     (match builtin with
      | Type _ -> raise_s [%message "Bug: builtin type"]

@@ -9,7 +9,7 @@ module Ty = struct
         { arg_ty : t
         ; ret_ty : t
         }
-    | Tuple of t list
+    | Tuple of t Nonempty_list.t
     | Pack of ((Tst.Value.Concrete.t, t) Hashtbl.t[@sexp.opaque])
   [@@deriving sexp]
 
@@ -36,6 +36,19 @@ module Scalar = struct
     | Bool of bool
     | Int of int64
   [@@deriving sexp]
+end
+
+module Access = struct
+  type t =
+    | Base
+    | Keys of t Tst.Value.Concrete.Map.t
+  [@@deriving sexp]
+
+  let rec union (a : t) (b : t) : t =
+    match a, b with
+    | Base, _ | _, Base -> Base
+    | Keys ma, Keys mb -> Keys (Map.merge_skewed ma mb ~combine:(fun ~key:_ -> union))
+  ;;
 end
 
 module Expr = struct
@@ -93,7 +106,7 @@ module Expr = struct
         ; loc : Lex.Location.t
         }
     | Tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -106,6 +119,12 @@ module Expr = struct
         }
     | Var of
         { id : Ident.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Sequence of
+        { first : t
+        ; second : t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -126,6 +145,12 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Tuple_get of
+        { tuple : t
+        ; index : int
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   let ty : t -> Ty.t = function
@@ -137,9 +162,11 @@ module Expr = struct
     | Tuple { ty; _ }
     | If { ty; _ }
     | Var { ty; _ }
+    | Sequence { ty; _ }
     | Pack { ty; _ }
     | Symbol { ty; _ }
-    | External { ty; _ } -> ty
+    | External { ty; _ }
+    | Tuple_get { ty; _ } -> ty
   ;;
 
   let with_ty t ty =
@@ -152,9 +179,11 @@ module Expr = struct
     | Tuple expr -> Tuple { expr with ty }
     | If expr -> If { expr with ty }
     | Var expr -> Var { expr with ty }
+    | Sequence expr -> Sequence { expr with ty }
     | Pack expr -> Pack { expr with ty }
     | Symbol expr -> Symbol { expr with ty }
     | External expr -> External { expr with ty }
+    | Tuple_get expr -> Tuple_get { expr with ty }
   ;;
 
   let loc : t -> Lex.Location.t = function
@@ -166,33 +195,32 @@ module Expr = struct
     | Tuple { loc; _ }
     | If { loc; _ }
     | Var { loc; _ }
+    | Sequence { loc; _ }
     | Pack { loc; _ }
     | Symbol { loc; _ }
-    | External { loc; _ } -> loc
+    | External { loc; _ }
+    | Tuple_get { loc; _ } -> loc
   ;;
 
-  let rec free_keys : t -> Tst.Value.Concrete.Set.t Ident.Map.t = function
+  let merge = Map.merge_skewed ~combine:(fun ~key:_ -> Access.union)
+
+  let rec free_keys_at (acc : Access.t) : t -> Access.t Ident.Map.t = function
     | Scalar _ | External _ -> Ident.Map.empty
-    | Var { id; _ } -> Ident.Map.singleton id Tst.Value.Concrete.Set.empty
-    | Symbol { fn; arg; _ } -> Ident.Map.map (free_keys fn) ~f:(fun keys -> Set.add keys arg)
+    | Var { id; _ } -> Ident.Map.singleton id acc
+    | Symbol { fn; arg; _ } -> free_keys_at (Keys (Tst.Value.Concrete.Map.singleton arg acc)) fn
     | Tuple { elts; _ } ->
-      List.map elts ~f:free_keys
-      |> List.fold ~init:Ident.Map.empty ~f:(Map.merge_skewed ~combine:(fun ~key:_ -> Set.union))
-    | Apply { fn; arg; _ } ->
-      Map.merge_skewed (free_keys fn) (free_keys arg) ~combine:(fun ~key:_ -> Set.union)
+      Nonempty_list.fold elts ~init:Ident.Map.empty ~f:(fun acc elt -> merge acc (free_keys elt))
+    | Apply { fn; arg; _ } -> merge (free_keys fn) (free_keys arg)
+    | Tuple_get { tuple; _ } -> free_keys tuple
     | If { cond; then_; else_; _ } ->
-      Map.merge_skewed (free_keys then_) (free_keys else_) ~combine:(fun ~key:_ -> Set.union)
-      |> Map.merge_skewed (free_keys cond) ~combine:(fun ~key:_ -> Set.union)
+      merge (free_keys then_) (free_keys else_) |> merge (free_keys cond)
     | Lambda { arg; body; _ } -> Map.remove (free_keys body) arg
-    | Let { var; bind; rest; _ } ->
-      Map.merge_skewed
-        (free_keys bind)
-        (Map.remove (free_keys rest) var)
-        ~combine:(fun ~key:_ -> Set.union)
+    | Let { var; bind; rest; _ } -> merge (free_keys bind) (Map.remove (free_keys rest) var)
+    | Sequence { first; second; _ } -> merge (free_keys first) (free_keys second)
     | Pack { pack; _ } ->
       Hashtbl.data pack
       |> List.map ~f:(fun (expr, _) -> free_keys expr)
-      |> List.fold ~init:Ident.Map.empty ~f:(Map.merge_skewed ~combine:(fun ~key:_ -> Set.union))
+      |> List.fold ~init:Ident.Map.empty ~f:merge
     | Fun { funs; rest; _ } ->
       let bound_ids =
         Nonempty_list.map funs ~f:(function
@@ -201,24 +229,19 @@ module Expr = struct
       in
       let fvs_in_funs =
         Nonempty_list.fold funs ~init:Ident.Map.empty ~f:(fun acc -> function
-          | Mono { arg; body; _ } ->
-            Map.merge_skewed
-              acc
-              (Map.remove (free_keys body) arg)
-              ~combine:(fun ~key:_ -> Set.union)
+          | Mono { arg; body; _ } -> merge acc (Map.remove (free_keys body) arg)
           | Pack { pack; _ } ->
             let fvs =
               Hashtbl.data pack
               |> List.map ~f:(fun (expr, _) -> free_keys expr)
-              |> List.fold
-                   ~init:Ident.Map.empty
-                   ~f:(Map.merge_skewed ~combine:(fun ~key:_ -> Set.union))
+              |> List.fold ~init:Ident.Map.empty ~f:merge
             in
-            Map.merge_skewed acc fvs ~combine:(fun ~key:_ -> Set.union))
+            merge acc fvs)
       in
-      let fvs = Map.merge_skewed fvs_in_funs (free_keys rest) ~combine:(fun ~key:_ -> Set.union) in
+      let fvs = merge fvs_in_funs (free_keys rest) in
       Nonempty_list.fold bound_ids ~init:fvs ~f:Map.remove
-  ;;
+
+  and free_keys expr = free_keys_at Base expr
 end
 
 module Top_level = struct

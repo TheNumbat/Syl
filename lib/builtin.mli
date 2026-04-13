@@ -23,3 +23,4 @@ exception Error of Error.t
 
 val desc : t -> Desc.t
 val eval : Prim.t -> Value.t -> Value.t
+val apply : loc:Lex.Location.t -> Prim.t -> Tst.Expr.t Nonempty_list.t -> Tst.Expr.t

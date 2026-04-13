@@ -5,7 +5,10 @@ module Literal : sig
     | Unit
     | Bool of bool
     | Int of int64
-  [@@deriving sexp]
+  [@@deriving sexp, compare, hash]
+
+  include Comparable.S with type t := t
+  include Hashable.S with type t := t
 
   val print : unit -> t -> string
 end
@@ -37,7 +40,14 @@ module Expr : sig
     ; after_var : Lex.Comment.t list
     }
 
-  and pattern_node = Var of { id : Ident.Raw.t }
+  and pattern_node =
+    | Var of { id : Ident.Raw.t }
+    | Literal of { value : Literal.t }
+    | Tuple of { elts : pattern Nonempty_list.t }
+    | Or of
+        { left : pattern
+        ; right : pattern
+        }
 
   and fun_node =
     { var : Ident.Raw.t
@@ -107,8 +117,8 @@ module Expr : sig
         ; ret : t
         ; ret_mode : Modes.Maybe.t
         }
-    | Tuple of { elts : t list }
-    | Make_tuple of { elts : t list }
+    | Tuple of { elts : t Nonempty_list.t }
+    | Make_tuple of { elts : t Nonempty_list.t }
     | Assert of
         { cond : t
         ; static : Modes.Staticity.t

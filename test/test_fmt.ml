@@ -1263,3 +1263,193 @@ let%expect_test "match arm with let" =
     ;;
     |}]
 ;;
+
+let%expect_test "match literal int patterns" =
+  fmt "let _ = match x with | 0 -> 1 | 1 -> 2 | n -> n;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | 0 -> 1
+      | 1 -> 2
+      | n -> n
+    ;;
+    |}]
+;;
+
+let%expect_test "match literal bool patterns" =
+  fmt "let _ = match x with | true -> 1 | false -> 0;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | true -> 1
+      | false -> 0
+    ;;
+    |}]
+;;
+
+let%expect_test "match literal unit pattern" =
+  fmt "let _ = match x with | () -> 0;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | () -> 0
+    ;;
+    |}]
+;;
+
+let%expect_test "match tuple pattern unparenthesized" =
+  fmt "let _ = match x with | a, b -> a;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a, b -> a
+    ;;
+    |}]
+;;
+
+let%expect_test "match tuple pattern with parens drops them" =
+  fmt "let _ = match x with | (a, b) -> a;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a, b -> a
+    ;;
+    |}]
+;;
+
+let%expect_test "match nested tuple pattern keeps inner parens" =
+  fmt "let _ = match x with | a, (b, c) -> b;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a, (b, c) -> b
+    ;;
+    |}]
+;;
+
+let%expect_test "match tuple pattern with literals" =
+  fmt "let _ = match x with | 0, true -> 1 | n, b -> n;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | 0, true -> 1
+      | n, b -> n
+    ;;
+    |}]
+;;
+
+let%expect_test "match tuple pattern wide breaks" =
+  fmt ~width:20 "let _ = match x with | aaa, bbb, ccc, ddd -> 1;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | aaa,
+        bbb,
+        ccc,
+        ddd ->
+        1
+    ;;
+    |}]
+;;
+
+let%expect_test "comment before literal pattern" =
+  fmt "let _ = match x with | (* c *) 0 -> 1 | n -> n;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | (* c *) 0 -> 1
+      | n -> n
+    ;;
+    |}]
+;;
+
+let%expect_test "comment after tuple pattern" =
+  fmt "let _ = match x with | a, b (* c *) -> a;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a, b (* c *) -> a
+    ;;
+    |}]
+;;
+
+let%expect_test "match or pattern simple" =
+  fmt "let _ = match x with | 0 | 1 -> true | n -> false;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | 0 | 1 -> true
+      | n -> false
+    ;;
+    |}]
+;;
+
+let%expect_test "match or pattern with three branches" =
+  fmt "let _ = match x with | 0 | 1 | 2 -> true | n -> false;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | 0 | 1 | 2 -> true
+      | n -> false
+    ;;
+    |}]
+;;
+
+let%expect_test "match or pattern with tuple branches" =
+  fmt "let _ = match x with | 0, 1 | 1, 0 -> true | a, b -> false;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | 0, 1 | 1, 0 -> true
+      | a, b -> false
+    ;;
+    |}]
+;;
+
+let%expect_test "tuple with or pattern element parenthesizes" =
+  fmt "let _ = match x with | (0 | 1), b -> b;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | (0 | 1), b -> b
+    ;;
+    |}]
+;;
+
+let%expect_test "or pattern wide breaks" =
+  fmt ~width:20 "let _ = match x with | aaa | bbb | ccc | ddd -> 1;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | aaa | bbb | ccc
+      | ddd ->
+        1
+    ;;
+    |}]
+;;
+
+let%expect_test "nested or pattern in parens" =
+  fmt "let _ = match x with | a, (b | c) -> a;;";
+  [%expect
+    {|
+    let _ =
+      match x with
+      | a, (b | c) -> a
+    ;;
+    |}]
+;;

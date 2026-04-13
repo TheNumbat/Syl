@@ -246,15 +246,15 @@ module Prim = struct
         let tuple, idx = pair value in
         (match tuple, idx with
          | Type (Tuple elts), Int (T idx) ->
-           let n = Int64.of_int (List.length elts) in
+           let n = Int64.of_int (Nonempty_list.length elts) in
            if Int64.(idx >= 0L && idx < n)
-           then List.nth_exn elts (Int64.to_int_exn idx)
+           then Nonempty_list.nth_exn elts (Int64.to_int_exn idx)
            else Fail.out_of_bounds idx n
          | Type (Tuple _), _ -> Value.reduce (Apply { fn = Prim (Type Tuple_get); arg = value })
          | _ -> Fail.expected_tuple tuple)
       | Tuple_length ->
         (match value with
-         | Type (Tuple elts) -> Int (T (Int64.of_int (List.length elts)))
+         | Type (Tuple elts) -> Int (T (Int64.of_int (Nonempty_list.length elts)))
          | _ -> Fail.expected_tuple value)
     ;;
   end
@@ -309,4 +309,32 @@ let eval (prim : Prim.t) (value : Value.t) : Value.t =
   | Int i -> Prim.Int.eval i value
   | Bool b -> Prim.Bool.eval b value
   | Type t -> Prim.Type.eval t value
+;;
+
+let apply ~loc (prim : Prim.t) (args : Tst.Expr.t Nonempty_list.t) : Tst.Expr.t =
+  let desc = desc (Prim prim) in
+  let ty = Tst.Ty.ret_ty desc.ty in
+  let mode = Tst.Ty.ret_mode desc.ty in
+  match args with
+  | [ arg ] ->
+    Tst.Expr.Apply
+      { fn = Builtin { builtin = Prim prim; ty = desc.ty; mode = desc.mode; loc }
+      ; arg
+      ; ty
+      ; mode
+      ; loc
+      }
+  | _ ->
+    let args_ty = Value.Type (Tuple (Nonempty_list.map args ~f:Expr.ty)) in
+    let args_mode =
+      Nonempty_list.fold ~init:(Modes.bottom ()) args ~f:(fun acc arg ->
+        Modes.join acc (Expr.mode arg))
+    in
+    Tst.Expr.Apply
+      { fn = Builtin { builtin = Prim prim; ty = desc.ty; mode = desc.mode; loc }
+      ; arg = Tuple { elts = args; ty = args_ty; mode = args_mode; loc }
+      ; ty
+      ; mode
+      ; loc
+      }
 ;;

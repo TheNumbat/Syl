@@ -29,7 +29,7 @@ module Ty : sig
         ; ret_ty : t
         }
     | Thunk of t
-    | Tuple of t list
+    | Tuple of t Nonempty_list.t
     | Pack of (Tst.Value.Concrete.t, t) Hashtbl.t
   [@@deriving sexp]
 
@@ -91,6 +91,12 @@ module Expr : sig
         }
     | Ident of
         { path : Path.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Tuple_get of
+        { tuple : Path.t
+        ; index : int
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

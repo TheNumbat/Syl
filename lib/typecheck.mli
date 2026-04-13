@@ -2,12 +2,20 @@ open! Core
 open Tst
 
 module Error : sig
+  module Match : sig
+    type t =
+      | Multiple_bindings of Ident.t
+      | Expected_tuple of Value.t
+      | Redundant of Dst.Expr.pattern Nonempty_list.t
+      | Non_exhaustive of Match.Result.Missing.t Nonempty_list.t
+    [@@deriving sexp]
+  end
+
   type t =
     | Unbound_ident of Ident.t
-    | Unknown_builtin of Ident.t * string
     | Mode_mismatch of
         { got : Modes.t
-        ; need : Modes.t (* TODO why *)
+        ; need : Modes.t
         }
     | Type_mismatch of
         { got : Value.t
@@ -21,7 +29,8 @@ module Error : sig
         { lhs : Value.t
         ; rhs : Value.t
         }
-    | Redundant_patterns of Dst.Expr.pattern Nonempty_list.t
+    | Match of Match.t
+    | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
     | Static_failure of Builtin.Error.t
     | Inline_self of Ident.t Nonempty_list.t

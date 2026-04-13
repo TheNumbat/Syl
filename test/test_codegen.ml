@@ -586,26 +586,13 @@ let _ = if true then f else g;;
 
 let%expect_test "closure erased" =
   go
-    ~check:`Run
     {|
-let c = fn (_ : unit) -> true;;
+let c = fn (_ : unit) -> let _ = print_unit () in true;;
 let f = (fn (x : int) -> 1);;
 let g = (fn (erased x : int) -> 2);;
 let _ = (if c () then f else g) 0;;
 |};
-  [%expect.unreachable]
-[@@expect.uncaught_exn
-  {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  ("Clang failed" (exit_code 1))
-  Raised at Base__Error.raise in file "src/error.ml" (inlined), line 9, characters 21-37
-  Called from Base__Error.raise_s in file "src/error.ml", line 10, characters 26-47
-  Called from Syl_test__Test_codegen.compile_and_run in file "test/test_codegen.ml", line 29, characters 41-92
-  Called from Syl_test__Test_codegen.(fun) in file "test/test_codegen.ml", lines 588-595, characters 2-2
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
-  |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -1750,6 +1737,17 @@ let%expect_test "static lambda returning static lambda" =
 let f = fn (static x : int) -> fn (static y : int) -> x;;
 let g = f 1;;
 let _ = g 2;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "three-level nested 2-arg static mono" =
+  go
+    {|
+let min2 = fn (static x : int) -> fn (static y : int) -> x + y;;
+let lo   = fn (static a : int) -> fn (static b : int) -> min2 a b;;
+let wrap = fn (static a : int) -> fn (static b : int) -> lo a b;;
+let _ = wrap 1 2;;
 |};
   [%expect {| |}]
 ;;
@@ -3282,5 +3280,148 @@ let _ = fn (static x : int) ->
   let _ = f 10 in
   ()
 ;;|};
+  [%expect {| |}]
+;;
+
+(* TODO fix, remove `Run *)
+let%expect_test "match simple bool" =
+  go
+    ~check:`Run
+    {|
+fun f (x : bool) : int =
+  match x with
+  | true -> 1
+  | false -> 2
+;;
+let _ = assert (f true == 1);;
+let _ = assert (f false == 2);;
+|};
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
+  ("Clang failed" (exit_code 1))
+  Raised at Base__Error.raise in file "src/error.ml" (inlined), line 9, characters 21-37
+  Called from Base__Error.raise_s in file "src/error.ml", line 10, characters 26-47
+  Called from Syl_test__Test_codegen.compile_and_run in file "test/test_codegen.ml", line 29, characters 41-92
+  Called from Syl_test__Test_codegen.(fun) in file "test/test_codegen.ml", lines 3288-3298, characters 2-2
+  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
+  |}]
+;;
+
+let%expect_test "match tuple binding" =
+  go
+    ~check:`Run
+    {|
+let _ = match (1, true) with | (x, y) -> assert (x == 1);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match tuple binding second element" =
+  go
+    ~check:`Run
+    {|
+let _ = match (1, 2) with | (x, y) -> assert (y == 2);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match 3-element tuple" =
+  go
+    ~check:`Run
+    {|
+let _ = match (1, 2, 3) with | (a, b, c) -> assert (a + b + c == 6);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match nested tuple" =
+  go
+    ~check:`Run
+    {|
+let _ = match ((1, 2), (3, 4)) with | ((a, b), (c, d)) -> assert (a + b + c + d == 10);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match tuple with literal patterns" =
+  go
+    ~check:`Run
+    {|
+fun f (x : int ^ bool) : int =
+  match x with
+  | (0, true) -> 1
+  | (0, false) -> 2
+  | (n, true) -> n + 10
+  | (n, false) -> n + 20
+;;
+let _ = assert (f (0, true) == 1);;
+let _ = assert (f (0, false) == 2);;
+let _ = assert (f (5, true) == 15);;
+let _ = assert (f (5, false) == 25);;
+|};
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
+  ("Clang failed" (exit_code 1))
+  Raised at Base__Error.raise in file "src/error.ml" (inlined), line 9, characters 21-37
+  Called from Base__Error.raise_s in file "src/error.ml", line 10, characters 26-47
+  Called from Syl_test__Test_codegen.compile_and_run in file "test/test_codegen.ml", line 29, characters 41-92
+  Called from Syl_test__Test_codegen.(fun) in file "test/test_codegen.ml", lines 3350-3364, characters 2-2
+  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
+  |}]
+;;
+
+let%expect_test "match deeply nested tuple" =
+  go
+    ~check:`Run
+    {|
+fun f (x : ((int ^ int) ^ int) ^ int) : int =
+  match x with
+  | (((a, b), c), d) -> a * 1000 + b * 100 + c * 10 + d
+;;
+let _ = assert (f (((1, 2), 3), 4) == 1234);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match tuple with literal in nested position" =
+  go
+    ~check:`Run
+    {|
+fun g (x : (int ^ bool) ^ int) : int =
+  match x with
+  | ((0, true), n) -> n
+  | ((0, false), n) -> 0 - 1
+  | ((x, b), n) -> x
+;;
+let _ = assert (g ((0, true), 42) == 42);;
+let _ = assert (g ((0, false), 42) == 0 - 1);;
+let _ = assert (g ((7, true), 42) == 7);;
+|};
+  [%expect.unreachable]
+[@@expect.uncaught_exn {|
+  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+     This is strongly discouraged as backtraces are fragile.
+     Please change this test to not include a backtrace. *)
+  ("Clang failed" (exit_code 1))
+  Raised at Base__Error.raise in file "src/error.ml" (inlined), line 9, characters 21-37
+  Called from Base__Error.raise_s in file "src/error.ml", line 10, characters 26-47
+  Called from Syl_test__Test_codegen.compile_and_run in file "test/test_codegen.ml", line 29, characters 41-92
+  Called from Syl_test__Test_codegen.(fun) in file "test/test_codegen.ml", lines 3393-3405, characters 2-2
+  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 142, characters 10-28
+  |}]
+;;
+
+let%expect_test "match tuple compiles" =
+  go
+    ~check:`Compile
+    {|
+let _ = match (1, true) with | (x, y) -> x;;
+|};
   [%expect {| |}]
 ;;

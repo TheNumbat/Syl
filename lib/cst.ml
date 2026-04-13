@@ -1,11 +1,17 @@
 open! Core
 
 module Literal = struct
-  type t =
-    | Unit
-    | Bool of bool
-    | Int of int64
-  [@@deriving sexp]
+  module T = struct
+    type t =
+      | Unit
+      | Bool of bool
+      | Int of int64
+    [@@deriving sexp, compare, hash]
+  end
+
+  include T
+  include Comparable.Make (T)
+  include Hashable.Make (T)
 
   let print () = function
     | Unit -> "()"
@@ -36,7 +42,14 @@ module Expr = struct
     ; after_var : Lex.Comment.t list
     }
 
-  and pattern_node = Var of { id : Ident.Raw.t }
+  and pattern_node =
+    | Var of { id : Ident.Raw.t }
+    | Literal of { value : Literal.t }
+    | Tuple of { elts : pattern Nonempty_list.t }
+    | Or of
+        { left : pattern
+        ; right : pattern
+        }
 
   and fun_node =
     { var : Ident.Raw.t
@@ -106,8 +119,8 @@ module Expr = struct
         ; ret : t
         ; ret_mode : Modes.Maybe.t
         }
-    | Tuple of { elts : t list }
-    | Make_tuple of { elts : t list }
+    | Tuple of { elts : t Nonempty_list.t }
+    | Make_tuple of { elts : t Nonempty_list.t }
     | Assert of
         { cond : t
         ; static : Modes.Staticity.t
@@ -178,21 +191,27 @@ module Expr = struct
     | (Var _ | Literal _ | Unreachable) as n -> n
     | Unop { op; arg } -> Unop { op; arg = strip arg }
     | Binop { op; lhs; rhs } -> Binop { op; lhs = strip lhs; rhs = strip rhs }
-    | Make_tuple { elts } -> Make_tuple { elts = List.map elts ~f:strip }
+    | Make_tuple { elts } -> Make_tuple { elts = Nonempty_list.map elts ~f:strip }
     | Arrow { arg; arg_id; arg_mode; ret; ret_mode } ->
       Arrow { arg = strip arg; arg_id; arg_mode; ret = strip ret; ret_mode }
-    | Tuple { elts } -> Tuple { elts = List.map elts ~f:strip }
+    | Tuple { elts } -> Tuple { elts = Nonempty_list.map elts ~f:strip }
     | Assert { cond; static; before_static } ->
       Assert { cond = strip cond; static; before_static = strip_comments before_static }
     | Type_annotation { expr; ty } -> Type_annotation { expr = strip expr; ty = strip ty }
     | Mode_annotation { expr; mode } -> Mode_annotation { expr = strip expr; mode }
 
   and strip_pattern (p : pattern) : pattern =
-    { node = p.node
+    { node = strip_pattern_node p.node
     ; loc = Lex.Location.empty
     ; before = strip_comments p.before
     ; after = strip_comments p.after
     }
+
+  and strip_pattern_node (n : pattern_node) : pattern_node =
+    match n with
+    | Var _ | Literal _ -> n
+    | Tuple { elts } -> Tuple { elts = Nonempty_list.map elts ~f:strip_pattern }
+    | Or { left; right } -> Or { left = strip_pattern left; right = strip_pattern right }
 
   and strip_arg (a : arg) : arg =
     { node =

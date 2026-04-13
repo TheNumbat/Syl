@@ -32,12 +32,32 @@ let maybe_erased (erased : Modes.Erasure.t) (expr : Dst.Expr.t) loc : Dst.Expr.t
   | Unerased -> expr
 ;;
 
-let rec desugar_pattern env (pattern : Cst.Expr.pattern) : Env.t * Dst.Expr.pattern =
+let rec desugar_pattern env seen (pattern : Cst.Expr.pattern)
+  : Env.t * Ident.Raw.Set.t * Dst.Expr.pattern
+  =
   let loc = pattern.loc in
   match pattern.node with
   | Var { id } ->
-    let env, id = Env.bind env id in
-    env, Var { id; loc }
+    if Set.mem seen id
+    then (
+      let id = Env.find env id in
+      env, seen, Var { id; loc })
+    else (
+      let seen = Set.add seen id in
+      let env, id = Env.bind env id in
+      env, seen, Var { id; loc })
+  | Literal { value } -> env, seen, Literal { value; loc }
+  | Tuple { elts } ->
+    let (env, seen), elts =
+      Nonempty_list.fold_map elts ~init:(env, seen) ~f:(fun (env, seen) pat ->
+        let env, seen, pat = desugar_pattern env seen pat in
+        (env, seen), pat)
+    in
+    env, seen, Tuple { elts; loc }
+  | Or { left; right } ->
+    let env, seen_left, left = desugar_pattern env seen left in
+    let env, seen_right, right = desugar_pattern env seen right in
+    env, Set.union seen_left seen_right, Or { left; right; loc }
 
 and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
   let loc = expr.loc in
@@ -54,7 +74,7 @@ and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
     let cond = desugar_expr env cond in
     let arms =
       Nonempty_list.map arms ~f:(fun (pat, rhs) ->
-        let env, pat = desugar_pattern env pat in
+        let env, _, pat = desugar_pattern env Ident.Raw.Set.empty pat in
         pat, desugar_expr env rhs)
     in
     Match { cond; arms; static; loc }
@@ -97,14 +117,14 @@ and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
       ; loc
       }
   | Make_tuple { elts } ->
-    let elts = List.map elts ~f:(desugar_expr env) in
+    let elts = Nonempty_list.map elts ~f:(desugar_expr env) in
     Make_tuple { elts; loc }
   | Arrow { arg; arg_id; arg_mode; ret; ret_mode } ->
     let arg = desugar_expr env arg in
     let arg_id = Option.value_or_thunk arg_id ~default:(fun () -> Ident.Raw.anon) in
     let env, arg_id = Env.bind env arg_id in
     Arrow { arg; arg_id; arg_mode; ret = desugar_expr env ret; ret_mode; loc }
-  | Tuple { elts } -> Tuple { elts = List.map elts ~f:(desugar_expr env); loc }
+  | Tuple { elts } -> Tuple { elts = Nonempty_list.map elts ~f:(desugar_expr env); loc }
   | Assert { cond; static; _ } ->
     let prim =
       match static with

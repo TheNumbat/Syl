@@ -124,7 +124,7 @@ let rec print_key (key : Tst.Value.Concrete.t) =
   | Int i -> Int64.to_string i
   | Closure i -> "λ" ^ Int.to_string i
   | Tuple elts ->
-    let elts = List.map elts ~f:print_key in
+    let elts = Nonempty_list.map elts ~f:print_key |> Nonempty_list.to_list in
     String.concat elts ~sep:"ₓ"
   | Arrow { arg; arg_mode; ret; ret_mode } ->
     let arg = print_key arg in
@@ -153,7 +153,11 @@ let rec print_ty (ty : Ty.t) =
   | Closure { arg_ty; ret_ty } ->
     sprintf "syl_closure<%s,%s>" (print_ty arg_ty) (print_ty_or_void ret_ty)
   | Thunk ty -> sprintf "syl_thunk<%s>" (print_ty_or_void ty)
-  | Tuple elts -> sprintf "syl_tuple<%s>" (String.concat ~sep:", " (List.map elts ~f:print_ty))
+  | Tuple elts ->
+    let args =
+      Nonempty_list.map elts ~f:print_ty |> Nonempty_list.to_list |> String.concat ~sep:", "
+    in
+    sprintf "syl_tuple<%s>" args
   | Pack _ -> raise_s [%message "Bug: unexpected type" (ty : Ty.t)]
 
 and print_ty_or_void (ty : Ty.t) = if Ty.is_zero_size ty then "void" else print_ty ty
@@ -186,11 +190,19 @@ let print_expr_nonzero (expr : Expr.t) =
     in
     Printf.sprintf "%s{%s}" (print_ty ty) (String.concat_array ~sep:", " paths)
   | Ident { path; _ } -> print_path path
+  | Tuple_get { tuple; index; _ } ->
+    let buf = Buffer.create 32 in
+    Buffer.add_string buf (print_path tuple);
+    for _ = 1 to index do
+      Buffer.add_string buf ".rest"
+    done;
+    Buffer.add_string buf ".first";
+    Buffer.contents buf
 ;;
 
 let print_expr_zero (expr : Expr.t) =
   match expr with
-  | Scalar { value = Unit; _ } | Ident _ | Make_tuple _ -> ""
+  | Scalar { value = Unit; _ } | Ident _ | Make_tuple _ | Tuple_get _ -> ""
   | Apply_closure { fn; arg; arg_ty; _ } ->
     if Ty.is_zero_size arg_ty
     then Printf.sprintf "%s()" (print_path fn)

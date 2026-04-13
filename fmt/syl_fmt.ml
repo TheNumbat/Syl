@@ -61,6 +61,29 @@ let fmt_literal (literal : Cst.Literal.t) =
 
 let fmt_ident (id : Ident.Raw.t) = text (Ident.Raw.print () id)
 
+let rec fmt_pattern ?(prec = `Tuple) cfg (pat : Cst.Expr.pattern) : Doc.t =
+  let inner =
+    match pat.node with
+    | Var { id } -> fmt_ident id
+    | Literal { value } -> fmt_literal value
+    | Tuple { elts } ->
+      let elts = Nonempty_list.to_list elts in
+      let sep = text "," ^^ line in
+      let body = align (concat ~sep ~f:(fmt_pattern ~prec:`Tuple cfg) elts) in
+      (match prec with
+       | `Or -> group body
+       | `Tuple -> group (text "(" ^^ body ^^ text ")"))
+    | Or { left; right } ->
+      let body =
+        fmt_pattern ~prec:`Or cfg left ^^ line ^^ text "| " ^^ fmt_pattern ~prec:`Or cfg right
+      in
+      (match prec with
+       | `Or -> group body
+       | `Tuple -> group (text "(" ^^ align body ^^ text ")"))
+  in
+  fmt_with_loc cfg pat inner
+;;
+
 let rec fmt_expr ?(force_break_if = false) (cfg : Config.t) (expr : Cst.Expr.t) : Doc.t =
   let inner = fmt_node ~force_break_if cfg expr in
   fmt_with_loc cfg expr inner
@@ -70,11 +93,7 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
   match expr.node with
   | Match { cond; arms; static; before_static } ->
     let fmt_arm ((pat : Cst.Expr.pattern), rhs) =
-      let pat_inner =
-        match pat.node with
-        | Var { id } -> fmt_ident id
-      in
-      let pat_doc = fmt_with_loc cfg pat pat_inner in
+      let pat_doc = fmt_pattern ~prec:`Or cfg pat in
       group (text "| " ^^ pat_doc ^^ text " ->" ^^ nest ind (line ^^ fmt_expr cfg rhs))
     in
     let arms_doc =
@@ -97,9 +116,11 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
     group
       (fmt_expr cfg lhs ^^ line ^^ text (Ident.Binop.print () op) ^^ text " " ^^ fmt_expr cfg rhs)
   | Make_tuple { elts } ->
+    let elts = Nonempty_list.to_list elts in
     let sep = text "," ^^ line in
     group (concat ~sep ~f:(fmt_expr cfg) elts)
   | Tuple { elts } ->
+    let elts = Nonempty_list.to_list elts in
     let sep = line ^^ text "^ " in
     group (concat ~sep ~f:(fmt_expr cfg) elts)
   | Arrow _ -> fmt_arrow cfg expr

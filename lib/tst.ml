@@ -18,7 +18,7 @@ type ty =
       ; ret_ty : dependent
       ; ret_mode : Modes.t
       }
-  | Tuple of value list
+  | Tuple of value Nonempty_list.t
 [@@deriving sexp]
 
 and dependent =
@@ -75,7 +75,7 @@ and value =
   | Closure of closure
   | Binder of binder
   | Var of Ident.t
-  | Tuple of value list
+  | Tuple of value Nonempty_list.t
   | If of
       { cond : value
       ; then_ : value
@@ -103,7 +103,7 @@ and concrete =
       ; ret : concrete
       ; ret_mode : Modes.t
       }
-  | Tuple of concrete list
+  | Tuple of concrete Nonempty_list.t
   | Scalar of Builtin0.Type.t
 [@@deriving sexp]
 
@@ -208,7 +208,7 @@ and expr =
       ; loc : Lex.Location.t
       }
   | Tuple of
-      { elts : expr list
+      { elts : expr Nonempty_list.t
       ; ty : value
       ; mode : Modes.t
       ; loc : Lex.Location.t
@@ -240,6 +240,13 @@ and expr =
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
+  | Tuple_get of
+      { tuple : expr
+      ; index : int
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
+      }
 [@@deriving sexp]
 
 let rec is_concrete_value : value -> _ = function
@@ -247,7 +254,7 @@ let rec is_concrete_value : value -> _ = function
   | Bool b -> is_concrete_bool b
   | Int i -> is_concrete_int i
   | Type ty -> is_concrete_ty ty
-  | Tuple elts -> List.for_all elts ~f:is_concrete_value
+  | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
   | Bottom | Var _ | If _ | Apply _ -> false
 
 and is_concrete_bool : vbool -> _ = function
@@ -260,7 +267,7 @@ and is_concrete_int : vint -> _ = function
 
 and is_concrete_ty : ty -> _ = function
   | Unit | Bool | Int | Type -> true
-  | Tuple elts -> List.for_all elts ~f:is_concrete_value
+  | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
   | Arrow { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_value ret_ty
   | Pi { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_dependent ret_ty
 
@@ -276,8 +283,11 @@ let rec join_concrete_ty (a : ty) (b : ty) : ty option =
   | Int, Int -> Some Int
   | Type, Type -> Some Type
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:join_concrete_value with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:join_concrete_value with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts -> Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
@@ -318,8 +328,11 @@ and meet_concrete_ty (a : ty) (b : ty) : ty option =
   | Int, Int -> Some Int
   | Type, Type -> Some Type
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:meet_concrete_value with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts -> Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:meet_concrete_value with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts -> Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
@@ -394,8 +407,11 @@ and join_concrete_value (a : value) (b : value) : value option =
   | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:join_concrete_value with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts : value -> Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:join_concrete_value with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts : value -> Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | ( ( Unit
       | Bool _
@@ -439,8 +455,11 @@ and meet_concrete_value (a : value) (b : value) : value option =
   | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | Tuple a_elts, Tuple b_elts ->
-    (match List.map2 a_elts b_elts ~f:meet_concrete_value with
-     | Ok elts -> Option.map (Option.all elts) ~f:(fun elts : value -> Tuple elts)
+    (match Nonempty_list.map2 a_elts b_elts ~f:meet_concrete_value with
+     | Ok elts ->
+       Nonempty_list.to_list elts
+       |> Option.all
+       |> Option.map ~f:(fun elts : value -> Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
   | ( ( Unit
       | Bool _
@@ -641,8 +660,18 @@ module Ty = struct
         ; ret_ty : dependent
         ; ret_mode : Modes.t
         }
-    | Tuple of value list
+    | Tuple of value Nonempty_list.t
   [@@deriving sexp]
+
+  let ret_ty : value -> value = function
+    | Type (Arrow { ret_ty; _ }) | Type (Pi { ret_ty = T ret_ty; _ }) -> ret_ty
+    | ty -> raise_s [%message "Bug: expected a concrete return type" (ty : value)]
+  ;;
+
+  let ret_mode : value -> Modes.t = function
+    | Type (Arrow { ret_mode; _ }) | Type (Pi { ret_mode; _ }) -> ret_mode
+    | ty -> raise_s [%message "Bug: expected a concrete return type" (ty : value)]
+  ;;
 
   let of_literal : Dst.Literal.t -> t = function
     | Unit -> Unit
@@ -665,7 +694,7 @@ module Value = struct
             ; ret : t
             ; ret_mode : Modes.t
             }
-        | Tuple of t list
+        | Tuple of t Nonempty_list.t
         | Scalar of Builtin0.Type.t
       [@@deriving sexp, hash, compare, equal]
     end
@@ -684,7 +713,7 @@ module Value = struct
     | Closure of closure
     | Binder of binder
     | Var of Ident.t
-    | Tuple of t list
+    | Tuple of t Nonempty_list.t
     | If of
         { cond : t
         ; then_ : t
@@ -700,6 +729,11 @@ module Value = struct
         }
     | Prim of Builtin0.Prim.t
   [@@deriving sexp]
+
+  let ty = function
+    | Type ty -> ty
+    | value -> raise_s [%message "Bug: expected concrete type" (value : t)]
+  ;;
 
   (* Only does rewrites that remove terms. *)
   let rec reduce = function
@@ -860,7 +894,7 @@ module Expr = struct
         ; loc : Lex.Location.t
         }
     | Tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; ty : value
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -892,6 +926,13 @@ module Expr = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
+    | Tuple_get of
+        { tuple : t
+        ; index : int
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   type nonrec fun_ = fun_ =
@@ -914,12 +955,20 @@ module Expr = struct
         }
   [@@deriving sexp]
 
+  let literal ~loc value =
+    let ty = Ty.of_literal value in
+    let mode = Modes.create ~staticity:Static ~erasure:Erased in
+    Literal { value = Value.of_literal value; ty = Type ty; mode; loc }
+  ;;
+
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
     | Literal _ | Builtin _ -> Ident.Set.empty
+    | Tuple_get { tuple; _ } -> free_vars tuple
     | Var { id; _ } -> Ident.Set.singleton id
     | Symbol { fn; _ } -> free_vars fn
-    | Tuple { elts; _ } -> Ident.Set.union_list (List.map elts ~f:free_vars)
+    | Tuple { elts; _ } ->
+      Nonempty_list.map elts ~f:free_vars |> Nonempty_list.to_list |> Ident.Set.union_list
     | Apply { fn; arg; _ } -> Set.union (free_vars fn) (free_vars arg)
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
@@ -954,7 +1003,8 @@ module Expr = struct
     | Let { ty; _ }
     | Fun { ty; _ }
     | Symbol { ty; _ }
-    | Builtin { ty; _ } -> ty
+    | Builtin { ty; _ }
+    | Tuple_get { ty; _ } -> ty
   ;;
 
   let mode = function
@@ -968,7 +1018,8 @@ module Expr = struct
     | Let { mode; _ }
     | Fun { mode; _ }
     | Symbol { mode; _ }
-    | Builtin { mode; _ } -> mode
+    | Builtin { mode; _ }
+    | Tuple_get { mode; _ } -> mode
   ;;
 
   let loc = function
@@ -982,7 +1033,8 @@ module Expr = struct
     | Let { loc; _ }
     | Fun { loc; _ }
     | Symbol { loc; _ }
-    | Builtin { loc; _ } -> loc
+    | Builtin { loc; _ }
+    | Tuple_get { loc; _ } -> loc
   ;;
 
   let desc t static = { ty = ty t; mode = mode t; static }
@@ -1000,6 +1052,7 @@ module Expr = struct
     | Fun t -> Fun { t with ty; mode }
     | Symbol t -> Symbol { t with ty; mode }
     | Builtin t -> Builtin { t with ty; mode }
+    | Tuple_get t -> Tuple_get { t with ty; mode }
   ;;
 
   let with_ty t ty =
@@ -1015,6 +1068,7 @@ module Expr = struct
     | Fun t -> Fun { t with ty }
     | Symbol t -> Symbol { t with ty }
     | Builtin t -> Builtin { t with ty }
+    | Tuple_get t -> Tuple_get { t with ty }
   ;;
 
   let with_mode t mode =
@@ -1030,6 +1084,7 @@ module Expr = struct
     | Fun t -> Fun { t with mode }
     | Symbol t -> Symbol { t with mode }
     | Builtin t -> Builtin { t with mode }
+    | Tuple_get t -> Tuple_get { t with mode }
   ;;
 end
 

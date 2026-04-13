@@ -18,10 +18,12 @@ module rec Ty : sig
         ; ret_ty : Dependent.t
         ; ret_mode : Modes.t
         }
-    | Tuple of Value.t list
+    | Tuple of Value.t Nonempty_list.t
   [@@deriving sexp]
 
   val of_literal : Dst.Literal.t -> t
+  val ret_ty : Value.t -> Value.t
+  val ret_mode : Value.t -> Modes.t
 end
 
 and Dependent : sig
@@ -147,7 +149,7 @@ and Value : sig
           ; ret : t
           ; ret_mode : Modes.t
           }
-      | Tuple of t list
+      | Tuple of t Nonempty_list.t
       | Scalar of Builtin0.Type.t
     [@@deriving sexp, hash, compare, equal]
 
@@ -164,7 +166,7 @@ and Value : sig
     | Closure of Closure.t
     | Binder of Binder.t
     | Var of Ident.t
-    | Tuple of t list
+    | Tuple of t Nonempty_list.t
     | If of
         { cond : t
         ; then_ : t
@@ -181,6 +183,7 @@ and Value : sig
     | Prim of Builtin0.Prim.t
   [@@deriving sexp]
 
+  val ty : t -> Ty.t
   val reduce : t -> t
   val of_literal : Dst.Literal.t -> t
   val is_true : t -> bool
@@ -272,7 +275,7 @@ and Expr : sig
         ; loc : Lex.Location.t
         }
     | Tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -304,8 +307,16 @@ and Expr : sig
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
+    | Tuple_get of
+        { tuple : t
+        ; index : int
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
+  val literal : loc:Lex.Location.t -> Dst.Literal.t -> t
   val free_vars : t -> Ident.Set.t
   val ty : t -> Value.t
   val mode : t -> Modes.t

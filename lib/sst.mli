@@ -9,7 +9,7 @@ module Ty : sig
         { arg_ty : t
         ; ret_ty : t
         }
-    | Tuple of t list
+    | Tuple of t Nonempty_list.t
     | Pack of (Tst.Value.Concrete.t, t) Hashtbl.t
   [@@deriving sexp]
 
@@ -24,6 +24,15 @@ module Scalar : sig
     | Bool of bool
     | Int of int64
   [@@deriving sexp]
+end
+
+module Access : sig
+  type t =
+    | Base
+    | Keys of t Tst.Value.Concrete.Map.t
+  [@@deriving sexp]
+
+  val union : t -> t -> t
 end
 
 module Expr : sig
@@ -81,7 +90,7 @@ module Expr : sig
         ; loc : Lex.Location.t
         }
     | Tuple of
-        { elts : t list
+        { elts : t Nonempty_list.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -94,6 +103,12 @@ module Expr : sig
         }
     | Var of
         { id : Ident.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Sequence of
+        { first : t
+        ; second : t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -114,12 +129,18 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Tuple_get of
+        { tuple : t
+        ; index : int
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   val ty : t -> Ty.t
   val with_ty : t -> Ty.t -> t
   val loc : t -> Lex.Location.t
-  val free_keys : t -> Tst.Value.Concrete.Set.t Ident.Map.t
+  val free_keys : t -> Access.t Ident.Map.t
 end
 
 module Top_level : sig
