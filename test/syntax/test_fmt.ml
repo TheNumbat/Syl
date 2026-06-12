@@ -1,21 +1,7 @@
 open! Core
 open! Syl
 
-let fmt ?(width = 100) input =
-  match Parse.parse input with
-  | Ok cst ->
-    let cfg = { Syl_fmt.Config.margin = width; indent = 2 } in
-    let output = Syl_fmt.to_string ~cfg cst in
-    print_string output;
-    let cst2 = Parse.parse_exn output in
-    let s1 = Cst.Program.strip cst |> [%sexp_of: Cst.Program.t] in
-    let s2 = Cst.Program.strip cst2 |> [%sexp_of: Cst.Program.t] in
-    if not (Sexp.equal s1 s2)
-    then (
-      print_endline "\nROUND-TRIP FAILED";
-      print_s [%message (s1 : Sexp.t) (s2 : Sexp.t)])
-  | Error { loc; reason; _ } -> print_s [%message (loc : Lex.Location.t) (reason : Parse.Error.t)]
-;;
+let fmt = Common.format_round_trip
 
 let%expect_test "simple let" =
   fmt "let x = 42;;";
@@ -198,9 +184,9 @@ let%expect_test "assert" =
   [%expect {| let _ = assert true;; |}]
 ;;
 
-let%expect_test "assert static" =
-  fmt "let _ = assert static true;;";
-  [%expect {| let _ = assert static true;; |}]
+let%expect_test "assert erased" =
+  fmt "let _ = assert erased true;;";
+  [%expect {| let _ = assert erased true;; |}]
 ;;
 
 let%expect_test "external" =
@@ -439,8 +425,6 @@ let%expect_test "comment after last app arg" =
   [%expect {| let _ = f a b (* c *);; |}]
 ;;
 
-(* Comment preservation on args, patterns, and funs *)
-
 let%expect_test "comment after fn arg" =
   fmt "let _ = fn (x : int) (* c *) -> x + 1;;";
   [%expect {| let _ = fn (x : int) (* c *) -> x + 1;; |}]
@@ -664,8 +648,6 @@ let%expect_test "comment before first pipe in match" =
     |}]
 ;;
 
-(* Comment position stability — verify no migration across tokens *)
-
 let%expect_test "match arm: comment after pattern before arrow" =
   fmt "let _ = match x with | a (* c *) -> 1 | b -> 2;;";
   [%expect
@@ -740,21 +722,19 @@ let%expect_test "match: comment before static" =
 ;;
 
 let%expect_test "assert: comment before static" =
-  fmt "let _ = assert (* c *) static true;;";
-  [%expect {| let _ = assert (* c *) static true;; |}]
+  fmt "let _ = assert (* c *) erased true;;";
+  [%expect {| let _ = assert (* c *) erased true;; |}]
 ;;
 
 let%expect_test "assert: comment after static" =
-  fmt "let _ = assert static (* c *) true;;";
-  [%expect {| let _ = assert static (* c *) true;; |}]
+  fmt "let _ = assert erased (* c *) true;;";
+  [%expect {| let _ = assert erased (* c *) true;; |}]
 ;;
 
 let%expect_test "top-level let: comment before erased" =
   fmt "let (* c *) erased x = 1;;";
   [%expect {| let (* c *) erased x = 1;; |}]
 ;;
-
-(* Line-breaking tests *)
 
 let%expect_test "application breaks" =
   fmt ~width:15 "let _ = f aaa bbb ccc;;";
@@ -1064,23 +1044,23 @@ let%expect_test "assert breaks" =
     |}]
 ;;
 
-let%expect_test "assert static breaks" =
-  fmt ~width:20 "let _ = assert static (1 + 2 + 3 == 6);;";
+let%expect_test "assert erased breaks" =
+  fmt ~width:20 "let _ = assert erased (1 + 2 + 3 == 6);;";
   [%expect
     {|
     let _ =
-      assert static
+      assert erased
         (1 + 2 + 3 == 6)
     ;;
     |}]
 ;;
 
-let%expect_test "assert static breaks" =
-  fmt ~width:10 "let _ = assert static (1 + 2 + 3 == 6);;";
+let%expect_test "assert erased breaks" =
+  fmt ~width:10 "let _ = assert erased (1 + 2 + 3 == 6);;";
   [%expect
     {|
     let _ =
-      assert static
+      assert erased
         (1 + 2
          + 3
          == 6)

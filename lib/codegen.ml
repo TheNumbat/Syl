@@ -9,16 +9,19 @@ let prelude =
 #include <stdio.h>
 #include <stdlib.h>
 
-using syl_env = char*;
 using syl_unit = void;
+using syl_type = void;
+using syl_tuple_void = void;
 using syl_bool = bool;
 using syl_int = int64_t;
+using syl_env = char*;
 
 template<typename Arg, typename Ret>
 struct syl_closure {
   Ret(*fn)(Arg, syl_env);
   syl_env env;
 
+  operator syl_env() { return env; }
   Ret operator()(Arg arg) { return fn(arg, env); }
 };
 
@@ -27,6 +30,7 @@ struct syl_closure<syl_unit,Ret> {
   Ret(*fn)(syl_env);
   syl_env env;
 
+  operator syl_env() { return env; }
   Ret operator()() { return fn(env); }
 };
 
@@ -59,18 +63,23 @@ static syl_env syl_env_rec(size_t size) {
 }
 
 template<typename... Env>
-static syl_env syl_capture(Env... captures) {
-  syl_env env = (syl_env)malloc(sizeof(syl_tuple<decltype(captures)...>));
+static syl_unit syl_fill_env(syl_env env, Env... captures) {
   size_t offset = 0;
   ((offset = (offset + alignof(decltype(captures)) - 1) & ~(alignof(decltype(captures)) - 1),
     *(decltype(captures)*)(env + offset) = captures,
     offset += sizeof(captures)),
    ...);
+}
+
+template<typename... Env>
+static syl_env syl_capture(Env... captures) {
+  syl_env env = syl_env_rec(sizeof(syl_tuple<decltype(captures)...>));
+  syl_fill_env(env, captures...);
   return env;
 }
+
+//SYL_PRELUDE_END
 |}
-  ^ Builtin.prelude
-  ^ "//SYL_PRELUDE_END"
 ;;
 
 module State = struct
@@ -114,16 +123,19 @@ let print_mode (mode : Modes.t) = print_static mode.staticity ^ print_erased mod
 
 let rec print_key (key : Tst.Value.Concrete.t) =
   match key with
-  | Scalar Unit -> "𝕌"
-  | Scalar Bool -> "𝔹"
-  | Scalar Int -> "𝕀"
-  | Scalar Type -> "𝕋"
+  | Prim (Type Unit) -> "𝕌"
+  | Prim (Type Bool) -> "𝔹"
+  | Prim (Type Int) -> "𝕀"
+  | Prim (Type Type) -> "𝕋"
+  | Prim (Prim prim) -> "λ" ^ Builtin0.Prim.symbol prim
   | Unit -> "ø"
   | Bool true -> "T"
   | Bool false -> "F"
-  | Int i -> Int64.to_string i
-  | Closure i -> "λ" ^ Int.to_string i
-  | Tuple elts ->
+  | Int i when Int64.( >= ) i 0L -> Int64.to_string i
+  | Int i -> "N" ^ String.drop_prefix (Int64.to_string i) 1
+  | External symbol -> symbol
+  | Closure hash -> "λ" ^ Int.to_string hash
+  | Tuple elts | Tuple_t elts ->
     let elts = Nonempty_list.map elts ~f:print_key |> Nonempty_list.to_list in
     String.concat elts ~sep:"ₓ"
   | Arrow { arg; arg_mode; ret; ret_mode } ->
@@ -149,40 +161,48 @@ let rec print_ty (ty : Ty.t) =
   | Unit -> "syl_unit"
   | Bool -> "syl_bool"
   | Int -> "syl_int"
+  | Type -> "syl_type"
   | Env -> "syl_env"
-  | Closure { arg_ty; ret_ty } ->
-    sprintf "syl_closure<%s,%s>" (print_ty arg_ty) (print_ty_or_void ret_ty)
-  | Thunk ty -> sprintf "syl_thunk<%s>" (print_ty_or_void ty)
+  | Closure { arg_ty; ret_ty } -> sprintf "syl_closure<%s,%s>" (print_ty arg_ty) (print_ty ret_ty)
+  | Tuple _ when Ty.is_zero_size ty -> "syl_tuple_void"
   | Tuple elts ->
     let args =
       Nonempty_list.map elts ~f:print_ty |> Nonempty_list.to_list |> String.concat ~sep:", "
     in
     sprintf "syl_tuple<%s>" args
-  | Pack _ -> raise_s [%message "Bug: unexpected type" (ty : Ty.t)]
-
-and print_ty_or_void (ty : Ty.t) = if Ty.is_zero_size ty then "void" else print_ty ty
+;;
 
 let print_expr_nonzero (expr : Expr.t) =
   match expr with
-  | Scalar { value = Unit; _ } -> assert false
+  | Scalar { value = Unit | Type; _ } | Fill_env_rec _ ->
+    raise_s [%message "Bug: expected non-zero size" (expr : Expr.t)]
   | Scalar { value = Bool true; _ } -> "true"
   | Scalar { value = Bool false; _ } -> "false"
   | Scalar { value = Int i; _ } -> Int64.to_string i ^ "ll"
-  | Make_env { captures = { size_in_bytes; _ }; _ } when size_in_bytes = 0 -> "NULL"
-  | Make_env { captures = { entries; _ }; _ } ->
+  | (Make_env { env = { length; _ }; _ } | Make_env_rec { length; _ }) when length = 0 -> "NULL"
+  | Make_env { env = { entries; _ }; _ } ->
     let paths =
       Array.filter_map entries ~f:(fun { path; ty; _ } ->
         if Ty.is_zero_size ty then None else Some (print_path path))
     in
     Printf.sprintf "syl_capture(%s)" (String.concat_array ~sep:", " paths)
+  | Make_env_rec { length; _ } -> Printf.sprintf "syl_env_rec(%d)" length
   | Make_closure { body; env; ty; _ } ->
-    let env = Option.value_map env ~default:"NULL" ~f:print_path in
+    let env = Option.value_map env ~f:print_path ~default:"NULL" in
     Printf.sprintf "%s{%s, %s}" (print_ty ty) (print_path body) env
   | Apply_closure { fn; arg; arg_ty; _ } ->
     if Ty.is_zero_size arg_ty
     then Printf.sprintf "%s()" (print_path fn)
     else Printf.sprintf "%s(%s)" (print_path fn) (print_path arg)
-  | Apply_thunk { fn; _ } -> Printf.sprintf "%s()" (print_path fn)
+  | Extcall { symbol; arg; arg_ty; _ } ->
+    if Ty.is_zero_size arg_ty
+    then Printf.sprintf "%s()" symbol
+    else Printf.sprintf "%s(%s)" symbol (print_path arg)
+  | Apply_thunk { fn; env; _ } -> Printf.sprintf "%s(%s)" (print_path fn) (print_path env)
+  | Apply_proc { fn; arg; arg_ty; env; _ } ->
+    if Ty.is_zero_size arg_ty
+    then Printf.sprintf "%s(%s)" (print_path fn) (print_path env)
+    else Printf.sprintf "%s(%s, %s)" (print_path fn) (print_path arg) (print_path env)
   | Make_tuple { elts; ty; _ } ->
     let paths =
       Array.filter_map elts ~f:(fun (path, ty) ->
@@ -202,52 +222,148 @@ let print_expr_nonzero (expr : Expr.t) =
 
 let print_expr_zero (expr : Expr.t) =
   match expr with
-  | Scalar { value = Unit; _ } | Ident _ | Make_tuple _ | Tuple_get _ -> ""
+  | Scalar { value = Unit | Type; _ } | Ident _ | Make_tuple _ | Tuple_get _ -> ""
+  | Fill_env_rec { env = { length; _ }; _ } when length = 0 -> ""
+  | Fill_env_rec { path; env = { entries; _ }; _ } ->
+    let paths =
+      Array.filter_map entries ~f:(fun { path; ty; _ } ->
+        if Ty.is_zero_size ty then None else Some (print_path path))
+    in
+    Printf.sprintf "syl_fill_env(%s, %s)" (print_path path) (String.concat_array ~sep:", " paths)
   | Apply_closure { fn; arg; arg_ty; _ } ->
     if Ty.is_zero_size arg_ty
     then Printf.sprintf "%s()" (print_path fn)
     else Printf.sprintf "%s(%s)" (print_path fn) (print_path arg)
-  | Apply_thunk { fn; _ } -> Printf.sprintf "%s()" (print_path fn)
-  | _ -> assert false
-;;
-
-let emit_return state return =
-  if Ty.is_zero_size (Expr.ty return)
-  then State.line state "%s;" (print_expr_zero return)
-  else State.line state "return %s;" (print_expr_nonzero return)
-;;
-
-let rec emit_decl state (decl : Decl.t) =
-  match decl with
-  | Values { exprs; _ } ->
-    Array.iter exprs ~f:(fun (path, expr) ->
-      let ty = Expr.ty expr in
-      if not (Ty.is_zero_size ty)
-      then State.line state "static %s %s;" (print_ty ty) (print_path path))
-  | Functions { paths; _ } ->
-    Array.iter paths ~f:(fun (path, ty, _) ->
-      State.line state "static %s %s;" (print_ty ty) (print_path path))
-  | Closure_body { path; arg_ty; return; _ } ->
+  | Apply_thunk { fn; env; _ } -> Printf.sprintf "%s(%s)" (print_path fn) (print_path env)
+  | Apply_proc { fn; arg; arg_ty; env; _ } ->
     if Ty.is_zero_size arg_ty
-    then
-      State.line
-        state
-        "static %s %s(syl_env);"
-        (print_ty_or_void (Expr.ty return))
-        (print_path path)
+    then Printf.sprintf "%s(%s)" (print_path fn) (print_path env)
+    else Printf.sprintf "%s(%s, %s)" (print_path fn) (print_path arg) (print_path env)
+  | Extcall { symbol; arg; arg_ty; _ } ->
+    if Ty.is_zero_size arg_ty
+    then Printf.sprintf "%s()" symbol
+    else Printf.sprintf "%s(%s)" symbol (print_path arg)
+  | Scalar _ | Make_env _ | Make_env_rec _ | Make_closure _ ->
+    raise_s [%message "Bug: expected zero-size" (expr : Expr.t)]
+;;
+
+let emit_decl state path ty =
+  if not (Ty.is_zero_size ty) then State.line state "%s %s;" (print_ty ty) (print_path path)
+;;
+
+let emit_bind state path expr =
+  if Ty.is_zero_size (Expr.ty expr)
+  then State.line state "%s;" (print_expr_zero expr)
+  else State.line state "%s = %s;" (print_path path) (print_expr_nonzero expr)
+;;
+
+let emit_return state expr =
+  if Ty.is_zero_size (Expr.ty expr)
+  then State.line state "%s;" (print_expr_zero expr)
+  else State.line state "return %s;" (print_expr_nonzero expr)
+;;
+
+let rec emit_block state path (block : Block.t) =
+  match block with
+  | Block { bindings; return } when Array.is_empty bindings -> emit_bind state path return
+  | Block { bindings; return } ->
+    Array.iter bindings ~f:(fun (path, block) -> emit_decl state path (Block.ty block));
+    State.scope state ~f:(fun () ->
+      Array.iter bindings ~f:(fun (path, block) -> emit_block state path block));
+    emit_bind state path return
+  | If { cond; then_; else_; _ } ->
+    State.line state "if(%s)" (print_expr_nonzero cond);
+    State.scope state ~f:(fun () -> emit_block state path then_);
+    State.line state "else";
+    State.scope state ~f:(fun () -> emit_block state path else_)
+  | Match { cases; tree; _ } ->
+    State.scope state ~f:(fun () ->
+      Array.iter cases ~f:(fun { bindings; _ } ->
+        Array.iter bindings ~f:(fun (path, ty) -> emit_decl state path ty));
+      emit_switch state path tree;
+      Array.iteri cases ~f:(fun i { block; _ } ->
+        State.line state "%s_%d:" (print_path path) i;
+        State.scope state ~f:(fun () -> emit_block state path block);
+        State.line state "goto %s_exit;" (print_path path));
+      State.line state "%s_exit:;" (print_path path))
+
+and emit_block_return state (block : Block.t) =
+  match block with
+  | Block { bindings; return } when Array.is_empty bindings -> emit_return state return
+  | Block { bindings; return } ->
+    Array.iter bindings ~f:(fun (path, block) -> emit_decl state path (Block.ty block));
+    State.scope state ~f:(fun () ->
+      Array.iter bindings ~f:(fun (path, block) -> emit_block state path block));
+    emit_return state return
+  | _ -> raise_s [%message "Bug: expected block" (block : Block.t)]
+
+and emit_switch state path (tree : Block.tree) =
+  match tree with
+  | Leaf { case; bindings } ->
+    State.scope state ~f:(fun () ->
+      Array.iter bindings ~f:(fun (path, expr) -> emit_bind state path expr);
+      State.line state "goto %s_%d;" (print_path path) case)
+  | Split { cond; then_; else_ } ->
+    State.scope state ~f:(fun () ->
+      State.line state "if(%s)" (print_expr_nonzero cond);
+      emit_switch state path then_;
+      State.line state "else";
+      emit_switch state path else_)
+;;
+
+let emit_proc_decl state (proc : Proc.t) =
+  match proc with
+  | Closure { path; arg_ty; body; _ } ->
+    if Ty.is_zero_size arg_ty
+    then State.line state "static %s %s(syl_env);" (print_ty (Block.ty body)) (print_path path)
     else
       State.line
         state
         "static %s %s(%s, syl_env);"
-        (print_ty (Expr.ty return))
+        (print_ty (Block.ty body))
         (print_path path)
         (print_ty arg_ty)
-  | Thunk_body { path; return; _ } ->
-    State.line state "static %s %s(syl_env);" (print_ty_or_void (Expr.ty return)) (print_path path)
+  | External { path; arg_ty; ret_ty; _ } ->
+    if Ty.is_zero_size arg_ty
+    then State.line state "static %s %s(syl_env);" (print_ty ret_ty) (print_path path)
+    else
+      State.line
+        state
+        "static %s %s(%s, syl_env);"
+        (print_ty ret_ty)
+        (print_path path)
+        (print_ty arg_ty)
+  | Thunk { path; body; _ } ->
+    State.line state "static %s %s(syl_env);" (print_ty (Block.ty body)) (print_path path)
+;;
+
+let emit_bind_env state captures =
+  Array.iter captures ~f:(fun { Env.path; ty; offset } ->
+    if not (Ty.is_zero_size ty)
+    then (
+      let ty = print_ty ty in
+      State.line state "%s %s = *(%s*)(𝒰 + %d);" ty (print_path path) ty offset))
+;;
+
+let emit_proc state (proc : Proc.t) =
+  match proc with
+  | Closure { path; arg; arg_ty; env; body; _ } ->
+    if Ty.is_zero_size arg_ty
+    then State.line state "static %s %s(syl_env 𝒰)" (print_ty (Block.ty body)) (print_path path)
+    else
+      State.line
+        state
+        "static %s %s(%s %s, syl_env 𝒰)"
+        (print_ty (Block.ty body))
+        (print_path path)
+        (print_ty arg_ty)
+        (print_path arg);
+    State.scope state ~f:(fun () ->
+      emit_bind_env state env.entries;
+      emit_block_return state body)
   | External { path; symbol; arg_ty; ret_ty; _ } ->
     let arg = print_ty arg_ty in
-    let ret = print_ty_or_void ret_ty in
-    State.line state "extern %s %s(%s);" ret symbol arg;
+    let ret = print_ty ret_ty in
     if Ty.is_zero_size arg_ty
     then State.line state "static %s %s(syl_env 𝒰)" ret (print_path path)
     else State.line state "static %s %s(%s _, syl_env 𝒰)" ret (print_path path) arg;
@@ -256,131 +372,27 @@ let rec emit_decl state (decl : Decl.t) =
      | false, true -> State.scope state ~f:(fun () -> State.line state "%s(_);" symbol)
      | true, false -> State.scope state ~f:(fun () -> State.line state "return %s();" symbol)
      | false, false -> State.scope state ~f:(fun () -> State.line state "return %s(_);" symbol))
-
-and emit_decls state decls = Array.iter decls ~f:(emit_decl state)
-
-let rec emit_stmt state (stmt : Stmt.t) =
-  match stmt with
-  | Values { bind; exprs; _ } when Array.is_empty bind ->
-    Array.iter exprs ~f:(fun (path, expr) ->
-      let ty = Expr.ty expr in
-      if Ty.is_zero_size ty
-      then State.line state "%s;" (print_expr_zero expr)
-      else State.line state "%s %s = %s;" (print_ty ty) (print_path path) (print_expr_nonzero expr))
-  | Values ({ exprs; _ } as values) ->
-    Array.iter exprs ~f:(fun (path, expr) ->
-      let ty = Expr.ty expr in
-      if not (Ty.is_zero_size ty) then State.line state "%s %s;" (print_ty ty) (print_path path));
-    emit_bind_values state values
-  | If { path; cond; then_bind; then_; else_bind; else_; _ } ->
-    let path = print_path path in
-    let ty = Expr.ty then_ in
-    if not (Ty.is_zero_size ty) then State.line state "%s %s;" (print_ty ty) path;
-    State.line state "if(%s)" (print_expr_nonzero cond);
+  | Thunk { path; env; body; _ } ->
+    State.line state "static %s %s(syl_env 𝒰)" (print_ty (Block.ty body)) (print_path path);
     State.scope state ~f:(fun () ->
-      emit_stmts state then_bind;
-      if Ty.is_zero_size ty
-      then State.line state "%s;" (print_expr_zero then_)
-      else State.line state "%s = %s;" path (print_expr_nonzero then_));
-    State.line state "else";
-    State.scope state ~f:(fun () ->
-      emit_stmts state else_bind;
-      if Ty.is_zero_size ty
-      then State.line state "%s;" (print_expr_zero else_)
-      else State.line state "%s = %s;" path (print_expr_nonzero else_))
-  | Functions ({ paths; _ } as functions) ->
-    Array.iter paths ~f:(fun (path, ty, _) ->
-      State.line state "%s %s;" (print_ty ty) (print_path path));
-    emit_bind_functions state functions
-
-and emit_stmts state (stmts : Stmt.t array) = Array.iter stmts ~f:(fun stmt -> emit_stmt state stmt)
-
-and emit_bind_values state ({ exprs; bind; _ } : Stmt.values) =
-  match Array.is_empty bind with
-  | true ->
-    Array.iter exprs ~f:(fun (path, expr) ->
-      if Ty.is_zero_size (Expr.ty expr)
-      then State.line state "%s;" (print_expr_zero expr)
-      else State.line state "%s = %s;" (print_path path) (print_expr_nonzero expr))
-  | false ->
-    State.scope state ~f:(fun () ->
-      emit_stmts state bind;
-      Array.iter exprs ~f:(fun (path, expr) ->
-        if Ty.is_zero_size (Expr.ty expr)
-        then State.line state "%s;" (print_expr_zero expr)
-        else State.line state "%s = %s;" (print_path path) (print_expr_nonzero expr)))
-
-and emit_bind_functions state { Stmt.paths; captures = { entries; size_in_bytes }; _ } =
-  State.scope state ~f:(fun () ->
-    (match size_in_bytes with
-     | 0 -> State.line state "syl_env 𝒰 = NULL;"
-     | _ -> State.line state "syl_env 𝒰 = syl_env_rec(%d);" size_in_bytes);
-    Array.iter paths ~f:(fun (path, ty, proc) ->
-      State.line state "%s = %s{%s, 𝒰};" (print_path path) (print_ty ty) (print_path proc));
-    Array.iter entries ~f:(fun { path; ty; offset_in_bytes } ->
-      if not (Ty.is_zero_size ty)
-      then State.line state "*(%s*)(𝒰 + %d) = %s;" (print_ty ty) offset_in_bytes (print_path path)))
+      emit_bind_env state env.entries;
+      emit_block_return state body)
 ;;
 
-let emit_env_sub state captures =
-  Array.iter captures ~f:(fun { Env.path; ty; offset_in_bytes } ->
-    if not (Ty.is_zero_size ty)
-    then (
-      let ty = print_ty ty in
-      State.line state "%s %s = *(%s*)(𝒰 + %d);" ty (print_path path) ty offset_in_bytes))
-;;
-
-let emit_procs_and_thunks state (lst : Program.t) =
-  Array.iter lst ~f:(function
-    | Closure_body { path; arg; arg_ty; captures; bind; return; _ } ->
-      if Ty.is_zero_size arg_ty
-      then
-        State.line
-          state
-          "static %s %s(syl_env 𝒰)"
-          (print_ty_or_void (Expr.ty return))
-          (print_path path)
-      else
-        State.line
-          state
-          "static %s %s(%s %s, syl_env 𝒰)"
-          (print_ty_or_void (Expr.ty return))
-          (print_path path)
-          (print_ty arg_ty)
-          (print_path arg);
-      State.scope state ~f:(fun () ->
-        emit_env_sub state captures;
-        emit_stmts state bind;
-        emit_return state return)
-    | Thunk_body { path; captures; bind; return; _ } ->
-      State.line
-        state
-        "static %s %s(syl_env 𝒰)"
-        (print_ty_or_void (Expr.ty return))
-        (print_path path);
-      State.scope state ~f:(fun () ->
-        emit_env_sub state captures;
-        emit_stmts state bind;
-        emit_return state return)
-    | Functions _ | Values _ | External _ -> ())
-;;
-
-let emit_main state (lst : Program.t) =
+let emit_main state main =
   State.line state "int main()";
   State.scope state ~f:(fun () ->
-    Array.iter lst ~f:(function
-      | Values values -> emit_bind_values state values
-      | Functions functions -> emit_bind_functions state functions
-      | Closure_body _ | Thunk_body _ | External _ -> ());
+    Array.iter main ~f:(fun (path, block) -> emit_decl state path (Block.ty block));
+    Array.iter main ~f:(fun (path, block) -> emit_block state path block);
     State.line state "return 0;")
 ;;
 
-let c (lst : Program.t) : string =
+let cpp (lst : Program.t) : string =
   let state = State.create () in
   Buffer.add_string state.buf prelude;
   Buffer.add_string state.buf Syl_std.runtime;
-  emit_decls state lst;
-  emit_procs_and_thunks state lst;
-  emit_main state lst;
+  Array.iter lst.procs ~f:(emit_proc_decl state);
+  Array.iter lst.procs ~f:(emit_proc state);
+  emit_main state lst.bindings;
   Buffer.contents state.buf
 ;;

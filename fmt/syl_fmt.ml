@@ -36,16 +36,16 @@ let fmt_with_loc cfg (expr : _ Cst.With_loc.t) inner =
   fmt_before cfg expr.before inner |> fmt_after cfg expr.after
 ;;
 
-let fmt_erased (erased : Modes.Erasure.t) =
-  match erased with
-  | Erased -> text " erased"
-  | Unerased -> nil
-;;
-
 let fmt_static (static : Modes.Staticity.t) =
   match static with
   | Static -> text " static"
   | Parametric | Dynamic -> nil
+;;
+
+let fmt_erased (erased : Modes.Erasure.t) =
+  match erased with
+  | Erased -> text " erased"
+  | Unerased -> nil
 ;;
 
 let fmt_modes (mode : Modes.Maybe.t) =
@@ -155,11 +155,11 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
     ^^ fmt_expr cfg rest
   | If { cond; then_; else_; static; before_static } ->
     fmt_if cfg ~ind ~force_break:force_break_if ~before_static static cond then_ else_
-  | Assert { cond; static; before_static } ->
+  | Assert { cond; erased; before_erased } ->
     group
       (text "assert"
-       |> fmt_after cfg before_static
-       |> fun d -> d ^^ fmt_static static ^^ nest ind (line ^^ fmt_expr cfg cond))
+       |> fmt_after cfg before_erased
+       |> fun d -> d ^^ fmt_erased erased ^^ nest ind (line ^^ fmt_expr cfg cond))
   | Type_annotation { expr = e; ty } ->
     group (fmt_expr cfg e ^^ nest ind (line ^^ text ": " ^^ fmt_expr cfg ty))
   | Mode_annotation { expr = e; mode } ->

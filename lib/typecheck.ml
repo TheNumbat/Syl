@@ -9,6 +9,7 @@ module Error = struct
       | Expected_tuple of Value.t
       | Redundant of Dst.Expr.pattern Nonempty_list.t
       | Non_exhaustive of Match.Result.Missing.t Nonempty_list.t
+      | Or_unbound of Ident.t Nonempty_list.t
     [@@deriving sexp]
   end
 
@@ -34,9 +35,11 @@ module Error = struct
     | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
     | Static_failure of Builtin.Error.t
-    | Inline_self of Ident.t Nonempty_list.t
+    | Erased_application of
+        { fn : Value.t
+        ; result : Modes.t
+        }
     | Recursion_limit of int
-    | Dynamic_erased
     | Unreachable_reached
   [@@deriving sexp]
 end
@@ -60,6 +63,8 @@ module Fail = struct
     let non_exhaustive ~loc here missing =
       raise (Error { loc; here; reason = Match (Non_exhaustive missing) })
     ;;
+
+    let or_unbound ~loc here ids = raise (Error { loc; here; reason = Match (Or_unbound ids) })
   end
 
   let mode_mismatch ~loc here got need =
@@ -76,7 +81,6 @@ module Fail = struct
 
   let unbound_ident ~loc here id = raise (Error { loc; here; reason = Unbound_ident id })
   let recursion_limit ~loc here limit = raise (Error { loc; here; reason = Recursion_limit limit })
-  let inline_self ~loc here id = raise (Error { loc; here; reason = Inline_self id })
 
   let static_external ~loc here id name =
     raise (Error { loc; here; reason = Static_external (id, name) })
@@ -89,11 +93,13 @@ module Fail = struct
   let static_failure ~loc here err = raise (Error { loc; here; reason = Static_failure err })
   let unreachable_reached ~loc here = raise (Error { loc; here; reason = Unreachable_reached })
 
+  let erased_application ~loc here fn result =
+    raise (Error { loc; here; reason = Erased_application { fn; result } })
+  ;;
+
   let expected_function ~loc here fn arg =
     raise (Error { loc; here; reason = Expected_function { fn; arg } })
   ;;
-
-  let dynamic_erased ~loc here = raise (Error { loc; here; reason = Dynamic_erased })
 
   let unreachable here ~loc =
     Lazy.from_fun (fun () ->
@@ -103,15 +109,63 @@ module Fail = struct
 end
 
 module State = struct
+  module Spec = struct
+    type t =
+      { key : Value.Concrete.t
+      ; family : int
+      }
+    [@@deriving sexp, compare, hash]
+  end
+
+  module Mono = struct
+    type t =
+      { family : int
+      ; body : Expr.t
+      ; desc : Desc.t
+      }
+  end
+
+  module Instance = struct
+    type t =
+      { hash : int
+      ; key : Value.Concrete.t
+      }
+    [@@deriving sexp, compare, hash]
+  end
+
+  module Family = struct
+    type t =
+      { path : Spec.t list
+      ; loc : Lex.Location.t
+      }
+    [@@deriving sexp, compare, hash]
+  end
+
   type t =
-    { mutable next_id : int
+    { mutable stamp : int
     ; mutable depth : int
     ; mutable app_depth : int
     ; mutable abs_depth : int
+    ; mutable path : Spec.t list
+    ; families : (Family.t, int) Hashtbl.t
+    ; specializations : (Instance.t, Mono.t) Hashtbl.t
+    ; groups : (int, Ident.t) Hashtbl.t
     }
 
   let recursion_limit = 1000
-  let create () = { next_id = 0; depth = 0; app_depth = 0; abs_depth = 0 }
+
+  let create ~stamp =
+    { stamp
+    ; depth = 0
+    ; app_depth = 0
+    ; abs_depth = 0
+    ; path = []
+    ; families = Hashtbl.create (module Family)
+    ; specializations = Hashtbl.create (module Instance)
+    ; groups = Hashtbl.create (module Core.Int)
+    }
+  ;;
+
   let concrete t = t.abs_depth = 0
   let monomorphizing t = t.app_depth > 0
 
@@ -133,47 +187,94 @@ module State = struct
     Exn.protect ~f ~finally:(fun () -> t.abs_depth <- t.abs_depth - 1)
   ;;
 
+  let with_spec t spec ~f =
+    t.path <- spec :: t.path;
+    Exn.protect ~f ~finally:(fun () -> t.path <- List.tl_exn t.path)
+  ;;
+
   let fresh_id t =
-    let res = t.next_id in
-    t.next_id <- t.next_id + 1;
+    let res = t.stamp in
+    t.stamp <- t.stamp + 1;
     res
   ;;
 
   let fresh_var t = Value.Var (Ident.create Ident.Raw.anon ~stamp:(fresh_id t))
+
+  let family t ~loc =
+    let key = { Family.loc; path = List.rev t.path } in
+    Hashtbl.find_or_add t.families key ~default:(fun () -> fresh_id t)
+  ;;
+
+  let specialize t instance ~f =
+    match Hashtbl.find t.specializations instance with
+    | Some mono -> mono
+    | None ->
+      let mono = f () in
+      Hashtbl.set t.specializations ~key:instance ~data:mono;
+      mono
+  ;;
+
+  let record_group t var ({ mode; static; _ } : Desc.t) =
+    if Lazy.is_val static && Modes.is_static mode && Modes.is_unerased mode
+    then (
+      match Lazy.force static with
+      | Value.Closure { hash; _ } | Binder { hash; _ } ->
+        Hashtbl.add_exn t.groups ~key:hash ~data:var
+      | _ -> ())
+  ;;
+
+  let collect_monos t =
+    Hashtbl.fold
+      t.specializations
+      ~init:Core.Int.Map.empty
+      ~f:(fun ~key:{ hash = _; key } ~data:{ Mono.family; body; desc = _ } acc ->
+        Map.update acc family ~f:(fun monos ->
+          let monos = Option.value monos ~default:Value.Concrete.Map.empty in
+          Map.update monos key ~f:(function
+            | None -> body
+            | Some existing -> existing)))
+  ;;
 end
 
-let rec concrete state (v : Value.t) : Value.Concrete.t option =
+let rec concrete (v : Value.t) : Value.Concrete.t option =
   match v with
   | Unit -> Some Unit
   | Bool (T b) -> Some (Bool b)
   | Int (T i) -> Some (Int i)
   | Tuple elts ->
-    Nonempty_list.map elts ~f:(concrete state)
+    Nonempty_list.map elts ~f:concrete
     |> Nonempty_list.to_list
     |> Option.all
     |> Option.map ~f:(fun elts -> Value.Concrete.Tuple (Nonempty_list.of_list_exn elts))
-  | Closure _ | Binder _ | Prim _ -> Some (Closure (State.fresh_id state))
-  | Type Unit -> Some (Scalar Unit)
-  | Type Bool -> Some (Scalar Bool)
-  | Type Int -> Some (Scalar Int)
-  | Type Type -> Some (Scalar Type)
+  | Closure closure -> Some (Closure closure.hash)
+  | Binder binder -> Some (Closure binder.hash)
+  | Prim prim -> Some (Prim (Prim prim))
+  | Type Unit -> Some (Prim (Type Unit))
+  | Type Bool -> Some (Prim (Type Bool))
+  | Type Int -> Some (Prim (Type Int))
+  | Type Type -> Some (Prim (Type Type))
   | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
-  | Type (Pi { arg_ty; arg_mode; ret_ty = T ret_ty; ret_mode }) ->
-    let%map arg = concrete state arg_ty
-    and ret = concrete state ret_ty in
+  | Type (Pi { arg_ty; arg_mode; ret_ty = T { ty = ret_ty; _ }; ret_mode }) ->
+    let%map arg = concrete arg_ty
+    and ret = concrete ret_ty in
     Value.Concrete.Arrow { arg; arg_mode; ret; ret_mode }
   | Type (Tuple elts) ->
-    let%map elts =
-      Nonempty_list.map elts ~f:(concrete state) |> Nonempty_list.to_list |> Option.all
-    in
-    Value.Concrete.Tuple (Nonempty_list.of_list_exn elts)
-  | Bottom | Bool _ | Int _ | Var _ | If _ | Apply _ | External _ | Type (Pi _) -> None
+    let%map elts = Nonempty_list.map elts ~f:concrete |> Nonempty_list.to_list |> Option.all in
+    Value.Concrete.Tuple_t (Nonempty_list.of_list_exn elts)
+  | External { symbol; _ } -> Some (External symbol)
+  | Bottom | Bool _ | Int _ | Var _ | If _ | Apply _ | Proj _ | Type (Pi _) -> None
+;;
+
+(* A static forced during its own computation becomes abstract. *)
+let force_or_var state static =
+  try Lazy.force static with
+  | Lazy.Undefined -> State.fresh_var state
 ;;
 
 let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
   let expr : Expr.t =
     if (not (Modes.is_erased src_mode)) && Modes.is_erased dst_mode
-    then Literal { value = Lazy.force static; ty = src_ty; mode = src_mode; loc = Expr.loc expr }
+    then Erased { ty = src_ty; mode = src_mode; loc = Expr.loc expr }
     else expr
   in
   let static =
@@ -193,23 +294,27 @@ let resolve_body_mode arg_mode (body_desc : Desc.t) =
   { body_desc with mode }
 ;;
 
+let resolve_app_mode ~loc (fn_desc : Desc.t) (ret_mode : Modes.t) : Modes.t =
+  if Modes.is_erased fn_desc.mode
+  then (
+    if not (Modes.is_static ret_mode) then Fail.erased_application [%here] ~loc fn_desc.ty ret_mode;
+    { ret_mode with erasure = Erased })
+  else ret_mode
+;;
+
 let require_mode ~loc src dst =
   if not (Modes.leq src dst) then Fail.mode_mismatch [%here] ~loc src dst
 ;;
 
-let require_mode_annotation ~loc src annot =
+let require_mode_annotation src annot =
   let annot =
-    if Modes.Maybe.is_erased annot
-    then (
-      if Modes.Maybe.is_dynamic annot then Fail.dynamic_erased [%here] ~loc;
-      { annot with staticity = Some Static })
+    if Modes.Maybe.is_erased annot && Option.is_none annot.staticity
+    then { annot with staticity = Some Static }
     else annot
   in
   let annot =
-    if Modes.Maybe.is_dynamic annot
-    then (
-      if Modes.Maybe.is_erased annot then Fail.dynamic_erased [%here] ~loc;
-      { annot with erasure = Some Unerased })
+    if Modes.Maybe.is_dynamic annot && Option.is_none annot.erasure
+    then { annot with erasure = Some Unerased }
     else annot
   in
   Modes.annotate src annot
@@ -221,10 +326,6 @@ let require_static ~loc (desc : Desc.t) =
 
 let require_unerased ~loc (desc : Desc.t) =
   require_mode ~loc desc.mode (Modes.top ~erasure:Unerased ())
-;;
-
-let require_not_dynamic_erased ~loc (desc : Desc.t) =
-  if Modes.is_dynamic desc.mode then require_unerased ~loc desc
 ;;
 
 let require_dynamic_arrow ~loc var sym (ty : Value.t) =
@@ -239,27 +340,6 @@ let require_var ~loc env id =
   match Env.find env id with
   | Some value -> value
   | None -> Fail.unbound_ident [%here] ~loc id
-;;
-
-let inline ~loc ~(env : Env.t) ~arg_id ~arg ~arg_mode body =
-  let ty = Expr.ty body in
-  let mode = Expr.mode body in
-  let fvs = Set.remove (Expr.free_vars body) arg_id in
-  let body =
-    if Modes.is_erased arg_mode
-    then body
-    else Expr.Let { var = arg_id; bind = arg; rest = body; ty; mode; loc }
-  in
-  Set.fold fvs ~init:body ~f:(fun acc id ->
-    match Map.find env id with
-    | Some (desc : Desc.t) when not (Modes.is_erased desc.mode) ->
-      (try
-         let value = Lazy.force desc.static in
-         let bind = Expr.Literal { value; ty = desc.ty; mode = desc.mode; loc } in
-         Expr.Let { var = id; bind; rest = acc; ty; mode; loc }
-       with
-       | Lazy.Undefined -> acc)
-    | _ -> acc)
 ;;
 
 let rebind_if_var env (expr : Expr.t) value =
@@ -292,21 +372,25 @@ and require_join_desc state ~loc (desc1 : Desc.t) (desc2 : Desc.t) =
 and require_static_type ~loc state (desc : Desc.t) =
   require_static ~loc desc;
   require_leq state ~loc desc.ty (Type Type);
-  Lazy.force desc.static
+  force_or_var state desc.static
 
 and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
   (* We've already typechecked forall args, so these can't fail. *)
   match dep with
-  | T a -> a
+  | T { ty; memo } ->
+    (match concrete arg_val with
+     | Some arg_concrete -> Hashtbl.set memo ~key:arg_concrete ~data:ty
+     | None -> ());
+    ty
   | Meet (a, b) -> Option.value_exn (meet_value state (eval state a arg_val) (eval state b arg_val))
   | Join (a, b) -> Option.value_exn (join_value state (eval state a arg_val) (eval state b arg_val))
   | Reduce { env; arg; arg_ty; arg_mode; memo; ret_ty } ->
     let reduce () =
       let env = Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val } in
       let ret_ty_desc = reduce state env ret_ty in
-      Lazy.force ret_ty_desc.static
+      force_or_var state ret_ty_desc.static
     in
-    (match concrete state arg_val with
+    (match concrete arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
          | None -> State.with_app state ~f:reduce
@@ -318,7 +402,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
       let body_desc = reduce state env body in
       body_desc.ty
     in
-    (match concrete state arg_val with
+    (match concrete arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
          | None -> State.with_app state ~f:reduce
@@ -343,12 +427,18 @@ and leq_value state (a : Value.t) (b : Value.t) =
      | Unequal_lengths -> false)
   | External a, External b -> String.equal a.symbol b.symbol
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
-    , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
-    leq_value state a_cond b_cond && leq_value state a_then b_then && leq_value state a_else b_else
+    , If { cond = b_cond; then_ = b_then; else_ = b_else } )
+    when leq_value state a_cond b_cond
+         && leq_value state a_then b_then
+         && leq_value state a_else b_else -> true
+  | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg }
+    when leq_value state a_fn b_fn && leq_value state a_arg b_arg -> true
+  | a, Apply { fn = Binder binder; arg } -> unfold_apply state binder arg ~f:(leq_value state a)
+  | Apply { fn = Binder binder; arg }, b ->
+    unfold_apply state binder arg ~f:(fun a -> leq_value state a b)
   | If { then_; else_; _ }, b -> leq_value state then_ b && leq_value state else_ b
   | a, If { then_; else_; _ } -> leq_value state a then_ && leq_value state a else_
-  | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-    leq_value state a_fn b_fn && leq_value state a_arg b_arg
+  | Proj a, Proj b -> a.index = b.index && leq_value state a.tuple b.tuple
   | ( ( Unit
       | Bool _
       | Int _
@@ -357,47 +447,34 @@ and leq_value state (a : Value.t) (b : Value.t) =
       | Binder _
       | Var _
       | Apply _
+      | Proj _
       | External _
       | Tuple _
       | Prim _ )
     , _ ) -> false
 
-and geq_value state (a : Value.t) (b : Value.t) =
+and geq_value state (a : Value.t) (b : Value.t) = leq_value state b a
+
+and unfold_apply : 'a. State.t -> Binder.t -> Value.t -> f:(Value.t -> 'a) -> 'a =
+  fun state binder arg_val ~f ->
+  let loc = Dst.Expr.loc binder.body_dst in
+  State.recur state ~loc ~f:(fun () ->
+    let arg_ty = Ty.arg binder.ty in
+    let arg_mode = Ty.arg_mode binder.ty in
+    let env =
+      Env.bind
+        binder.env
+        binder.arg
+        { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
+    in
+    let desc = reduce state env binder.body_dst in
+    f (force_or_var state desc.static))
+
+and unfold_value state (a : Value.t) (b : Value.t) ~f =
   match a, b with
-  | _, Bottom -> true
-  | Bottom, _ -> false
-  | Unit, Unit -> true
-  | Bool a, Bool b -> geq_bool state a b
-  | Int a, Int b -> geq_int state a b
-  | Type a, Type b -> geq_ty state a b
-  | Closure a, Closure b -> geq_closure a b
-  | Binder a, Binder b -> geq_binder a b
-  | Var a, Var b -> Ident.equal a b
-  | Prim a, Prim b -> Builtin.Prim.equal a b
-  | Tuple a_elts, Tuple b_elts ->
-    (match Nonempty_list.zip a_elts b_elts with
-     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> geq_value state a b)
-     | Unequal_lengths -> false)
-  | External a, External b -> String.equal a.symbol b.symbol
-  | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
-    , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
-    geq_value state a_cond b_cond && geq_value state a_then b_then && geq_value state a_else b_else
-  | If { then_; else_; _ }, b -> geq_value state then_ b && geq_value state else_ b
-  | a, If { then_; else_; _ } -> geq_value state a then_ && geq_value state a else_
-  | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-    geq_value state a_fn b_fn && geq_value state a_arg b_arg
-  | ( ( Unit
-      | Bool _
-      | Int _
-      | Type _
-      | Closure _
-      | Binder _
-      | Var _
-      | Apply _
-      | External _
-      | Tuple _
-      | Prim _ )
-    , _ ) -> false
+  | a, Apply { fn = Binder binder; arg } -> unfold_apply state binder arg ~f:(fun b -> f a b)
+  | Apply { fn = Binder binder; arg }, b -> unfold_apply state binder arg ~f:(fun a -> f a b)
+  | _, _ -> None
 
 and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   match a, b with
@@ -420,11 +497,18 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
      | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
-    , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
-    let%map cond = join_value state a_cond b_cond
-    and then_ = join_value state a_then b_then
-    and else_ = join_value state a_else b_else in
-    Value.If { cond; then_; else_ }
+    , (If { cond = b_cond; then_ = b_then; else_ = b_else } as b) ) ->
+    (match
+       let%map cond = join_value state a_cond b_cond
+       and then_ = join_value state a_then b_then
+       and else_ = join_value state a_else b_else in
+       Value.If { cond; then_; else_ }
+     with
+     | Some join -> Some join
+     | None ->
+       let%bind then_ = join_value state a_then b
+       and else_ = join_value state a_else b in
+       join_value state then_ else_)
   | If { then_; else_; _ }, b ->
     let%bind then_ = join_value state then_ b
     and else_ = join_value state else_ b in
@@ -433,10 +517,19 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
     let%bind then_ = join_value state a then_
     and else_ = join_value state a else_ in
     join_value state then_ else_
-  | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-    let%map fn = join_value state a_fn b_fn
-    and arg = join_value state a_arg b_arg in
-    Value.Apply { fn; arg }
+  | (Apply { fn = a_fn; arg = a_arg } as a), (Apply { fn = b_fn; arg = b_arg } as b) ->
+    (match
+       let%map fn = join_value state a_fn b_fn
+       and arg = join_value state a_arg b_arg in
+       Value.Apply { fn; arg }
+     with
+     | Some join -> Some join
+     | None -> unfold_value state a b ~f:(join_value state))
+  | a, (Apply { fn = Binder _; _ } as b) | (Apply { fn = Binder _; _ } as a), b ->
+    unfold_value state a b ~f:(join_value state)
+  | Proj a, Proj b when a.index = b.index ->
+    let%map tuple = join_value state a.tuple b.tuple in
+    Value.Proj { tuple; index = a.index }
   | ( ( Unit
       | Bool _
       | Int _
@@ -445,6 +538,7 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | Binder _
       | Var _
       | Apply _
+      | Proj _
       | External _
       | Tuple _
       | Prim _ )
@@ -470,11 +564,18 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
      | Unequal_lengths -> None)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
   | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
-    , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
-    let%map cond = meet_value state a_cond b_cond
-    and then_ = meet_value state a_then b_then
-    and else_ = meet_value state a_else b_else in
-    Value.If { cond; then_; else_ }
+    , (If { cond = b_cond; then_ = b_then; else_ = b_else } as b) ) ->
+    (match
+       let%map cond = meet_value state a_cond b_cond
+       and then_ = meet_value state a_then b_then
+       and else_ = meet_value state a_else b_else in
+       Value.If { cond; then_; else_ }
+     with
+     | Some meet -> Some meet
+     | None ->
+       let%bind then_ = meet_value state a_then b
+       and else_ = meet_value state a_else b in
+       meet_value state then_ else_)
   | If { then_; else_; _ }, b ->
     let%bind then_ = meet_value state then_ b
     and else_ = meet_value state else_ b in
@@ -483,10 +584,19 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
     let%bind then_ = meet_value state a then_
     and else_ = meet_value state a else_ in
     meet_value state then_ else_
-  | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-    let%map fn = meet_value state a_fn b_fn
-    and arg = meet_value state a_arg b_arg in
-    Value.Apply { fn; arg }
+  | (Apply { fn = a_fn; arg = a_arg } as a), (Apply { fn = b_fn; arg = b_arg } as b) ->
+    (match
+       let%map fn = meet_value state a_fn b_fn
+       and arg = meet_value state a_arg b_arg in
+       Value.Apply { fn; arg }
+     with
+     | Some meet -> Some meet
+     | None -> unfold_value state a b ~f:(meet_value state))
+  | a, (Apply { fn = Binder _; _ } as b) | (Apply { fn = Binder _; _ } as a), b ->
+    unfold_value state a b ~f:(meet_value state)
+  | Proj a, Proj b when a.index = b.index ->
+    let%map tuple = meet_value state a.tuple b.tuple in
+    Value.Proj { tuple; index = a.index }
   | ( ( Unit
       | Bool _
       | Int _
@@ -495,19 +605,18 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | Binder _
       | Var _
       | Apply _
+      | Proj _
       | External _
       | Tuple _
       | Prim _ )
     , _ ) -> None
 
-and leq_closure _ _ = false
-and geq_closure _ _ = false
-and join_closure _ _ = None
-and meet_closure _ _ = None
-and leq_binder _ _ = false
-and geq_binder _ _ = false
-and join_binder _ _ = None
-and meet_binder _ _ = None
+and leq_closure (a : Closure.t) (b : Closure.t) = a.hash = b.hash
+and join_closure (a : Closure.t) (b : Closure.t) = if a.hash = b.hash then Some a else None
+and meet_closure (a : Closure.t) (b : Closure.t) = if a.hash = b.hash then Some a else None
+and leq_binder (a : Binder.t) (b : Binder.t) = a.hash = b.hash
+and join_binder (a : Binder.t) (b : Binder.t) = if a.hash = b.hash then Some a else None
+and meet_binder (a : Binder.t) (b : Binder.t) = if a.hash = b.hash then Some a else None
 
 (* Compares structurally. Could use a fancier solver. *)
 and leq_bool state a b =
@@ -524,36 +633,27 @@ and leq_bool state a b =
   | Gte (a0, a1), Gte (b0, b1) -> leq_value state a0 b0 && leq_value state a1 b1
   | _ -> false
 
-and geq_bool state a b = leq_bool state a b
-
 (* Compares structurally. Could use a fancier solver. *)
-and join_bool state a b =
+and unify_bool ~f (a : Bool.t) (b : Bool.t) : Bool.t option =
   match a, b with
   | T a, T b -> if Core.Bool.equal a b then Some (T a) else None
-  | Not a, Not b -> Option.map (join_value state a b) ~f:(fun b : Bool.t -> Not b)
+  | Not a, Not b -> Option.map (f a b) ~f:(fun b : Bool.t -> Not b)
   | And (a0, a1), And (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t ->
-      And (a, b))
-  | Or (a0, a1), Or (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t -> Or (a, b))
-  | Eq (a0, a1), Eq (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t -> Eq (a, b))
+    Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> And (a, b))
+  | Or (a0, a1), Or (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> Or (a, b))
+  | Eq (a0, a1), Eq (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> Eq (a, b))
   | Neq (a0, a1), Neq (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t ->
-      Neq (a, b))
-  | Lt (a0, a1), Lt (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t -> Lt (a, b))
+    Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> Neq (a, b))
+  | Lt (a0, a1), Lt (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> Lt (a, b))
   | Lte (a0, a1), Lte (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t ->
-      Lte (a, b))
-  | Gt (a0, a1), Gt (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t -> Gt (a, b))
+    Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> Lte (a, b))
+  | Gt (a0, a1), Gt (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> Gt (a, b))
   | Gte (a0, a1), Gte (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Bool.t ->
-      Gte (a, b))
+    Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Bool.t -> Gte (a, b))
   | _ -> None
 
-and meet_bool state a b = join_bool state a b
+and join_bool state a b = unify_bool ~f:(join_value state) a b
+and meet_bool state a b = unify_bool ~f:(meet_value state) a b
 
 (* Compares structurally. Could use a fancier solver. *)
 and leq_int state a b =
@@ -567,26 +667,20 @@ and leq_int state a b =
   | Mod (a0, a1), Mod (b0, b1) -> leq_value state a0 b0 && leq_value state a1 b1
   | _ -> false
 
-and geq_int state a b = leq_int state a b
-
 (* Compares structurally. Could use a fancier solver. *)
-and join_int state a b =
+and unify_int ~f (a : Int.t) (b : Int.t) : Int.t option =
   match a, b with
   | T a, T b -> if Int64.equal a b then Some (T a) else None
-  | Neg a, Neg b -> Option.map (join_value state a b) ~f:(fun i : Int.t -> Neg i)
-  | Add (a0, a1), Add (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Int.t -> Add (a, b))
-  | Sub (a0, a1), Sub (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Int.t -> Sub (a, b))
-  | Mul (a0, a1), Mul (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Int.t -> Mul (a, b))
-  | Div (a0, a1), Div (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Int.t -> Div (a, b))
-  | Mod (a0, a1), Mod (b0, b1) ->
-    Option.map2 (join_value state a0 b0) (join_value state a1 b1) ~f:(fun a b : Int.t -> Mod (a, b))
+  | Neg a, Neg b -> Option.map (f a b) ~f:(fun i : Int.t -> Neg i)
+  | Add (a0, a1), Add (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Int.t -> Add (a, b))
+  | Sub (a0, a1), Sub (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Int.t -> Sub (a, b))
+  | Mul (a0, a1), Mul (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Int.t -> Mul (a, b))
+  | Div (a0, a1), Div (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Int.t -> Div (a, b))
+  | Mod (a0, a1), Mod (b0, b1) -> Option.map2 (f a0 b0) (f a1 b1) ~f:(fun a b : Int.t -> Mod (a, b))
   | _ -> None
 
-and meet_int state a b = join_int state a b
+and join_int state a b = unify_int ~f:(join_value state) a b
+and meet_int state a b = unify_int ~f:(meet_value state) a b
 
 and leq_ty state a b =
   match a, b with
@@ -623,43 +717,6 @@ and leq_ty state a b =
     && Modes.leq a_ret_mode b_ret_mode
     && geq_value state a_arg_ty b_arg_ty
     && leq_value state (eval state a_ret_ty (State.fresh_var state)) b_ret_ty
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> false
-
-and geq_ty state a b =
-  match a, b with
-  | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
-  | Tuple a_elts, Tuple b_elts ->
-    (match Nonempty_list.zip a_elts b_elts with
-     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> geq_value state a b)
-     | Unequal_lengths -> false)
-  | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-    , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
-    ->
-    Modes.leq a_arg_mode b_arg_mode
-    && Modes.geq a_ret_mode b_ret_mode
-    && leq_value state a_arg_ty b_arg_ty
-    && geq_value state a_ret_ty b_ret_ty
-  | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-    , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
-    Modes.leq a_arg_mode b_arg_mode
-    && Modes.geq a_ret_mode b_ret_mode
-    && leq_value state a_arg_ty b_arg_ty
-    &&
-    let var = State.fresh_var state in
-    geq_value state (eval state a_ret_ty var) (eval state b_ret_ty var)
-  | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-    , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
-    Modes.leq a_arg_mode b_arg_mode
-    && Modes.geq a_ret_mode b_ret_mode
-    && leq_value state a_arg_ty b_arg_ty
-    && geq_value state a_ret_ty (eval state b_ret_ty (State.fresh_var state))
-  | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-    , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
-    ->
-    Modes.leq a_arg_mode b_arg_mode
-    && Modes.geq a_ret_mode b_ret_mode
-    && leq_value state a_arg_ty b_arg_ty
-    && geq_value state (eval state a_ret_ty (State.fresh_var state)) b_ret_ty
   | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> false
 
 and join_ty state a b =
@@ -704,7 +761,7 @@ and join_ty state a b =
     Ty.Pi
       { arg_ty
       ; arg_mode = Modes.meet a_arg_mode b_arg_mode
-      ; ret_ty = Dependent.join (T a_ret_ty) b_ret_ty
+      ; ret_ty = Dependent.join (Dependent.mono a_ret_ty) b_ret_ty
       ; ret_mode = Modes.join a_ret_mode b_ret_mode
       }
   | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
@@ -715,7 +772,7 @@ and join_ty state a b =
     Ty.Pi
       { arg_ty
       ; arg_mode = Modes.meet a_arg_mode b_arg_mode
-      ; ret_ty = Dependent.join a_ret_ty (T b_ret_ty)
+      ; ret_ty = Dependent.join a_ret_ty (Dependent.mono b_ret_ty)
       ; ret_mode = Modes.join a_ret_mode b_ret_mode
       }
   | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
@@ -805,8 +862,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
   | Var { id; loc } ->
     let desc = require_var ~loc env id in
     (match desc.mode.erasure with
-     | Erased ->
-       Literal { value = Lazy.force desc.static; ty = desc.ty; mode = desc.mode; loc }, desc
+     | Erased -> Erased { ty = desc.ty; mode = desc.mode; loc }, desc
      | Unerased -> Var { id; ty = desc.ty; mode = desc.mode; loc }, desc)
   | Let { var; bind; rest; loc } ->
     let bind, bind_desc = typecheck state env bind in
@@ -816,7 +872,9 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
   | Fun { funs; rest; loc } ->
     let funs, env = typecheck_funs state env funs in
     let rest, rest_desc = typecheck state env rest in
-    Fun { funs; rest; ty = rest_desc.ty; mode = rest_desc.mode; loc }, rest_desc
+    (match Nonempty_list.of_list funs with
+     | Some funs -> Fun { funs; rest; ty = rest_desc.ty; mode = rest_desc.mode; loc }, rest_desc
+     | None -> rest, rest_desc)
   | Arrow { arg; arg_mode; arg_id; ret; ret_mode; loc } ->
     let ty = Value.Type Type in
     let mode = Modes.create ~staticity:Static ~erasure:Erased in
@@ -836,7 +894,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
   | Mode_annotation { expr; mode; loc } ->
     let expr, desc = typecheck state env expr in
-    let mode = require_mode_annotation ~loc desc.mode mode in
+    let mode = require_mode_annotation desc.mode mode in
     require_mode ~loc desc.mode mode;
     weaken ~loc expr desc ~ty:desc.ty ~mode
   | Type_annotation { expr; ty; loc } ->
@@ -855,25 +913,14 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
       Literal { value; ty; mode; loc }, { Desc.ty; mode; static = Lazy.from_val value })
   | Make_tuple { elts; loc } ->
     (* TODO could maybe be a primitive *)
-    let elts, descs =
-      Nonempty_list.map elts ~f:(fun elt -> typecheck state env elt) |> Nonempty_list.unzip
-    in
-    let mode =
-      Nonempty_list.fold descs ~init:(Modes.bottom ()) ~f:(fun acc desc -> Modes.join acc desc.mode)
-    in
-    let ty = Value.Type (Tuple (Nonempty_list.map descs ~f:(fun desc -> desc.ty))) in
-    let static =
-      Nonempty_list.map descs ~f:(fun desc -> desc.static)
-      |> Nonempty_list.to_list
-      |> Lazy.all
-      |> Lazy.map ~f:(fun elts -> Value.Tuple (Nonempty_list.of_list_exn elts))
-    in
-    Tuple { elts; ty; mode; loc }, { ty; mode; static }
+    let elts = Nonempty_list.map elts ~f:(fun elt -> typecheck state env elt) in
+    Expr.tuple ~loc elts
 
 and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode : Value.t =
   let arg_desc = reduce state env arg_ty in
-  let arg_mode = require_mode_annotation ~loc (Modes.default ()) arg_mode in
-  let ret_mode = require_mode_annotation ~loc (Modes.default ()) ret_mode in
+  let arg_mode = require_mode_annotation (Modes.default ()) arg_mode in
+  (* TODO default to static? *)
+  let ret_mode = require_mode_annotation (Modes.default ()) ret_mode in
   let arg_ty = require_static_type state ~loc arg_desc in
   match arg_mode.staticity with
   | Dynamic | Parametric ->
@@ -914,6 +961,7 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
           acc
           { Dst.Expr.var; arg; erased; arg_ty; arg_mode; ret_mode; ret_ty; body = body_dst; loc }
         ->
+        let family = State.family state ~loc in
         let ty = typecheck_arrow state ~loc env ~arg_id:arg ~arg_ty ~arg_mode ~ret_ty ~ret_mode in
         let fun_mode = Modes.join fun_mode (Modes.bottom ~erasure:erased ()) in
         let desc : Desc.t =
@@ -923,17 +971,12 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
             let static =
               Lazy.from_fun (fun () ->
                 Value.Binder
-                  { arg
-                  ; ty
-                  ; body = body_dst
-                  ; mono = Hashtbl.create (module Value.Concrete)
-                  ; env = !env_rec
-                  })
+                  { arg; ty; body_dst; env = !env_rec; family; hash = State.fresh_id state })
             in
             { ty; mode = fun_mode; static }
           | Type (Arrow { arg_ty; ret_ty; ret_mode; _ }) ->
             let arg_mode =
-              require_mode_annotation ~loc (Modes.default ~staticity:Parametric ()) arg_mode
+              require_mode_annotation (Modes.default ~staticity:Parametric ()) arg_mode
             in
             let fun_mode = Modes.return fun_mode ~ret:ret_mode in
             let static =
@@ -951,7 +994,8 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
                 let body_desc = resolve_body_mode arg_mode body_desc in
                 require_mode ~loc body_desc.mode ret_mode;
                 require_leq state ~loc body_desc.ty ret_ty;
-                Value.Closure { arg; ty; body; body_dst; env = !env_rec })
+                Value.Closure
+                  { arg; ty; body; body_dst; env = !env_rec; family; hash = State.fresh_id state })
             in
             let arg_mode = { arg_mode with staticity = Dynamic } in
             { Desc.ty = Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
@@ -964,33 +1008,37 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
   in
   env_rec := env;
   let funs =
-    Nonempty_list.map funs ~f:(fun { var; loc; _ } : Expr.fun_ ->
+    Nonempty_list.filter_map funs ~f:(fun { var; loc; _ } : Expr.fun_ option ->
       let { Desc.ty; mode; static } = require_var ~loc env var in
-      try
-        match ty, Lazy.force static with
-        | Type (Arrow _), Closure { arg; ty; body; _ } -> Lambda { var; arg; body; ty; mode; loc }
-        | Type (Pi { arg_ty; arg_mode; ret_mode; ret_ty }), Binder { arg; ty; body; mono; _ } ->
-          let arg_val = State.fresh_var state in
-          let env =
-            Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
-          in
-          let body_desc = reduce state env body in
-          if Modes.is_erased ret_mode then require_static ~loc body_desc;
-          let body_desc = resolve_body_mode arg_mode body_desc in
-          require_mode ~loc body_desc.mode ret_mode;
-          require_leq state ~loc body_desc.ty (eval state ret_ty arg_val);
-          Binder { var; arg; body; mono; ty; mode; loc }
-        | _ -> raise_s [%message "Bug: expected function type"]
-      with
-      | Lazy.Undefined ->
-        Fail.inline_self [%here] ~loc (Nonempty_list.map funs ~f:(fun { var; _ } -> var)))
+      let value = Lazy.force static in
+      State.record_group state var { ty; mode; static };
+      match ty, value with
+      | Type (Arrow _), Closure { arg; ty; body; family; _ } ->
+        if Modes.is_unerased mode
+        then Some (Lambda { var; arg; body; ty; mode; family; loc })
+        else None
+      | Type (Pi { arg_ty; arg_mode; ret_mode; ret_ty }), Binder { arg; ty; body_dst; family; _ } ->
+        let arg_val = State.fresh_var state in
+        let env =
+          Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
+        in
+        let body_desc = reduce state env body_dst in
+        if Modes.is_erased ret_mode then require_static ~loc body_desc;
+        let body_desc = resolve_body_mode arg_mode body_desc in
+        require_mode ~loc body_desc.mode ret_mode;
+        require_leq state ~loc body_desc.ty (eval state ret_ty arg_val);
+        if Modes.is_unerased mode
+        then Some (Binder { var; arg; body = Value.Concrete.Map.empty; ty; mode; family; loc })
+        else None
+      | _ -> raise_s [%message "Bug: expected function type"])
   in
   funs, env
 
 and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
+  let family = State.family state ~loc in
   let arg_ty_desc = reduce state env arg_ty in
   let arg_ty = require_static_type state ~loc arg_ty_desc in
-  let arg_mode = require_mode_annotation ~loc (Modes.default ~staticity:Parametric ()) arg_mode in
+  let arg_mode = require_mode_annotation (Modes.default ~staticity:Parametric ()) arg_mode in
   let fn_mode =
     Set.remove (Dst.Expr.free_vars body_dst) arg
     |> Set.fold ~init:(Modes.bottom ()) ~f:(fun acc id ->
@@ -1012,8 +1060,16 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
       Value.Type (Arrow { arg_ty; arg_mode; ret_ty = body_desc.ty; ret_mode = body_desc.mode })
     in
     let fn_mode = Modes.return fn_mode ~ret:body_desc.mode in
-    let static = Lazy.from_val (Value.Closure { arg; ty; body; body_dst; env }) in
-    Expr.Lambda { arg; ty; body; mode = fn_mode; loc }, { Desc.ty; mode = fn_mode; static }
+    let static =
+      Lazy.from_val
+        (Value.Closure { arg; ty; body; body_dst; env; family; hash = State.fresh_id state })
+    in
+    let expr : Expr.t =
+      if Modes.is_erased fn_mode
+      then Erased { ty; mode = fn_mode; loc }
+      else Lambda { arg; ty; body; mode = fn_mode; family; loc }
+    in
+    expr, { Desc.ty; mode = fn_mode; static }
   | Static ->
     let body_desc =
       let env =
@@ -1030,9 +1086,43 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
       Value.Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode = body_desc.mode })
     in
     let fn_mode = Modes.return fn_mode ~ret:body_desc.mode in
-    let mono = Hashtbl.create (module Value.Concrete) in
-    let static = Lazy.from_val (Value.Binder { arg; ty; body = body_dst; mono; env }) in
-    Binder { arg; ty; body = body_dst; mono; mode = fn_mode; loc }, { ty; mode = fn_mode; static }
+    let static =
+      Lazy.from_val (Value.Binder { arg; ty; body_dst; env; family; hash = State.fresh_id state })
+    in
+    let expr : Expr.t =
+      if Modes.is_erased fn_mode
+      then Erased { ty; mode = fn_mode; loc }
+      else Binder { arg; ty; body = Value.Concrete.Map.empty; mode = fn_mode; family; loc }
+    in
+    expr, { ty; mode = fn_mode; static }
+
+and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mode ~arg_val key =
+  State.specialize state { hash = binder.hash; key } ~f:(fun () ->
+    let env =
+      Env.bind
+        binder.env
+        binder.arg
+        { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
+    in
+    let body, body_desc =
+      State.with_spec state { family = binder.family; key } ~f:(fun () ->
+        State.with_app state ~f:(fun () -> typecheck state env binder.body_dst))
+    in
+    let body =
+      if Modes.is_erased arg_mode
+      then body
+      else
+        Expr.Let
+          { var = binder.arg
+          ; bind = Literal { value = arg_val; ty = arg_ty; mode = arg_mode; loc }
+          ; rest = body
+          ; ty = body_desc.ty
+          ; mode = body_desc.mode
+          ; loc
+          }
+    in
+    let body, desc = weaken ~loc body body_desc ~ty:ret_ty ~mode:ret_mode in
+    { State.Mono.family = binder.family; body; desc })
 
 and typecheck_apply state env ~fn ~arg ~loc =
   let open Lazy.Let_syntax in
@@ -1043,44 +1133,38 @@ and typecheck_apply state env ~fn ~arg ~loc =
     require_static ~loc fn_desc;
     require_mode ~loc arg_desc.mode arg_mode;
     require_leq state ~loc arg_desc.ty arg_ty;
-    let arg_val = Lazy.force arg_desc.static in
-    let ret_ty = eval state ret_ty arg_val in
-    (match Lazy.force fn_desc.static with
-     | Binder binder ->
-       (match concrete state arg_val with
-        | Some arg_concrete ->
-          let { Binder.Mono.body; body_desc; _ } =
-            Hashtbl.update_and_return binder.mono arg_concrete ~f:(function
-              | None ->
-                let env =
-                  Env.bind
-                    binder.env
-                    binder.arg
-                    { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
-                in
-                let body, body_desc =
-                  State.with_app state ~f:(fun () -> typecheck state env binder.body)
-                in
-                let body, body_desc = weaken ~loc body body_desc ~ty:ret_ty ~mode:ret_mode in
-                { arg = binder.arg; arg_mode; arg_desc; body; body_desc }
-              | Some x -> x)
-          in
-          if Modes.is_erased fn_desc.mode
-          then (
-            let body = inline ~loc ~env:binder.env ~arg_id:binder.arg ~arg ~arg_mode body in
-            body, body_desc)
-          else
-            ( Symbol { fn; key = arg_concrete; ty = body_desc.ty; mode = body_desc.mode; loc }
-            , body_desc )
-        | None ->
-          let static =
-            if Modes.is_static ret_mode
-            then Lazy.from_val (Value.reduce (Apply { fn = Binder binder; arg = arg_val }))
-            else Fail.unreachable [%here] ~loc
-          in
-          ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-          , { ty = ret_ty; mode = ret_mode; static } ))
-     | Closure closure ->
+    let mode = resolve_app_mode ~loc fn_desc ret_mode in
+    let fn_val = force_or_var state fn_desc.static in
+    let arg_val = force_or_var state arg_desc.static in
+    let key = concrete arg_val in
+    let ty =
+      match fn_val, key with
+      | Binder binder, Some key ->
+        State.with_spec state { family = binder.family; key } ~f:(fun () ->
+          eval state ret_ty arg_val)
+      | _ -> eval state ret_ty arg_val
+    in
+    (match fn_val, key with
+     | Value.Binder binder, Some key ->
+       let mono =
+         specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val key
+       in
+       let desc = { Desc.ty; mode; static = mono.desc.static } in
+       if Modes.is_erased mode
+       then Erased { ty; mode; loc }, desc
+       else
+         Specialize { fn; arg; target = Family binder.family; key = Some key; ty; mode; loc }, desc
+     | Binder binder, None ->
+       let static =
+         if Modes.is_static ret_mode
+         then Lazy.from_val (Value.reduce (Apply { fn = Binder binder; arg = arg_val }))
+         else Fail.unreachable [%here] ~loc
+       in
+       let desc = { Desc.ty; mode; static } in
+       if Modes.is_erased mode
+       then Erased { ty; mode; loc }, desc
+       else Apply { fn; arg; ty; mode; loc }, desc
+     | Closure closure, _ ->
        let static =
          if Modes.is_static ret_mode
          then (
@@ -1090,24 +1174,14 @@ and typecheck_apply state env ~fn ~arg ~loc =
                closure.arg
                { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
            in
-           let desc = reduce state env closure.body_dst in
-           desc.static)
+           (reduce state env closure.body_dst).static)
          else Fail.unreachable [%here] ~loc
        in
-       if Modes.is_erased fn_desc.mode
-       then (
-         let body, body_desc =
-           let body_desc =
-             { Desc.ty = Expr.ty closure.body; mode = Expr.mode closure.body; static }
-           in
-           weaken ~loc closure.body body_desc ~ty:ret_ty ~mode:ret_mode
-         in
-         let body = inline ~loc ~env:closure.env ~arg_id:closure.arg ~arg ~arg_mode body in
-         body, body_desc)
-       else
-         ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-         , { ty = ret_ty; mode = ret_mode; static } )
-     | Prim prim ->
+       let desc = { Desc.ty; mode; static } in
+       if Modes.is_erased mode
+       then Erased { ty; mode; loc }, desc
+       else Specialize { fn; arg; ty; target = Family closure.family; key = None; mode; loc }, desc
+     | Prim prim, _ ->
        let static =
          if Modes.is_static ret_mode
          then
@@ -1116,23 +1190,27 @@ and typecheck_apply state env ~fn ~arg ~loc =
              | Builtin.Error err -> Fail.static_failure [%here] ~loc err)
          else Fail.unreachable [%here] ~loc
        in
-       let desc = { Desc.ty = ret_ty; mode = ret_mode; static } in
-       if Modes.is_erased fn_desc.mode
-       then Literal { value = Lazy.force static; ty = ret_ty; mode = ret_mode; loc }, desc
-       else Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }, desc
-     | _ ->
+       let desc = { Desc.ty; mode; static } in
+       if Modes.is_erased mode
+       then (
+         (* Static computation stays lazy except for asserts, which exist to
+            be checked: an unused [assert erased] must still fire. *)
+         (match prim with
+          | Assert_erased -> ignore (Lazy.force static : Value.t)
+          | _ -> ());
+         Erased { ty; mode; loc }, desc)
+       else Specialize { fn; arg; ty; target = Prim prim; key = None; mode; loc }, desc
+     | fn_val, _ ->
        let static =
          if Modes.is_static ret_mode
-         then (
-           let%map fn = fn_desc.static in
-           Value.reduce (Apply { fn; arg = arg_val }))
+         then Lazy.from_val (Value.reduce (Apply { fn = fn_val; arg = arg_val }))
          else Fail.unreachable [%here] ~loc
        in
-       ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-       , { ty = ret_ty; mode = ret_mode; static } ))
+       let desc = { Desc.ty; mode; static } in
+       if Modes.is_erased mode
+       then Erased { ty; mode; loc }, desc
+       else Apply { fn; arg; ty; mode; loc }, desc)
   | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode }) ->
-    require_not_dynamic_erased ~loc fn_desc;
-    require_not_dynamic_erased ~loc arg_desc;
     require_mode ~loc arg_desc.mode arg_mode;
     require_leq state ~loc arg_desc.ty arg_ty;
     let ret_mode =
@@ -1155,27 +1233,11 @@ and typecheck_apply state env ~fn ~arg ~loc =
         | _ -> Lazy.map arg_desc.static ~f:(fun arg -> Value.reduce (Apply { fn; arg })))
       else Fail.unreachable [%here] ~loc
     in
-    if Modes.is_erased fn_desc.mode
-    then (
-      match Lazy.force fn_desc.static with
-      | Closure closure ->
-        let body, body_desc =
-          let body_desc =
-            { Desc.ty = Expr.ty closure.body; mode = Expr.mode closure.body; static }
-          in
-          weaken ~loc closure.body body_desc ~ty:ret_ty ~mode:ret_mode
-        in
-        let body = inline ~loc ~env:closure.env ~arg_id:closure.arg ~arg ~arg_mode body in
-        body, body_desc
-      | Prim _ ->
-        (* If we have inlined prims, they need to be implemented here. *)
-        raise_s [%message "Bug: TODO"]
-      | _ ->
-        ( Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }
-        , { ty = ret_ty; mode = ret_mode; static } ))
-    else (
-      let desc = { Desc.ty = ret_ty; mode = ret_mode; static } in
-      Apply { fn; arg; ty = ret_ty; mode = ret_mode; loc }, desc)
+    let mode = resolve_app_mode ~loc fn_desc ret_mode in
+    let desc = { Desc.ty = ret_ty; mode; static } in
+    if Modes.is_erased mode
+    then Erased { ty = ret_ty; mode; loc }, desc
+    else Apply { fn; arg; ty = ret_ty; mode; loc }, desc
   | _ -> Fail.expected_function [%here] ~loc fn_desc.ty arg_desc.ty
 
 and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
@@ -1185,7 +1247,7 @@ and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
   match static with
   | Static ->
     require_static ~loc cond_desc;
-    (match Lazy.force cond_desc.static with
+    (match force_or_var state cond_desc.static with
      | Bool (T true) when State.monomorphizing state -> typecheck state env then_
      | Bool (T false) when State.monomorphizing state -> typecheck state env else_
      | Bool (T true) ->
@@ -1205,23 +1267,29 @@ and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
        in
        let mode = Modes.cond ~cond:cond_desc.mode [ then_desc.mode; else_desc.mode ] in
        let static =
-         if Modes.is_static mode
-         then (
+         if Modes.is_dynamic mode
+         then Fail.unreachable [%here] ~loc
+         else (
            let%map then_ = then_desc.static
            and else_ = else_desc.static in
            Value.reduce (If { cond = value; then_; else_ }))
-         else Fail.unreachable [%here] ~loc
        in
-       let ty = Value.reduce (If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty }) in
+       (* Resolve the [if]-value here if possible. *)
+       let ty =
+         match join_value state then_desc.ty else_desc.ty with
+         | Some ty -> ty
+         | None -> Value.reduce (If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty })
+       in
        If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
   | Dynamic | Parametric ->
-    require_not_dynamic_erased ~loc cond_desc;
+    require_unerased ~loc cond_desc;
     let then_, then_desc = typecheck state env then_ in
     let else_, else_desc = typecheck state env else_ in
     let mode = Modes.cond ~cond:cond_desc.mode [ then_desc.mode; else_desc.mode ] in
     let static =
-      if Modes.is_static mode
-      then
+      if Modes.is_dynamic mode
+      then Fail.unreachable [%here] ~loc
+      else
         Lazy.bind cond_desc.static ~f:(function
           | Bool (T true) -> then_desc.static
           | Bool (T false) -> else_desc.static
@@ -1229,7 +1297,6 @@ and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
             let%map then_ = then_desc.static
             and else_ = else_desc.static in
             Value.reduce (If { cond; then_; else_ }))
-      else Fail.unreachable [%here] ~loc
     in
     let ty = require_join state ~loc then_desc.ty else_desc.ty in
     If { cond; then_; else_; ty; mode; loc }, { ty; mode; static }
@@ -1237,9 +1304,7 @@ and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
 and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map.t =
   (* TODO dependent match *)
   match pattern with
-  | Var { id; loc } ->
-    let _ = loc in
-    Ident.Map.singleton id desc
+  | Var { id; _ } -> if Ident.is_anon id then Ident.Map.empty else Ident.Map.singleton id desc
   | Literal { value; loc } ->
     require_leq ~loc state desc.ty (Value.Type (Ty.of_literal value));
     Ident.Map.empty
@@ -1249,8 +1314,10 @@ and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map
        Nonempty_list.zip_exn elts elt_tys
        |> Nonempty_list.mapi ~f:(fun index (elt, ty) ->
          let static =
-           Lazy.map desc.static ~f:(function
+           Lazy.map desc.static ~f:(fun value ->
+             match Value.reduce value with
              | Tuple elts -> Nonempty_list.nth_exn elts index
+             | (Var _ | If _ | Apply _ | Proj _) as tuple -> Value.reduce (Proj { tuple; index })
              | value ->
                raise_s [%message "Bug: expected tuple" (value : Value.t) (loc : Lex.Location.t)])
          in
@@ -1263,83 +1330,120 @@ and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map
   | Or { left; right; loc } ->
     let lhs = pattern_bindings state ~desc left in
     let rhs = pattern_bindings state ~desc right in
+    let diff =
+      Set.symmetric_diff (Map.key_set lhs) (Map.key_set rhs)
+      |> Sequence.map ~f:Either.value
+      |> Sequence.to_list
+    in
+    (match diff with
+     | [] -> ()
+     | id :: rest -> Fail.Match.or_unbound [%here] ~loc (Nonempty_list.create id rest));
     Map.merge_skewed lhs rhs ~combine:(fun ~key:_ lhs rhs -> require_join_desc state ~loc lhs rhs)
 
-and build_condition ~loc ~scrutinee (literal : Dst.Literal.t) : Expr.t =
+and build_condition ~loc ~scrutinee ~scrutinee_desc (literal : Dst.Literal.t) : Expr.t =
   match literal with
   | Unit -> Expr.literal ~loc (Bool true)
   | Bool true -> scrutinee
-  | Bool false -> Builtin.apply ~loc (Bool Not) [ scrutinee ]
-  | Int i -> Builtin.apply ~loc (Int Eq) [ scrutinee; Expr.literal ~loc (Int i) ]
+  | Bool false -> Builtin.apply ~loc (Bool Not) scrutinee scrutinee_desc
+  | Int i ->
+    let arg, arg_desc =
+      let lit = Expr.literal ~loc (Int i) in
+      let lit_desc = Expr.desc lit (Lazy.from_val (Value.Int (T i))) in
+      Expr.tuple ~loc (Nonempty_list.create (scrutinee, scrutinee_desc) [ lit, lit_desc ])
+    in
+    Builtin.apply ~loc (Int Eq) arg arg_desc
 
 and typecheck_match state env ~scrutinee ~arms ~static:_ ~loc =
-  (* TODO dependent match, also probably rewrite this *)
+  (* TODO dependent match *)
   let scrutinee, scrutinee_desc = typecheck state env scrutinee in
-  require_not_dynamic_erased ~loc scrutinee_desc;
-  let arm_bodies =
-    Nonempty_list.map arms ~f:(fun (pattern, body) ->
-      let bindings = pattern_bindings state ~desc:scrutinee_desc pattern in
-      let env = Map.fold bindings ~init:env ~f:(fun ~key ~data env -> Env.bind env key data) in
-      let body, body_desc = typecheck state env body in
-      bindings, body, body_desc)
+  require_unerased ~loc scrutinee_desc;
+  let patterns, (cases, descs) =
+    let patterns, cases =
+      Nonempty_list.map arms ~f:(fun (pattern, body) ->
+        let bindings = pattern_bindings state ~desc:scrutinee_desc pattern in
+        let binding_tys = Map.map bindings ~f:(fun (desc : Desc.t) -> desc.ty) in
+        let env = Map.fold bindings ~init:env ~f:(fun ~key ~data env -> Env.bind env key data) in
+        let body, body_desc = typecheck state env body in
+        pattern, ({ Expr.body; bindings = binding_tys }, body_desc))
+      |> Nonempty_list.unzip
+    in
+    patterns, Nonempty_list.unzip cases
   in
-  let ty, arm_mode =
-    let ((_, _, { ty; mode; _ }) :: rest) = arm_bodies in
-    List.fold rest ~init:(ty, mode) ~f:(fun (ty, mode) (_, _, desc) ->
-      require_join state ~loc ty desc.ty, Modes.join mode desc.mode)
-  in
-  let mode = Modes.cond ~cond:scrutinee_desc.mode [ arm_mode ] in
   let compiled =
-    let cases =
-      Nonempty_list.map2_exn arms arm_bodies ~f:(fun (pattern, _) (bindings, body, _body_desc) ->
-        { Match.Case.pattern; body; bindings })
-    in
-    Match.compile ~ty:scrutinee_desc.ty cases
+    let compiled = Match.compile ~ty:scrutinee_desc.ty patterns in
+    (match compiled.redundant with
+     | [] -> ()
+     | first :: rest -> Fail.Match.redundant [%here] ~loc (Nonempty_list.create first rest));
+    (match compiled.missing with
+     | [] -> ()
+     | first :: rest -> Fail.Match.non_exhaustive [%here] ~loc (Nonempty_list.create first rest));
+    compiled
   in
-  (match compiled.redundant with
-   | [] -> ()
-   | first :: rest -> Fail.Match.redundant [%here] ~loc (Nonempty_list.create first rest));
-  (match compiled.missing with
-   | [] -> ()
-   | first :: rest -> Fail.Match.non_exhaustive [%here] ~loc (Nonempty_list.create first rest));
-  let project path =
-    let indices = Vec.to_list path in
-    let rec aux expr (ty : Value.t) = function
-      | [] -> expr
-      | index :: rest ->
-        (match ty with
-         | Type (Tuple elt_tys) ->
-           let ty = Nonempty_list.nth_exn elt_tys index in
-           let get = Expr.Tuple_get { tuple = expr; index; ty; mode = scrutinee_desc.mode; loc } in
-           aux get ty rest
-         | _ -> raise_s [%message "Bug: expected tuple" (ty : Value.t) (loc : Lex.Location.t)])
+  let ty, mode =
+    let ty, mode =
+      let ({ ty; mode; _ } :: rest) = descs in
+      List.fold rest ~init:(ty, mode) ~f:(fun (ty, mode) desc ->
+        require_join state ~loc ty desc.ty, Modes.join mode desc.mode)
     in
-    aux scrutinee scrutinee_desc.ty indices
+    ty, Modes.cond ~cond:scrutinee_desc.mode [ mode ]
   in
-  let rec lower (tree : Match.Tree.t) : Expr.t =
-    match tree with
-    | Fail -> Builtin.apply ~loc Assert [ Expr.literal ~loc (Bool false) ]
-    | Leaf { action; bindings } ->
-      Map.fold bindings ~init:action ~f:(fun ~key ~data:{ Match.Tree.Binding.occurrence; _ } acc ->
-        let bind = project occurrence.path in
-        Expr.Let { var = key; bind; rest = acc; ty = Expr.ty acc; mode = Expr.mode acc; loc })
-    | Switch { occurrence; cases; default } ->
-      let target = project occurrence.path in
-      let default =
-        Option.map default ~f:lower
-        |> Option.value_or_thunk ~default:(fun () ->
-          (* TODO needs some kind of unreachable, assert returns unit *)
-          Builtin.apply ~loc Assert [ Expr.literal ~loc (Bool false) ])
+  let expr =
+    Expr.rebind scrutinee ~stamp:(State.fresh_id state) ~f:(fun scrutinee ->
+      let project path =
+        let rec aux path expr (desc : Desc.t) =
+          match path with
+          | [] -> expr, desc
+          | index :: rest ->
+            (match desc.ty with
+             | Type (Tuple elt_tys) ->
+               let ty = Nonempty_list.nth_exn elt_tys index in
+               let get = Expr.Tuple_get { tuple = expr; index; ty; mode = desc.mode; loc } in
+               let static =
+                 Lazy.map desc.static ~f:(fun (v : Value.t) ->
+                   match Value.reduce v with
+                   | Tuple elts -> Nonempty_list.nth_exn elts index
+                   | (Var _ | If _ | Apply _ | Proj _) as tuple ->
+                     Value.reduce (Proj { tuple; index })
+                   | v ->
+                     raise_s [%message "Bug: expected tuple" (v : Value.t) (loc : Lex.Location.t)])
+               in
+               aux rest get { Desc.ty; mode = desc.mode; static }
+             | ty -> raise_s [%message "Bug: expected tuple" (ty : Value.t) (loc : Lex.Location.t)])
+        in
+        aux (Vec.to_list path) scrutinee scrutinee_desc
       in
-      Array.fold_right cases ~init:default ~f:(fun (constructor, body) acc ->
-        match constructor with
-        | Literal value ->
-          let test = build_condition ~loc ~scrutinee:target value in
-          let body = lower body in
-          Expr.If { cond = test; then_ = body; else_ = acc; ty; mode; loc }
-        | Tuple _ -> lower body)
+      let rec build_switch (tree : Match.Tree.t) : Expr.tree =
+        match tree with
+        | Leaf { case; bindings } ->
+          let bindings =
+            Map.map bindings ~f:(fun (occurrence : Match.Tree.Occurrence.t) ->
+              let expr, _ = project occurrence.path in
+              expr)
+          in
+          Leaf { case; bindings }
+        | Switch { occurrence; cases; default } ->
+          let scrutinee, scrutinee_desc = project occurrence.path in
+          let build_case ((constructor, body) : Match.Tree.Constructor.t * _) acc =
+            match constructor with
+            | Literal value ->
+              let cond = build_condition ~loc ~scrutinee ~scrutinee_desc value in
+              let then_ = build_switch body in
+              Expr.Split { cond; then_; else_ = acc }
+            | Tuple _ -> build_switch body
+          in
+          Array.fold_right
+            cases
+            ~init:(Option.map default ~f:build_switch)
+            ~f:(fun (constructor, tree) acc ->
+              match acc with
+              | None -> Some (build_switch tree)
+              | Some acc -> Some (build_case (constructor, tree) acc))
+          |> Option.value_exn
+        | Fail -> raise_s [%message "Bug: nonexhaustive match" (loc : Lex.Location.t)]
+      in
+      Expr.Match { cases; tree = build_switch compiled.tree; ty; mode; loc })
   in
-  lower compiled.tree, { Desc.ty; mode; static = Fail.unreachable [%here] ~loc }
+  expr, { Desc.ty; mode; static = Fail.unreachable [%here] ~loc }
 ;;
 
 let typecheck_top_level state env (dst : Dst.Top_level.t) : Top_level.t * Env.t =
@@ -1350,14 +1454,16 @@ let typecheck_top_level state env (dst : Dst.Top_level.t) : Top_level.t * Env.t 
     Let { var; bind; loc }, env
   | Fun { funs; loc } ->
     let funs, env = typecheck_funs state env funs in
-    Fun { funs; loc }, env
+    (match Nonempty_list.of_list funs with
+     | Some funs -> Fun { funs; loc }, env
+     | None -> Erased { loc }, env)
   | External { var; ty; symbol; loc } ->
     let ty_desc = reduce state env ty in
     let ty = require_static_type ~loc state ty_desc in
     require_dynamic_arrow ~loc var symbol ty;
     let mode = Modes.bottom () in
     let static = Lazy.from_val (Value.External { symbol; ty }) in
-    External { var; symbol; ty; loc }, Env.bind env var { Desc.ty; mode; static }
+    External { var; symbol; ty; mode; loc }, Env.bind env var { Desc.ty; mode; static }
   | Builtin { var; name; loc } ->
     let builtin =
       match Builtin.find name with
@@ -1365,7 +1471,7 @@ let typecheck_top_level state env (dst : Dst.Top_level.t) : Top_level.t * Env.t 
       | None -> Fail.unknown_builtin [%here] ~loc var name
     in
     let desc = Builtin.desc builtin in
-    Builtin { var; builtin; ty = desc.ty; loc }, Env.bind env var desc
+    Builtin { var; builtin; ty = desc.ty; mode = desc.mode; loc }, Env.bind env var desc
 ;;
 
 let fold_top_levels state env dst tls =
@@ -1374,11 +1480,17 @@ let fold_top_levels state env dst tls =
     tl :: acc, env)
 ;;
 
-let typecheck_exn (dst : Dst.Program.t) =
-  let state = State.create () in
+let typecheck_exn (dst : Dst.Program.t) : Program.t =
+  let state = State.create ~stamp:dst.stamp in
   let env = Env.initial in
-  let program, _ = fold_top_levels state env dst [] in
-  List.rev program
+  let program = List.rev (fst (fold_top_levels state env dst.top_levels [])) in
+  let groups = Core.Int.Map.of_hashtbl_exn state.groups in
+  (* Check reify doesn't expand the monomorphization store. *)
+  let specialization_count = Hashtbl.length state.specializations in
+  let top_levels = Reify.program ~monos:(State.collect_monos state) ~groups program in
+  if Hashtbl.length state.specializations <> specialization_count
+  then raise_s [%message "Bug: specializations created during reification"];
+  { top_levels; stamp = state.stamp }
 ;;
 
 let typecheck tst =

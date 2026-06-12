@@ -144,5 +144,9 @@ module Top_level : sig
 end
 
 module Program : sig
-  type t = Top_level.t list [@@deriving sexp]
+  type t =
+    { top_levels : Top_level.t list
+    ; stamp : int
+    }
+  [@@deriving sexp]
 end

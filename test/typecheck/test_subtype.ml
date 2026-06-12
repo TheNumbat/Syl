@@ -1,19 +1,7 @@
 open! Core
 open! Syl
 
-let go ?(print = false) input =
-  let cst = Parse.parse_exn input in
-  let dst = Desugar.desugar cst in
-  match Typecheck.typecheck dst with
-  | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; here; reason } ->
-    if print
-    then
-      print_s
-        [%message
-          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
-    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
-;;
+let go = Common.typecheck
 
 let%expect_test "weaken mode: static unerased -> static erased (literal substitution)" =
   go
@@ -69,7 +57,7 @@ let _ = f : int -> int;;
        (got
         (Type
          (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
-          (ret_ty (T (Type Int)))
+          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
         (Type
@@ -136,7 +124,7 @@ let%expect_test "weaken mode: both axes (static unerased -> dynamic erased)" =
     {|
 let _ = 1 @ dynamic erased;;
 |};
-  [%expect {| ((loc ((line 2) (column 10))) (reason Dynamic_erased)) |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "weaken if non-split: staticity on branch" =
@@ -177,8 +165,21 @@ let%expect_test "weaken if split: both axes on branch" =
     {|
 let f = fn (static b : bool) -> if static b then 1 @ dynamic erased else 1;;
 let _ = f false;;
+let _ = f true;;
 |};
-  [%expect {| ((loc ((line 2) (column 51))) (reason Dynamic_erased)) |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Erased_application
+       (fn
+        (Type
+         (Pi (arg_ty (Type Bool))
+          (arg_mode ((staticity Static) (erasure Unerased)))
+          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
+          (ret_mode ((staticity Dynamic) (erasure Erased))))))
+       (result ((staticity Dynamic) (erasure Erased))))))
+    |}]
 ;;
 
 let%expect_test "weaken binder apply: erasure on body" =
@@ -234,7 +235,7 @@ let _ = apply g;;
        (got
         (Type
          (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
-          (ret_ty (T (Type Int)))
+          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
         (Type
@@ -269,7 +270,7 @@ let _ = apply g;;
        (got
         (Type
          (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
-          (ret_ty (T (Type Int)))
+          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
         (Type
@@ -305,7 +306,24 @@ let%expect_test "erased closure taking closure arg" =
 let apply = fn (f : int -> int) -> f 0;;
 let _ = (apply @ erased) (fn (x : int) -> x);;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Erased_application
+       (fn
+        (Type
+         (Arrow
+          (arg_ty
+           (Type
+            (Arrow (arg_ty (Type Int))
+             (arg_mode ((staticity Dynamic) (erasure Unerased)))
+             (ret_ty (Type Int))
+             (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
+          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
+       (result ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "binder taking closure, applied erased inside" =
@@ -351,13 +369,13 @@ let _ = f : static int -> int;;
         (Type
          (Pi (arg_ty (Type Int))
           (arg_mode ((staticity Static) (erasure Unerased)))
-          (ret_ty (T (Type Int)))
+          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
           (ret_mode ((staticity Static) (erasure Erased))))))
        (need
         (Type
          (Pi (arg_ty (Type Int))
           (arg_mode ((staticity Static) (erasure Unerased)))
-          (ret_ty (T (Type Int)))
+          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
           (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
     |}]
 ;;
@@ -557,7 +575,7 @@ let _ = f : static (static erased type \ t -> t) -> unit;;
                (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 49)))))))
              (ret_mode ((staticity Static) (erasure Erased))))))
           (arg_mode ((staticity Static) (erasure Unerased)))
-          (ret_ty (T (Type Unit)))
+          (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
         (Type
@@ -572,7 +590,7 @@ let _ = f : static (static erased type \ t -> t) -> unit;;
                (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 46)))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
           (arg_mode ((staticity Static) (erasure Unerased)))
-          (ret_ty (T (Type Unit)))
+          (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
           (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
     |}]
 ;;
@@ -620,6 +638,74 @@ let%expect_test "join Pi/Pi function-type arg returning type: fresh var issue" =
 let f = fn (static g : static int -> static type) -> fn (x : g 0) -> x;;
 let h = fn (static g : static int -> static type) -> fn (x : g 0) -> x;;
 let _ = if true then f else h;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "join unfolds an abstract type-function application" =
+  go
+    {|
+fun id (static erased t : type) : erased type = t;;
+fun f (static erased t : type) : t -> bool -> t =
+  fn (x : id t) -> fn (b : bool) -> if b then x else (x : t);;
+let _ = f int 5 true;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "meet unfolds an abstract type-function application (arrow arg in join)" =
+  go
+    {|
+fun id (static erased t : type) : erased type = t;;
+fun f (static erased t : type) : t -> t =
+  fn (y : t) -> (if true then fn (v : id t) -> y else fn (v : t) -> y) y;;
+let _ = f int 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "geq unfolds an abstract type-function application (arg contravariance)" =
+  go
+    {|
+fun id (static erased t : type) : erased type = t;;
+fun f (static erased t : type) : (id t -> int) -> t -> int =
+  fn (g : id t -> int) -> (g : t -> int);;
+let _ = f int (fn (x : int) -> x) 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "leq If/If with distinct conds falls through to branch comparison" =
+  go
+    {|
+let f = fn (static a : bool) -> fn (static b : bool) ->
+  fn (x : (if static a then int else int)) -> (x : (if static b then int else int));;
+let _ = f true false 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "join If/If with distinct conds falls through to branch collapse" =
+  go
+    {|
+let f = fn (static a : bool) -> fn (static b : bool) ->
+  fn (x : (if static a then int else int)) -> fn (y : (if static b then int else int)) ->
+    if true then x else y;;
+let _ = f true false 1 2;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test
+    "meet If/If with distinct conds falls through to branch collapse (arrow arg in join)"
+  =
+  go
+    {|
+let f = fn (static a : bool) -> fn (static b : bool) ->
+  fn (g : (if static a then int else int) -> int) ->
+    fn (h : (if static b then int else int) -> int) ->
+      if true then g else h;;
+let _ = f true false (fn (v : int) -> v) (fn (v : int) -> v);;
 |};
   [%expect {| |}]
 ;;

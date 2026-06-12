@@ -48,15 +48,6 @@ module Pattern = struct
   ;;
 end
 
-module Case = struct
-  type t =
-    { pattern : Pattern.t
-    ; body : Tst.Expr.t
-    ; bindings : Tst.Desc.t Ident.Map.t
-    }
-  [@@deriving sexp]
-end
-
 module Tree = struct
   module Constructor = struct
     module T = struct
@@ -78,12 +69,12 @@ module Tree = struct
     let members =
       let unit = Some (Vec.of_array [| Literal Unit |]) in
       let bool = Some (Vec.of_array [| Literal (Bool true); Literal (Bool false) |]) in
-      fun (ty : Tst.Ty.t) ->
+      fun (ty : Tst.Value.t) ->
         match ty with
-        | Unit -> unit
-        | Bool -> bool
-        | Tuple elt_tys -> Some (Vec.of_array [| Tuple (Nonempty_list.length elt_tys) |])
-        | Int | Arrow _ | Pi _ | Type -> None
+        | Type Unit -> unit
+        | Type Bool -> bool
+        | Type (Tuple elt_tys) -> Some (Vec.of_array [| Tuple (Nonempty_list.length elt_tys) |])
+        | _ -> None
     ;;
 
     let covers ts ty =
@@ -98,7 +89,7 @@ module Tree = struct
   module Occurrence = struct
     type t =
       { path : int Vec.t
-      ; ty : Tst.Ty.t
+      ; ty : Tst.Value.t
       }
     [@@deriving sexp]
 
@@ -119,29 +110,21 @@ module Tree = struct
       | Literal _ -> [||]
       | Tuple arity ->
         (match occurrence.ty with
-         | Tuple elt_tys when Nonempty_list.length elt_tys = arity ->
+         | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = arity ->
            Array.of_list (Nonempty_list.to_list elt_tys)
            |> Array.mapi ~f:(fun index ty ->
              let path = Vec.copy occurrence.path in
              Vec.push_back path index;
-             { path; ty = Tst.Value.ty ty })
-         | ty -> raise_s [%message "Bug: expected tuple" (arity : int) (ty : Tst.Ty.t)])
+             { path; ty })
+         | ty -> raise_s [%message "Bug: expected tuple" (arity : int) (ty : Tst.Value.t)])
     ;;
-  end
-
-  module Binding = struct
-    type t =
-      { occurrence : Occurrence.t
-      ; desc : Tst.Desc.t
-      }
-    [@@deriving sexp]
   end
 
   type t =
     | Fail
     | Leaf of
-        { action : Tst.Expr.t
-        ; bindings : Binding.t Ident.Map.t
+        { case : int
+        ; bindings : Occurrence.t Ident.Map.t
         }
     | Switch of
         { occurrence : Occurrence.t
@@ -201,10 +184,9 @@ end
 module Row = struct
   type t =
     { patterns : Pattern.t array
-    ; bindings : Tst.Desc.t Ident.Map.t
-    ; body : Tst.Expr.t
-    ; id : int
-    ; bound : Tree.Binding.t Ident.Map.t
+    ; bound : Tree.Occurrence.t Ident.Map.t
+    ; idx : int
+    ; case : int
     }
 
   let all_wild t = Array.for_all t.patterns ~f:Pattern.is_wild
@@ -258,20 +240,15 @@ module Row = struct
   ;;
 end
 
-let bind bindings bound occurrence id =
-  if Ident.is_anon id || Map.mem bound id
-  then bound
-  else (
-    match Map.find bindings id with
-    | Some desc -> Map.set bound ~key:id ~data:{ Tree.Binding.occurrence; desc }
-    | None -> raise_s [%message "Bug: missing desc" (id : Ident.t)])
+let bind bound occurrence id =
+  if Ident.is_anon id || Map.mem bound id then bound else Map.set bound ~key:id ~data:occurrence
 ;;
 
 let materialize (row : Row.t) (occurrences : Tree.Occurrence.t array) =
   Array.foldi row.patterns ~init:row.bound ~f:(fun i bound pattern ->
     let occurrence = occurrences.(i) in
     match pattern with
-    | Var { id; _ } -> bind row.bindings bound occurrence id
+    | Var { id; _ } -> bind bound occurrence id
     | _ -> raise_s [%message "Bug: expected wild row"])
 ;;
 
@@ -281,7 +258,7 @@ let specialize constructor occurrence col (rows : Row.t Vec.t) =
   Vec.iter rows ~f:(fun row ->
     match row.patterns.(col), constructor with
     | Var { id; _ }, _ ->
-      let bound = bind row.bindings row.bound occurrence id in
+      let bound = bind row.bound occurrence id in
       let rest_len = Array.length row.patterns - 1 in
       let patterns =
         Array.init (arity + rest_len) ~f:(fun i ->
@@ -311,7 +288,7 @@ let default occurrence col (rows : Row.t Vec.t) =
   Vec.iter rows ~f:(fun row ->
     match row.patterns.(col) with
     | Var { id; _ } ->
-      let bound = bind row.bindings row.bound occurrence id in
+      let bound = bind row.bound occurrence id in
       let patterns =
         Array.init (Array.length row.patterns - 1) ~f:(fun i -> row.patterns.(skip col i))
       in
@@ -328,8 +305,8 @@ let rec compile_matrix reached (occurrences : Tree.Occurrence.t array) (rows : R
   else if Row.all_wild (Vec.get rows 0)
   then (
     let row = Vec.get rows 0 in
-    Hash_set.add reached row.id;
-    Leaf { action = row.body; bindings = materialize row occurrences })
+    Hash_set.add reached row.idx;
+    Leaf { case = row.case; bindings = materialize row occurrences })
   else (
     let col = Row.select rows in
     let occurrence = occurrences.(col) in
@@ -345,11 +322,9 @@ let rec compile_matrix reached (occurrences : Tree.Occurrence.t array) (rows : R
     let default =
       if Tree.Constructor.covers constructors occurrence.ty
       then None
-      else
-        let rest =
-          Tree.Occurrence.remove occurrences col |> Option.value ~default:[||]
-        in
-        Some (compile_matrix reached rest (default occurrence col rows))
+      else (
+        let rest = Tree.Occurrence.remove occurrences col |> Option.value ~default:[||] in
+        Some (compile_matrix reached rest (default occurrence col rows)))
     in
     Switch { occurrence; cases; default })
 ;;
@@ -389,36 +364,29 @@ and missing_matrix (occurrences : Tree.Occurrence.t array) (rows : Row.t Vec.t) 
           (before @ [ value ] @ after) :: acc))
       |> List.rev
     | None ->
-      let rest =
-        Tree.Occurrence.remove occurrences col |> Option.value ~default:[||]
-      in
+      let rest = Tree.Occurrence.remove occurrences col |> Option.value ~default:[||] in
       missing_matrix rest (default occurrence col rows)
       |> List.map ~f:(fun missing ->
         let before, after = List.split_n missing col in
         before @ [ Result.Missing.Wildcard ] @ after))
 ;;
 
-let compile ~(ty : Tst.Value.t) (cases : Case.t Nonempty_list.t) =
-  let next_id = ref 0 in
+let compile ~(ty : Tst.Value.t) (patterns : Pattern.t Nonempty_list.t) =
+  let next_idx = ref 0 in
   let rows =
-    Nonempty_list.to_list cases
+    Nonempty_list.to_list patterns
     |> Sequence.of_list
-    |> Sequence.concat_mapi ~f:(fun _source case ->
-      Pattern.expand case.pattern
+    |> Sequence.concat_mapi ~f:(fun case pattern ->
+      Pattern.expand pattern
       |> Sequence.of_list
       |> Sequence.map ~f:(fun pattern ->
-        let id = !next_id in
-        incr next_id;
-        { Row.patterns = [| pattern |]
-        ; bindings = case.bindings
-        ; body = case.body
-        ; id
-        ; bound = Ident.Map.empty
-        }))
+        let idx = !next_idx in
+        incr next_idx;
+        { Row.patterns = [| pattern |]; case; idx; bound = Ident.Map.empty }))
     |> Vec.of_sequence
   in
   let reached = Hash_set.create (module Int) in
-  let occurrences = [| { Tree.Occurrence.path = Vec.create (); ty = Tst.Value.ty ty } |] in
+  let occurrences = [| { Tree.Occurrence.path = Vec.create (); ty } |] in
   let tree = compile_matrix reached occurrences rows in
   let missing =
     if Tree.exhaustive tree
@@ -427,7 +395,7 @@ let compile ~(ty : Tst.Value.t) (cases : Case.t Nonempty_list.t) =
   in
   let redundant =
     Vec.fold rows ~init:[] ~f:(fun acc row ->
-      if Hash_set.mem reached row.id then acc else row.patterns.(0) :: acc)
+      if Hash_set.mem reached row.idx then acc else row.patterns.(0) :: acc)
     |> List.rev
   in
   { Result.tree; redundant; missing }

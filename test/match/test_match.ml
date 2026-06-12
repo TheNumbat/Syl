@@ -1,14 +1,7 @@
 open! Core
 open! Syl
 
-let go input =
-  let cst = Parse.parse_exn input in
-  let dst = Desugar.desugar cst in
-  match Typecheck.typecheck dst with
-  | Ok _ -> ()
-  | Error { loc; reason; _ } ->
-    print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
-;;
+let go = Common.typecheck
 
 let%expect_test "simple var binding" =
   go {| let _ = match true with | x -> x;; |};
@@ -57,8 +50,8 @@ let%expect_test "or-pattern different names then duplicate left" =
   go {| let _ = match (true, true) with | ((x | y), x) -> x;; |};
   [%expect
     {|
-    ((loc ((line 1) (column 35)))
-     (reason (Match (Multiple_bindings ((Id x) <opaque>)))))
+    ((loc ((line 1) (column 36)))
+     (reason (Match (Or_unbound (((Id x) <opaque>) ((Id y) <opaque>))))))
     |}]
 ;;
 
@@ -66,9 +59,41 @@ let%expect_test "or-pattern different names then duplicate right" =
   go {| let _ = match (true, true) with | ((x | y), y) -> y;; |};
   [%expect
     {|
-    ((loc ((line 1) (column 35)))
-     (reason (Match (Multiple_bindings ((Id y) <opaque>)))))
+    ((loc ((line 1) (column 36)))
+     (reason (Match (Or_unbound (((Id x) <opaque>) ((Id y) <opaque>))))))
     |}]
+;;
+
+let%expect_test "or-pattern different names under constructor" =
+  go {| let _ = match (true, 0) with | ((x, 0) | (y, 1)) -> true | _ -> false;; |};
+  [%expect
+    {|
+    ((loc ((line 1) (column 32)))
+     (reason (Match (Or_unbound (((Id x) <opaque>) ((Id y) <opaque>))))))
+    |}]
+;;
+
+let%expect_test "or-pattern binds only on left" =
+  go {| let _ = match (true, 0) with | ((x, 0) | (z, 1)) -> true | _ -> false;; |};
+  [%expect
+    {|
+    ((loc ((line 1) (column 32)))
+     (reason (Match (Or_unbound (((Id x) <opaque>) ((Id z) <opaque>))))))
+    |}]
+;;
+
+let%expect_test "or-pattern var vs wildcard is asymmetric" =
+  go {| let _ = match (true, 0) with | ((x, 0) | (_, 1)) -> true | _ -> false;; |};
+  [%expect
+    {|
+    ((loc ((line 1) (column 32)))
+     (reason (Match (Or_unbound (((Id x) <opaque>))))))
+    |}]
+;;
+
+let%expect_test "or-pattern wildcards on both sides is allowed" =
+  go {| let _ = match (true, 0) with | ((_, 0) | (_, 1)) -> true | _ -> false;; |};
+  [%expect {| |}]
 ;;
 
 let%expect_test "nested tuple duplicate" =
@@ -104,6 +129,38 @@ let%expect_test "or-pattern same name no conflict with tuple" =
            ((Var (id ((Id x) <opaque>)) (loc ((line 1) (column 41))))
             (Var (id ((Id y) <opaque>)) (loc ((line 1) (column 45))))))
           (loc ((line 1) (column 35)))))))))
+    |}]
+;;
+
+let%expect_test "match on abstract type accepted" =
+  go
+    {|
+let _ = fn (static erased t : type) -> fn (x : t) -> match x with | y -> y;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match on abstract type rejected" =
+  go
+    {|
+let _ = fn (static erased t : type) -> fn (x : t) -> match x with | 0 -> 1;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 68)))
+     (reason (Type_mismatch (got (Var (Anon <opaque>))) (need (Type Int)))))
+    |}]
+;;
+
+let%expect_test "match tuple pattern on abstract type rejected" =
+  go
+    {|
+let _ = fn (static erased t : type) -> fn (x : t) -> match x with | (a, b) -> a;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 68)))
+     (reason (Match (Expected_tuple (Var (Anon <opaque>))))))
     |}]
 ;;
 

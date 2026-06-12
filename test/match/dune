@@ -1,0 +1,6 @@
+(library
+ (name syl_test_match)
+ (inline_tests)
+ (libraries syl_test_common syl syl_fmt core core_unix)
+ (preprocess
+  (pps ppx_jane)))

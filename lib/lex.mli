@@ -109,7 +109,7 @@ module Location : sig
     { line : int
     ; column : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp, compare, hash]
 
   val empty : t
 end
@@ -131,6 +131,7 @@ module Tokenizer : sig
   val loc : t -> Location.t
   val next : t -> Token.t
   val peek : t -> Token.t
+  val peek2 : t -> Token.t * Token.t
   val skip : t -> unit
   val comments : t -> Location.t * Comment.t list
 end

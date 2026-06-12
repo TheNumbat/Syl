@@ -5,6 +5,7 @@ include Builtin0
 module Error = struct
   type t =
     | Divide_by_zero of Int.t
+    | Negative_modulus of Int.t
     | Assert_failed of Value.t
     | Expected_tuple of Value.t
     | Expected_arrow of Value.t
@@ -20,6 +21,7 @@ exception Error of Error.t
 
 module Fail = struct
   let divide_by_zero i = raise (Error (Divide_by_zero i))
+  let negative_modulus i = raise (Error (Negative_modulus i))
   let assert_failed b = raise (Error (Assert_failed b))
   let expected_tuple t = raise (Error (Expected_tuple t))
   let expected_arrow t = raise (Error (Expected_arrow t))
@@ -35,7 +37,7 @@ let pair (value : Value.t) : Value.t * Value.t =
 
 let static_erased = Modes.create ~staticity:Static ~erasure:Erased
 let static_unerased = Modes.create ~staticity:Static ~erasure:Unerased
-let dynamic_erased = Modes.create ~staticity:Dynamic ~erasure:Erased
+let dynamic_unerased = Modes.create ~staticity:Dynamic ~erasure:Unerased
 
 module Prim = struct
   include Prim
@@ -48,7 +50,7 @@ module Prim = struct
         (Arrow
            { arg_ty = Type (Tuple [ Type Int; Type Int ])
            ; ret_ty = Type Int
-           ; arg_mode = dynamic_erased
+           ; arg_mode = dynamic_unerased
            ; ret_mode = static_unerased
            })
     ;;
@@ -58,7 +60,7 @@ module Prim = struct
         (Arrow
            { arg_ty = Type (Tuple [ Type Int; Type Int ])
            ; ret_ty = Type Bool
-           ; arg_mode = dynamic_erased
+           ; arg_mode = dynamic_unerased
            ; ret_mode = static_unerased
            })
     ;;
@@ -68,7 +70,7 @@ module Prim = struct
         (Arrow
            { arg_ty = Type Int
            ; ret_ty = Type Int
-           ; arg_mode = dynamic_erased
+           ; arg_mode = dynamic_unerased
            ; ret_mode = static_unerased
            })
     ;;
@@ -99,6 +101,7 @@ module Prim = struct
         let a, b = pair value in
         (match b with
          | Int (T 0L) -> Fail.divide_by_zero (Mod (a, b))
+         | Int (T n) when Int64.is_negative n -> Fail.negative_modulus (Mod (a, b))
          | _ -> Value.reduce (Int (Mod (a, b))))
       | Neg -> Value.reduce (Int (Neg value))
       | Eq ->
@@ -130,7 +133,7 @@ module Prim = struct
         (Arrow
            { arg_ty = Type (Tuple [ Type Bool; Type Bool ])
            ; ret_ty = Type Bool
-           ; arg_mode = dynamic_erased
+           ; arg_mode = dynamic_unerased
            ; ret_mode = static_unerased
            })
     ;;
@@ -140,7 +143,7 @@ module Prim = struct
         (Arrow
            { arg_ty = Type Bool
            ; ret_ty = Type Bool
-           ; arg_mode = dynamic_erased
+           ; arg_mode = dynamic_unerased
            ; ret_mode = static_unerased
            })
     ;;
@@ -170,15 +173,15 @@ module Prim = struct
         Type
           (Pi
              { arg_ty = Type Type
-             ; ret_ty = T (Type Bool)
+             ; ret_ty = Dependent.mono (Type Bool)
              ; arg_mode = static_erased
-             ; ret_mode = static_unerased
+             ; ret_mode = static_erased
              })
       | Arrow_arg | Arrow_ret | Pi_arg ->
         Type
           (Pi
              { arg_ty = Type Type
-             ; ret_ty = T (Type Type)
+             ; ret_ty = Dependent.mono (Type Type)
              ; arg_mode = static_erased
              ; ret_mode = static_erased
              })
@@ -186,7 +189,7 @@ module Prim = struct
         Type
           (Pi
              { arg_ty = Type (Tuple [ Type Type; Type Int ])
-             ; ret_ty = T (Type Type)
+             ; ret_ty = Dependent.mono (Type Type)
              ; arg_mode = static_erased
              ; ret_mode = static_erased
              })
@@ -194,9 +197,9 @@ module Prim = struct
         Type
           (Pi
              { arg_ty = Type Type
-             ; ret_ty = T (Type Int)
+             ; ret_ty = Dependent.mono (Type Int)
              ; arg_mode = static_erased
-             ; ret_mode = static_unerased
+             ; ret_mode = static_erased
              })
     ;;
 
@@ -267,19 +270,19 @@ module Prim = struct
           (Arrow
              { arg_ty = Type Bool
              ; ret_ty = Type Unit
-             ; arg_mode = dynamic_erased
+             ; arg_mode = dynamic_unerased
              ; ret_mode = static_unerased
              })
       in
       { ty; mode = static_unerased; static = Lazy.from_val (Value.Prim prim) }
-    | Assert_static ->
+    | Assert_erased ->
       let ty =
         Value.Type
           (Pi
              { arg_ty = Type Bool
-             ; ret_ty = T (Type Unit)
+             ; ret_ty = Dependent.mono (Type Unit)
              ; arg_mode = static_erased
-             ; ret_mode = static_unerased
+             ; ret_mode = static_erased
              })
       in
       { ty; mode = static_erased; static = Lazy.from_val (Value.Prim prim) }
@@ -305,36 +308,18 @@ let eval_assert (value : Value.t) : Value.t =
 
 let eval (prim : Prim.t) (value : Value.t) : Value.t =
   match prim with
-  | Assert | Assert_static -> eval_assert value
+  | Assert | Assert_erased -> eval_assert value
   | Int i -> Prim.Int.eval i value
   | Bool b -> Prim.Bool.eval b value
   | Type t -> Prim.Type.eval t value
 ;;
 
-let apply ~loc (prim : Prim.t) (args : Tst.Expr.t Nonempty_list.t) : Tst.Expr.t =
-  let desc = desc (Prim prim) in
-  let ty = Tst.Ty.ret_ty desc.ty in
-  let mode = Tst.Ty.ret_mode desc.ty in
-  match args with
-  | [ arg ] ->
-    Tst.Expr.Apply
-      { fn = Builtin { builtin = Prim prim; ty = desc.ty; mode = desc.mode; loc }
-      ; arg
-      ; ty
-      ; mode
-      ; loc
-      }
-  | _ ->
-    let args_ty = Value.Type (Tuple (Nonempty_list.map args ~f:Expr.ty)) in
-    let args_mode =
-      Nonempty_list.fold ~init:(Modes.bottom ()) args ~f:(fun acc arg ->
-        Modes.join acc (Expr.mode arg))
-    in
-    Tst.Expr.Apply
-      { fn = Builtin { builtin = Prim prim; ty = desc.ty; mode = desc.mode; loc }
-      ; arg = Tuple { elts = args; ty = args_ty; mode = args_mode; loc }
-      ; ty
-      ; mode
-      ; loc
-      }
+let apply ~loc (prim : Prim.t) (arg : Tst.Expr.t) (_arg_desc (* TODO *) : Desc.t) : Tst.Expr.t =
+  let prim_desc = desc (Prim prim) in
+  let ty = Tst.Ty.ret prim_desc.ty in
+  let mode = Tst.Ty.ret_mode prim_desc.ty in
+  let fn : Tst.Expr.t =
+    Builtin { builtin = Prim prim; ty = prim_desc.ty; mode = prim_desc.mode; loc }
+  in
+  Tst.Expr.Apply { fn; arg; ty; mode; loc }
 ;;

@@ -1,3 +1,3 @@
 open! Core
 
-val c : Lst.Program.t -> string
+val cpp : Lst.Program.t -> string

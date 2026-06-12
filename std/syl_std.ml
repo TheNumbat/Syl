@@ -30,6 +30,60 @@ external print_int : int -> unit = syl_std_print_int;;
 
 let runtime =
   {|
+#include <stdlib.h>
+
+static syl_unit syl_assert(syl_bool cond) {
+  if(!cond) abort();
+}
+static syl_int syl_int_add(syl_tuple<syl_int,syl_int> x) {
+  return x.first + x.rest.first;
+}
+static syl_int syl_int_sub(syl_tuple<syl_int,syl_int> x) {
+  return x.first - x.rest.first;
+}
+static syl_int syl_int_mul(syl_tuple<syl_int,syl_int> x) {
+  return x.first * x.rest.first;
+}
+static syl_int syl_int_div(syl_tuple<syl_int,syl_int> x) {
+  return x.first / x.rest.first;
+}
+static syl_int syl_int_mod(syl_tuple<syl_int,syl_int> x) {
+  syl_int mod = x.first % x.rest.first;
+  syl_int abs = x.rest.first < 0 ? -x.rest.first : x.rest.first;
+  if (mod < 0) mod += abs;
+  return mod;
+}
+static syl_int syl_int_neg(syl_int x) {
+  return -x;
+}
+static syl_bool syl_int_eq(syl_tuple<syl_int,syl_int> x) {
+  return x.first == x.rest.first;
+}
+static syl_bool syl_int_neq(syl_tuple<syl_int,syl_int> x) {
+  return x.first != x.rest.first;
+}
+static syl_bool syl_int_lt(syl_tuple<syl_int,syl_int> x) {
+  return x.first < x.rest.first;
+}
+static syl_bool syl_int_lte(syl_tuple<syl_int,syl_int> x) {
+  return x.first <= x.rest.first;
+}
+static syl_bool syl_int_gt(syl_tuple<syl_int,syl_int> x) {
+  return x.first > x.rest.first;
+}
+static syl_bool syl_int_gte(syl_tuple<syl_int,syl_int> x) {
+  return x.first >= x.rest.first;
+}
+static syl_bool syl_bool_and(syl_tuple<syl_bool,syl_bool> x) {
+  return x.first && x.rest.first;
+}
+static syl_bool syl_bool_or(syl_tuple<syl_bool,syl_bool> x) {
+  return x.first || x.rest.first;
+}
+static syl_bool syl_bool_not(syl_bool x) {
+  return !x;
+}
+
 syl_unit syl_std_print_unit() {
   printf("()\n");
 }

@@ -54,7 +54,7 @@ module Prim : sig
 
   type t =
     | Assert
-    | Assert_static
+    | Assert_erased
     | Int of Int.t
     | Bool of Bool.t
     | Type of Type.t
@@ -68,7 +68,6 @@ type t =
   | Prim of Prim.t
 [@@deriving sexp, compare, equal, hash]
 
-val prelude : string
 val find : string -> t option
 
 include Hashable.S with type t := t

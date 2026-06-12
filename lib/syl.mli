@@ -29,4 +29,4 @@ val to_dst : string -> Dst.Program.t Result.t
 val to_tst : string -> Tst.Program.t Result.t
 val to_sst : string -> Sst.Program.t Result.t
 val to_lst : string -> Lst.Program.t Result.t
-val to_c : string -> string Result.t
+val to_cpp : string -> string Result.t

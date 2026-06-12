@@ -121,8 +121,8 @@ module Expr : sig
     | Make_tuple of { elts : t Nonempty_list.t }
     | Assert of
         { cond : t
-        ; static : Modes.Staticity.t
-        ; before_static : Lex.Comment.t list
+        ; erased : Modes.Erasure.t
+        ; before_erased : Lex.Comment.t list
         }
     | Unreachable
     | Type_annotation of

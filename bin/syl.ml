@@ -11,7 +11,7 @@ let unwrap ~f result =
 let dump_cst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the concrete IR"
+    ~summary:"print after parse"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -21,7 +21,7 @@ let dump_cst =
 let dump_dst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the desugared IR"
+    ~summary:"print after desugar"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -31,7 +31,7 @@ let dump_dst =
 let dump_tst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the typed IR"
+    ~summary:"print after typecheck"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -41,7 +41,7 @@ let dump_tst =
 let dump_sst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the simplified IR"
+    ~summary:"print after simplify"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -51,7 +51,7 @@ let dump_sst =
 let dump_lst =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the linearized IR"
+    ~summary:"print after linearize"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
@@ -61,11 +61,32 @@ let dump_lst =
 let dump_cpp =
   let open Command.Let_syntax in
   Command.basic
-    ~summary:"print the C++ output"
+    ~summary:"print after code generation"
     (let%map_open file = anon ("file" %: string) in
      fun () ->
        let contents = In_channel.read_all file in
-       unwrap (Syl.to_c contents) ~f:print_endline)
+       unwrap (Syl.to_cpp contents) ~f:print_endline)
+;;
+
+let dump_all =
+  let open Command.Let_syntax in
+  Command.basic
+    ~summary:"print after every pass"
+    (let%map_open file = anon ("file" %: string) in
+     fun () ->
+       let contents = In_channel.read_all file in
+       unwrap (Syl.to_cst contents) ~f:(fun cst ->
+         print_s [%message (cst : Syl.Cst.Program.t)];
+         let dst = Syl.Desugar.desugar cst in
+         print_s [%message (dst : Syl.Dst.Program.t)];
+         unwrap (Syl.to_tst contents) ~f:(fun tst ->
+           print_s [%message (tst : Syl.Tst.Program.t)];
+           let sst = Syl.Simplify.simplify tst in
+           print_s [%message (sst : Syl.Sst.Program.t)];
+           let lst = Syl.Linearize.linearize sst in
+           print_s [%message (lst : Syl.Lst.Program.t)];
+           let cpp = Syl.Codegen.cpp lst in
+           print_s [%message (cpp : string)])))
 ;;
 
 let dump =
@@ -77,6 +98,7 @@ let dump =
     ; "sst", dump_sst
     ; "lst", dump_lst
     ; "cpp", dump_cpp
+    ; "all", dump_all
     ]
 ;;
 
@@ -84,7 +106,7 @@ let default_output file = Filename.basename (Filename.chop_extension file) ^ ".e
 
 let compile_to_exe file output =
   let contents = In_channel.read_all file in
-  unwrap (Syl.to_c contents) ~f:(fun c_code ->
+  unwrap (Syl.to_cpp contents) ~f:(fun c_code ->
     let c_file = Stdlib.Filename.temp_file "syl" ".cpp" in
     Out_channel.write_all c_file ~data:c_code;
     let cmd = sprintf "clang++ -O2 -o %s %s" (Filename.quote output) (Filename.quote c_file) in
@@ -133,7 +155,7 @@ let read_input file =
   | None -> In_channel.input_all In_channel.stdin
 ;;
 
-let fmt =
+let format =
   let open Command.Let_syntax in
   Command.basic
     ~summary:"format a Syl source file"
@@ -174,5 +196,5 @@ let () =
   Command_unix.run
     (Command.group
        ~summary:"Syl Compiler"
-       [ "dump", dump; "build", build; "run", run; "fmt", fmt; "check", check ])
+       [ "dump", dump; "build", build; "run", run; "format", format; "check", check ])
 ;;

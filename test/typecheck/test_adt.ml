@@ -1,19 +1,7 @@
 open! Core
 open! Syl
 
-let go ?(print = false) input =
-  let cst = Parse.parse_exn input in
-  let dst = Desugar.desugar cst in
-  match Typecheck.typecheck dst with
-  | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; here; reason } ->
-    if print
-    then
-      print_s
-        [%message
-          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
-    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
-;;
+let go = Common.typecheck
 
 let%expect_test "tuple type basics" =
   go

@@ -8,6 +8,7 @@ end
 module Error : sig
   type t =
     | Divide_by_zero of Int.t
+    | Negative_modulus of Int.t
     | Assert_failed of Value.t
     | Expected_tuple of Value.t
     | Expected_arrow of Value.t
@@ -23,4 +24,4 @@ exception Error of Error.t
 
 val desc : t -> Desc.t
 val eval : Prim.t -> Value.t -> Value.t
-val apply : loc:Lex.Location.t -> Prim.t -> Tst.Expr.t Nonempty_list.t -> Tst.Expr.t
+val apply : loc:Lex.Location.t -> Prim.t -> Tst.Expr.t -> Desc.t -> Tst.Expr.t

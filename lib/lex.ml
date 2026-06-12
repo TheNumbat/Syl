@@ -291,7 +291,7 @@ module Location = struct
     { line : int
     ; column : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp, compare, hash]
 
   let empty = { line = 1; column = 0 }
 end
@@ -563,6 +563,14 @@ module Tokenizer = struct
     let tok = next t in
     restore t state;
     tok
+  ;;
+
+  let peek2 t =
+    let state = save t in
+    let tok1 = next t in
+    let tok2 = next t in
+    restore t state;
+    tok1, tok2
   ;;
 
   let skip t = ignore (next t)

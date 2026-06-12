@@ -16,7 +16,7 @@ function activate(context) {
     const formatter = vscode.languages.registerDocumentFormattingEditProvider("syl", {
         provideDocumentFormattingEdits(document) {
             const config = vscode.workspace.getConfiguration("syl");
-            const command = config.get("formatCommand", "dune exec bin/syl.exe -- fmt");
+            const command = config.get("formatCommand", "dune exec bin/syl.exe -- format");
             const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
             try {

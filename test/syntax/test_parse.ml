@@ -1,18 +1,7 @@
 open! Core
 open! Syl
 
-let go ?(print = false) input =
-  match Parse.parse input with
-  | Ok cst ->
-    print_string (Syl_fmt.to_string cst);
-    if print then print_s [%message (cst : Cst.Program.t)]
-  | Error { loc; here; reason } ->
-    if print
-    then
-      print_s
-        [%message (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Parse.Error.t)]
-    else print_s [%message (loc : Lex.Location.t) (reason : Parse.Error.t)]
-;;
+let go = Common.parse_and_format
 
 let%expect_test "arrow" =
   go "let _ = t -> static t -> t;;";
@@ -529,9 +518,9 @@ let _ = assert (f x);;
 let%expect_test "assert" =
   go
     {|
-let _ = assert static x;;
+let _ = assert erased x;;
   |};
-  [%expect {| let _ = assert static x;; |}]
+  [%expect {| let _ = assert erased x;; |}]
 ;;
 
 let%expect_test "assert" =
@@ -549,17 +538,17 @@ let _ = assert (static x);;
 let%expect_test "assert" =
   go
     {|
-let _ = assert static x @ static;;
+let _ = assert erased x @ static;;
   |};
-  [%expect {| let _ = assert static x @ static;; |}]
+  [%expect {| let _ = assert erased x @ static;; |}]
 ;;
 
 let%expect_test "assert" =
   go
     {|
-let _ = assert static (x @ static);;
+let _ = assert erased (x @ static);;
   |};
-  [%expect {| let _ = assert static (x @ static);; |}]
+  [%expect {| let _ = assert erased (x @ static);; |}]
 ;;
 
 let%expect_test "2 tuple" =

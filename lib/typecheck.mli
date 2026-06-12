@@ -8,6 +8,7 @@ module Error : sig
       | Expected_tuple of Value.t
       | Redundant of Dst.Expr.pattern Nonempty_list.t
       | Non_exhaustive of Match.Result.Missing.t Nonempty_list.t
+      | Or_unbound of Ident.t Nonempty_list.t
     [@@deriving sexp]
   end
 
@@ -33,9 +34,11 @@ module Error : sig
     | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
     | Static_failure of Builtin.Error.t
-    | Inline_self of Ident.t Nonempty_list.t
+    | Erased_application of
+        { fn : Value.t
+        ; result : Modes.t
+        }
     | Recursion_limit of int
-    | Dynamic_erased
     | Unreachable_reached
   [@@deriving sexp]
 end

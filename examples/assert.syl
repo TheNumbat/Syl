@@ -2,9 +2,9 @@ let _ = assert true;;
 
 let _ = (assert true) @ static;;
 
-let _ = assert static true;;
+let _ = assert erased true;;
 
-let _ = (assert static true) @ static;;
+let _ = (assert erased true) @ static;;
 
 let x = true @ dynamic;;
 

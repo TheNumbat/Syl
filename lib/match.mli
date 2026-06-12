@@ -23,28 +23,11 @@ module Pattern : sig
   [@@deriving sexp]
 end
 
-module Case : sig
-  type t =
-    { pattern : Pattern.t
-    ; body : Tst.Expr.t
-    ; bindings : Tst.Desc.t Ident.Map.t
-    }
-  [@@deriving sexp]
-end
-
 module Tree : sig
   module Occurrence : sig
     type t =
       { path : int Vec.t
-      ; ty : Tst.Ty.t
-      }
-    [@@deriving sexp]
-  end
-
-  module Binding : sig
-    type t =
-      { occurrence : Occurrence.t
-      ; desc : Tst.Desc.t
+      ; ty : Tst.Value.t
       }
     [@@deriving sexp]
   end
@@ -59,8 +42,8 @@ module Tree : sig
   type t =
     | Fail
     | Leaf of
-        { action : Tst.Expr.t
-        ; bindings : Binding.t Ident.Map.t
+        { case : int
+        ; bindings : Occurrence.t Ident.Map.t
         }
     | Switch of
         { occurrence : Occurrence.t
@@ -88,4 +71,4 @@ module Result : sig
   [@@deriving sexp]
 end
 
-val compile : ty:Tst.Value.t -> Case.t Nonempty_list.t -> Result.t
+val compile : ty:Tst.Value.t -> Pattern.t Nonempty_list.t -> Result.t

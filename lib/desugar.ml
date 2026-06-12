@@ -8,9 +8,14 @@ module Env = struct
 
   let create () = { vars = Ident.Raw.Map.empty; stamp = ref 0 }
 
-  let bind t raw =
+  let next t =
     let stamp = !(t.stamp) in
     t.stamp := stamp + 1;
+    stamp
+  ;;
+
+  let bind t raw =
+    let stamp = next t in
     { t with vars = Map.set t.vars ~key:raw ~data:stamp }, Ident.create raw ~stamp
   ;;
 
@@ -23,7 +28,8 @@ end
 let arg_is_static (arg_mode : Modes.Maybe.t) =
   match arg_mode.staticity with
   | Some Static -> true
-  | _ -> false
+  | Some (Parametric | Dynamic) -> false
+  | None -> Modes.Maybe.is_erased arg_mode
 ;;
 
 let maybe_erased (erased : Modes.Erasure.t) (expr : Dst.Expr.t) loc : Dst.Expr.t =
@@ -55,9 +61,9 @@ let rec desugar_pattern env seen (pattern : Cst.Expr.pattern)
     in
     env, seen, Tuple { elts; loc }
   | Or { left; right } ->
-    let env, seen_left, left = desugar_pattern env seen left in
-    let env, seen_right, right = desugar_pattern env seen right in
-    env, Set.union seen_left seen_right, Or { left; right; loc }
+    let env, seen, left = desugar_pattern env seen left in
+    let env, seen, right = desugar_pattern env seen right in
+    env, seen, Or { left; right; loc }
 
 and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
   let loc = expr.loc in
@@ -125,11 +131,11 @@ and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
     let env, arg_id = Env.bind env arg_id in
     Arrow { arg; arg_id; arg_mode; ret = desugar_expr env ret; ret_mode; loc }
   | Tuple { elts } -> Tuple { elts = Nonempty_list.map elts ~f:(desugar_expr env); loc }
-  | Assert { cond; static; _ } ->
+  | Assert { cond; erased; _ } ->
     let prim =
-      match static with
-      | Static -> Dst.Expr.Builtin { builtin = Prim Assert_static; loc }
-      | Dynamic | Parametric -> Dst.Expr.Builtin { builtin = Prim Assert; loc }
+      match erased with
+      | Erased -> Dst.Expr.Builtin { builtin = Prim Assert_erased; loc }
+      | Unerased -> Dst.Expr.Builtin { builtin = Prim Assert; loc }
     in
     Apply { fn = prim; arg = desugar_expr env cond; loc }
   | Unreachable -> Unreachable { loc }
@@ -195,5 +201,5 @@ let desugar (cst : Cst.Program.t) : Dst.Program.t =
   let env = Env.create () in
   let env, program = fold_top_levels env stdlib [] in
   let _, program = fold_top_levels env cst.items program in
-  List.rev program
+  { top_levels = List.rev program; stamp = !(env.stamp) }
 ;;

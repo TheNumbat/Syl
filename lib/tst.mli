@@ -21,14 +21,19 @@ module rec Ty : sig
     | Tuple of Value.t Nonempty_list.t
   [@@deriving sexp]
 
-  val of_literal : Dst.Literal.t -> t
-  val ret_ty : Value.t -> Value.t
+  val arg : Value.t -> Value.t
+  val arg_mode : Value.t -> Modes.t
+  val ret : Value.t -> Value.t
   val ret_mode : Value.t -> Modes.t
+  val of_literal : Dst.Literal.t -> t
 end
 
 and Dependent : sig
   type t =
-    | T of Value.t
+    | T of
+        { ty : Value.t
+        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
+        }
     | Meet of t * t
     | Join of t * t
     | Reduce of
@@ -48,6 +53,8 @@ and Dependent : sig
         ; body : Dst.Expr.t
         }
   [@@deriving sexp]
+
+  val mono : Value.t -> t
 
   (* Smart constructors fold concrete types *)
   val meet : t -> t -> t
@@ -110,30 +117,22 @@ and Closure : sig
     ; body : Expr.t
     ; body_dst : Dst.Expr.t
     ; env : Env.t
+    ; family : int
+    ; hash : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp, compare, hash]
 end
 
 and Binder : sig
-  module Mono : sig
-    type t =
-      { arg : Ident.t
-      ; arg_mode : Modes.t
-      ; arg_desc : Desc.t
-      ; body : Expr.t
-      ; body_desc : Desc.t
-      }
-    [@@deriving sexp]
-  end
-
   type t =
     { arg : Ident.t
     ; ty : Value.t
-    ; body : Dst.Expr.t
-    ; mono : (Value.Concrete.t, Mono.t) Hashtbl.t
+    ; body_dst : Dst.Expr.t
     ; env : Env.t
+    ; family : int
+    ; hash : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp, compare, hash]
 end
 
 and Value : sig
@@ -142,16 +141,18 @@ and Value : sig
       | Unit
       | Bool of bool
       | Int of int64
+      | Tuple of t Nonempty_list.t
       | Closure of int
+      | Prim of Builtin0.t
+      | External of string
       | Arrow of
           { arg : t
           ; arg_mode : Modes.t
           ; ret : t
           ; ret_mode : Modes.t
           }
-      | Tuple of t Nonempty_list.t
-      | Scalar of Builtin0.Type.t
-    [@@deriving sexp, hash, compare, equal]
+      | Tuple_t of t Nonempty_list.t
+    [@@deriving sexp, compare, hash]
 
     include Comparable.S with type t := t
     include Hashable.S with type t := t
@@ -175,6 +176,10 @@ and Value : sig
     | Apply of
         { fn : t
         ; arg : t
+        }
+    | Proj of
+        { tuple : t
+        ; index : int
         }
     | External of
         { symbol : string
@@ -217,20 +222,49 @@ and Expr : sig
         ; body : t
         ; ty : Value.t
         ; mode : Modes.t
+        ; family : int
         ; loc : Lex.Location.t
         }
     | Binder of
         { var : Ident.t
         ; arg : Ident.t
-        ; body : Dst.Expr.t
-        ; mono : (Value.Concrete.t, Binder.Mono.t) Hashtbl.t
+        ; body : t Value.Concrete.Map.t
         ; ty : Value.t
         ; mode : Modes.t
+        ; family : int
         ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 
+  and case =
+    { bindings : Value.t Ident.Map.t
+    ; body : t
+    }
+  [@@deriving sexp]
+
+  and tree =
+    | Leaf of
+        { case : int
+        ; bindings : t Ident.Map.t
+        }
+    | Split of
+        { cond : t
+        ; then_ : tree
+        ; else_ : tree
+        }
+  [@@deriving sexp]
+
+  and target =
+    | Family of int
+    | Prim of Builtin0.Prim.t
+  [@@deriving sexp]
+
   and t =
+    | Erased of
+        { ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
     | Literal of
         { value : Value.t
         ; ty : Value.t
@@ -249,19 +283,29 @@ and Expr : sig
         ; body : t
         ; ty : Value.t
         ; mode : Modes.t
+        ; family : int
         ; loc : Lex.Location.t
         }
     | Binder of
         { arg : Ident.t
-        ; body : Dst.Expr.t
-        ; mono : (Value.Concrete.t, Binder.Mono.t) Hashtbl.t
+        ; body : t Value.Concrete.Map.t
         ; ty : Value.t
         ; mode : Modes.t
+        ; family : int
         ; loc : Lex.Location.t
         }
     | Apply of
         { fn : t
         ; arg : t
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Specialize of
+        { fn : t
+        ; arg : t
+        ; target : target
+        ; key : Value.Concrete.t option
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -280,10 +324,24 @@ and Expr : sig
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
+    | Tuple_get of
+        { tuple : t
+        ; index : int
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
     | If of
         { cond : t
         ; then_ : t
         ; else_ : t
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Match of
+        { cases : case Nonempty_list.t
+        ; tree : tree
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -294,30 +352,32 @@ and Expr : sig
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-    | Symbol of
-        { fn : t
-        ; key : Value.Concrete.t
-        ; ty : Value.t
-        ; mode : Modes.t
-        ; loc : Lex.Location.t
-        }
     | Builtin of
         { builtin : Builtin0.t
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-    | Tuple_get of
-        { tuple : t
-        ; index : int
+    | Extcall of
+        { symbol : string
+        ; arg : t
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 
+  (* Combinators *)
+
   val literal : loc:Lex.Location.t -> Dst.Literal.t -> t
-  val free_vars : t -> Ident.Set.t
+  val rebind : t -> stamp:int -> f:(t -> t) -> t
+  val tuple : loc:Lex.Location.t -> (t * Desc.t) Nonempty_list.t -> t * Desc.t
+
+  (* Util *)
+
+  (* [monos] overrides what a [Binder] node binds: pre-reify nodes carry
+     empty bodies, so supply the family's monos from the store. *)
+  val free_vars : ?monos:(int -> t Value.Concrete.Map.t) -> t -> Ident.Set.t
   val ty : t -> Value.t
   val mode : t -> Modes.t
   val loc : t -> Lex.Location.t
@@ -329,6 +389,7 @@ end
 
 module Top_level : sig
   type t =
+    | Erased of { loc : Lex.Location.t }
     | Let of
         { var : Ident.t
         ; bind : Expr.t
@@ -342,17 +403,25 @@ module Top_level : sig
         { var : Ident.t
         ; symbol : string
         ; ty : Value.t
+        ; mode : Modes.t
         ; loc : Lex.Location.t
         }
     | Builtin of
         { var : Ident.t
         ; builtin : Builtin0.t
         ; ty : Value.t
+        ; mode : Modes.t
         ; loc : Lex.Location.t
         }
   [@@deriving sexp]
 end
 
 module Program : sig
-  type t = Top_level.t list [@@deriving sexp]
+  (* Fully reified: [Specialize] targets are resolved and binder bodies carry
+     their monomorphizations. *)
+  type t =
+    { top_levels : Top_level.t list
+    ; stamp : int
+    }
+  [@@deriving sexp]
 end

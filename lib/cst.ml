@@ -123,8 +123,8 @@ module Expr = struct
     | Make_tuple of { elts : t Nonempty_list.t }
     | Assert of
         { cond : t
-        ; static : Modes.Staticity.t
-        ; before_static : Lex.Comment.t list
+        ; erased : Modes.Erasure.t
+        ; before_erased : Lex.Comment.t list
         }
     | Unreachable
     | Type_annotation of
@@ -195,8 +195,8 @@ module Expr = struct
     | Arrow { arg; arg_id; arg_mode; ret; ret_mode } ->
       Arrow { arg = strip arg; arg_id; arg_mode; ret = strip ret; ret_mode }
     | Tuple { elts } -> Tuple { elts = Nonempty_list.map elts ~f:strip }
-    | Assert { cond; static; before_static } ->
-      Assert { cond = strip cond; static; before_static = strip_comments before_static }
+    | Assert { cond; erased; before_erased } ->
+      Assert { cond = strip cond; erased; before_erased = strip_comments before_erased }
     | Type_annotation { expr; ty } -> Type_annotation { expr = strip expr; ty = strip ty }
     | Mode_annotation { expr; mode } -> Mode_annotation { expr = strip expr; mode }
 

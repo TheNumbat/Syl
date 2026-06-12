@@ -38,6 +38,25 @@ let expect_op t ~op =
   if Lex.Op.equal (expect t ~kind:Op) op then () else Fail.unexpected [%here] ~loc tok
 ;;
 
+let op_to_ident : Lex.Op.t -> Ident.t option = function
+  | Tilde_minus -> Some Ident.(unop Neg)
+  | Not -> Some Ident.(unop Not)
+  | Minus -> Some Ident.(binop Sub)
+  | Plus -> Some Ident.(binop Add)
+  | Star -> Some Ident.(binop Mul)
+  | Slash -> Some Ident.(binop Div)
+  | Percent -> Some Ident.(binop Mod)
+  | And -> Some Ident.(binop And)
+  | Or -> Some Ident.(binop Or)
+  | Eq -> Some Ident.(binop Eq)
+  | Neq -> Some Ident.(binop Neq)
+  | Lt -> Some Ident.(binop Lt)
+  | Lte -> Some Ident.(binop Lte)
+  | Gt -> Some Ident.(binop Gt)
+  | Gte -> Some Ident.(binop Gte)
+  | Tilde | Backslash | Arrow | Caret | Comma -> None
+;;
+
 let expect_ident t =
   let loc = Tokenizer.loc t.tokens in
   match Tokenizer.next t.tokens with
@@ -46,36 +65,14 @@ let expect_ident t =
     (match Tokenizer.next t.tokens with
      | Op op ->
        let id =
-         match op with
-         | Tilde_minus -> Ident.(unop Neg)
-         | Not -> Ident.(unop Not)
-         | Minus -> Ident.(binop Sub)
-         | Plus -> Ident.(binop Add)
-         | Star -> Ident.(binop Mul)
-         | Slash -> Ident.(binop Div)
-         | Percent -> Ident.(binop Mod)
-         | And -> Ident.(binop And)
-         | Or -> Ident.(binop Or)
-         | Eq -> Ident.(binop Eq)
-         | Neq -> Ident.(binop Neq)
-         | Lt -> Ident.(binop Lt)
-         | Lte -> Ident.(binop Lte)
-         | Gt -> Ident.(binop Gt)
-         | Gte -> Ident.(binop Gte)
-         | op -> Fail.unexpected [%here] ~loc (Op op)
+         match op_to_ident op with
+         | Some id -> id
+         | None -> Fail.unexpected [%here] ~loc (Op op)
        in
        expect t ~kind:Rparen;
        id
      | tok -> Fail.unexpected [%here] ~loc tok)
   | tok -> Fail.unexpected [%here] ~loc tok
-;;
-
-let maybe_erased t : Modes.Erasure.t =
-  match Tokenizer.peek t.tokens with
-  | Erased ->
-    expect t ~kind:Erased;
-    Erased
-  | _ -> Unerased
 ;;
 
 let maybe_static t : Modes.Staticity.t =
@@ -84,6 +81,14 @@ let maybe_static t : Modes.Staticity.t =
     expect t ~kind:Static;
     Static
   | _ -> Dynamic
+;;
+
+let maybe_erased t : Modes.Erasure.t =
+  match Tokenizer.peek t.tokens with
+  | Erased ->
+    expect t ~kind:Erased;
+    Erased
+  | _ -> Unerased
 ;;
 
 let maybe_modes ~required t : Modes.Maybe.t =
@@ -359,10 +364,10 @@ and expr_primary t : Expr.t =
     match Tokenizer.next t.tokens with
     | Unreachable -> Expr.Unreachable
     | Assert ->
-      let _, before_static = leading t in
-      let static = maybe_static t in
+      let _, before_erased = leading t in
+      let erased = maybe_erased t in
       let cond = expr_lnot t in
-      Assert { cond; static; before_static }
+      Assert { cond; erased; before_erased }
     | Match ->
       let _, before_static = leading t in
       let static = maybe_static t in
@@ -403,9 +408,21 @@ and expr_primary t : Expr.t =
       let rest = expr t in
       Let { var; erased; bind; rest; before_erased; after_erased; after_var }
     | Lparen ->
-      let exp = expr t in
-      expect t ~kind:Rparen;
-      Paren { expr = exp }
+      (match Tokenizer.peek2 t.tokens with
+       | Op op, Rparen ->
+         (match op_to_ident op with
+          | Some id ->
+            Tokenizer.skip t.tokens;
+            Tokenizer.skip t.tokens;
+            Var { id }
+          | None ->
+            let exp = expr t in
+            expect t ~kind:Rparen;
+            Paren { expr = exp })
+       | _ ->
+         let exp = expr t in
+         expect t ~kind:Rparen;
+         Paren { expr = exp })
     | Unit -> Literal { value = Unit }
     | Bool value -> Literal { value = Bool value }
     | Int value -> Literal { value = Int value }

@@ -13,6 +13,7 @@ module Expr = struct
     ; body : t
     ; loc : Lex.Location.t
     }
+  [@@deriving sexp]
 
   and pattern =
     | Var of
@@ -209,5 +210,9 @@ module Top_level = struct
 end
 
 module Program = struct
-  type t = Top_level.t list [@@deriving sexp]
+  type t =
+    { top_levels : Top_level.t list
+    ; stamp : int
+    }
+  [@@deriving sexp]
 end

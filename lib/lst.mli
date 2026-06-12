@@ -1,10 +1,11 @@
 open! Core
+module Key := Tst.Value.Concrete
 
 module Path : sig
   module Entry : sig
     type t =
       | Id of Ident.t
-      | Key of Tst.Value.Concrete.t
+      | Key of Key.t
     [@@deriving sexp, compare, equal, hash]
   end
 
@@ -12,9 +13,11 @@ module Path : sig
 
   val empty : t
   val id : Ident.t -> t
+  val with_ : ?id:Ident.t -> ?key:Key.t -> t -> t
   val with_id : t -> Ident.t -> t
-  val with_key : t -> Tst.Value.Concrete.t -> t
+  val with_key : t -> Key.t -> t
 
+  include Hashable.S with type t := t
   include Comparable.S with type t := t
 end
 
@@ -23,46 +26,58 @@ module Ty : sig
     | Unit
     | Bool
     | Int
+    | Type
+    | Tuple of t Nonempty_list.t
     | Env
     | Closure of
         { arg_ty : t
         ; ret_ty : t
         }
-    | Thunk of t
-    | Tuple of t Nonempty_list.t
-    | Pack of (Tst.Value.Concrete.t, t) Hashtbl.t
   [@@deriving sexp]
 
   val size_in_mem : t -> int
   val align_in_mem : t -> int
-  val is_zero_size : t -> bool
   val align_to : int -> align:int -> int
+  val is_zero_size : t -> bool
 end
 
 module Env : sig
   type entry =
     { path : Path.t
     ; ty : Ty.t
-    ; offset_in_bytes : int
+    ; offset : int
     }
   [@@deriving sexp]
 
   type t =
     { entries : entry array
-    ; size_in_bytes : int
+    ; length : int
     }
   [@@deriving sexp]
+
+  val empty : t
 end
 
 module Expr : sig
-  type t =
+  type nonrec t =
     | Scalar of
         { value : Sst.Scalar.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | Make_env of
-        { captures : Env.t
+        { env : Env.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Make_env_rec of
+        { length : int
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Fill_env_rec of
+        { path : Path.t
+        ; env : Env.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -86,6 +101,22 @@ module Expr : sig
         }
     | Apply_thunk of
         { fn : Path.t
+        ; env : Path.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Apply_proc of
+        { fn : Path.t
+        ; arg : Path.t
+        ; arg_ty : Ty.t
+        ; env : Path.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Extcall of
+        { symbol : string
+        ; arg : Path.t
+        ; arg_ty : Ty.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -103,57 +134,67 @@ module Expr : sig
   [@@deriving sexp]
 
   val ty : t -> Ty.t
+  val loc : t -> Lex.Location.t
   val with_ty : t -> Ty.t -> t
 end
 
-module Stmt : sig
-  type values =
-    { exprs : (Path.t * Expr.t) array
-    ; bind : t array
-    ; loc : Lex.Location.t
+module Block : sig
+  type case =
+    { bindings : (Path.t * Ty.t) array
+    ; block : t
     }
   [@@deriving sexp]
 
-  and functions =
-    { paths : (Path.t * Ty.t * Path.t) array
-    ; captures : Env.t
-    ; loc : Lex.Location.t
-    }
+  and tree =
+    | Leaf of
+        { case : int
+        ; bindings : (Path.t * Expr.t) array
+        }
+    | Split of
+        { cond : Expr.t
+        ; then_ : tree
+        ; else_ : tree
+        }
   [@@deriving sexp]
 
   and t =
-    | Values of values
-    | Functions of functions
+    | Block of
+        { bindings : (Path.t * t) array
+        ; return : Expr.t
+        }
     | If of
-        { path : Path.t
-        ; cond : Expr.t
-        ; then_bind : t array
-        ; then_ : Expr.t
-        ; else_bind : t array
-        ; else_ : Expr.t
+        { cond : Expr.t
+        ; then_ : t
+        ; else_ : t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Match of
+        { tree : tree
+        ; cases : case array
+        ; ty : Ty.t
         ; loc : Lex.Location.t
         }
   [@@deriving sexp]
+
+  val ty : t -> Ty.t
+  val loc : t -> Lex.Location.t
 end
 
-module Decl : sig
+module Proc : sig
   type t =
-    | Values of Stmt.values
-    | Functions of Stmt.functions
-    | Closure_body of
+    | Closure of
         { path : Path.t
         ; arg : Path.t
         ; arg_ty : Ty.t
-        ; captures : Env.entry array
-        ; bind : Stmt.t array
-        ; return : Expr.t
+        ; env : Env.t
+        ; body : Block.t
         ; loc : Lex.Location.t
         }
-    | Thunk_body of
+    | Thunk of
         { path : Path.t
-        ; captures : Env.entry array
-        ; bind : Stmt.t array
-        ; return : Expr.t
+        ; env : Env.t
+        ; body : Block.t
         ; loc : Lex.Location.t
         }
     | External of
@@ -167,5 +208,9 @@ module Decl : sig
 end
 
 module Program : sig
-  type t = Decl.t array [@@deriving sexp]
+  type t =
+    { procs : Proc.t array
+    ; bindings : (Path.t * Block.t) array
+    }
+  [@@deriving sexp]
 end

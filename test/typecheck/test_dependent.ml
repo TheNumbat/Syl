@@ -1,19 +1,7 @@
 open! Core
 open! Syl
 
-let go ?(print = false) input =
-  let cst = Parse.parse_exn input in
-  let dst = Desugar.desugar cst in
-  match Typecheck.typecheck dst with
-  | Ok tst -> if print then print_s [%message (tst : Tst.Program.t)]
-  | Error { loc; here; reason } ->
-    if print
-    then
-      print_s
-        [%message
-          (loc : Lex.Location.t) (here : Source_code_position.t) (reason : Typecheck.Error.t)]
-    else print_s [%message (loc : Lex.Location.t) (reason : Typecheck.Error.t)]
-;;
+let go = Common.typecheck
 
 let%expect_test "static lambda identity returns dependent type" =
   go
@@ -273,12 +261,12 @@ let _ = id bool true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "fun with erased (non-static) type arg fails for dependent ret type" =
+let%expect_test "fun with erased type arg binds for dependent ret type (erased implies static)" =
   go
     {|
 fun id (erased t : type) : t -> t = fn (x : t) -> x;;
 |};
-  [%expect {| ((loc ((line 2) (column 27))) (reason (Unbound_ident ((Id t) <opaque>)))) |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dynamic app" =
@@ -665,7 +653,13 @@ let%expect_test "cannot use dynamic erased as condition" =
 let x = true @ dynamic erased;;
 let _ = if x then 1 else 2;;
 |};
-  [%expect {| ((loc ((line 2) (column 13))) (reason Dynamic_erased)) |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "inline case 1: binder with captured static var" =
@@ -696,10 +690,30 @@ let _ = f 5;;
   [%expect {| |}]
 ;;
 
-let%expect_test "inline case 3: erased closure capturing two static vars" =
+let%expect_test "inline case 3: unerased closure capturing static var" =
+  go
+    {|
+let mk = fn (static a : int) -> (fn (y : int) -> a + y);;
+let f = mk 10;;
+let _ = f 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "ghost closure applied for static result, two captures" =
   go
     {|
 let mk = fn (static a : int) -> fn (static b : int) -> (fn (y : int) -> a + b + y) @ erased;;
+let f = mk 10 20;;
+let _ = f 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "inline case 3: unerased closure capturing two static vars" =
+  go
+    {|
+let mk = fn (static a : int) -> fn (static b : int) -> (fn (y : int) -> a + b + y);;
 let f = mk 10 20;;
 let _ = f 5;;
 |};
@@ -846,10 +860,10 @@ let _ = if true then f else g;;
   [%expect {| |}]
 ;;
 
-let%expect_test "assert static" =
+let%expect_test "assert erased" =
   go
     {|
-let _ = fn (static x : bool) -> if static x then () else assert static x;;
+let _ = fn (static x : bool) -> if static x then () else assert erased x;;
   |};
   [%expect
     {|
@@ -862,21 +876,21 @@ let%expect_test "static bool reduction" =
   go
     {|
 let _ = fn (static x : bool) ->
-  let _ = assert static !(x && false) in
-  let _ = assert static !(false && x) in
-  let _ = assert static !(x && !x) in
-  let _ = assert static (x || true) in
-  let _ = assert static (true || x) in
-  let _ = assert static (x || !x) in
-  let _ = assert static (!(!x) || !x) in
-  let _ = assert static ((x || false) || !x) in
-  let _ = assert static ((false || x) || !x) in
-  let _ = assert static (!x || (x || false)) in
-  let _ = assert static (!x || (false || x)) in
-  let _ = assert static ((x && true) || !x) in
-  let _ = assert static ((true && x) || !x) in
-  let _ = assert static (!x || (x && true)) in
-  let _ = assert static (!x || (true && x)) in
+  let _ = assert erased !(x && false) in
+  let _ = assert erased !(false && x) in
+  let _ = assert erased !(x && !x) in
+  let _ = assert erased (x || true) in
+  let _ = assert erased (true || x) in
+  let _ = assert erased (x || !x) in
+  let _ = assert erased (!(!x) || !x) in
+  let _ = assert erased ((x || false) || !x) in
+  let _ = assert erased ((false || x) || !x) in
+  let _ = assert erased (!x || (x || false)) in
+  let _ = assert erased (!x || (false || x)) in
+  let _ = assert erased ((x && true) || !x) in
+  let _ = assert erased ((true && x) || !x) in
+  let _ = assert erased (!x || (x && true)) in
+  let _ = assert erased (!x || (true && x)) in
   ()
 ;;
   |};
@@ -887,32 +901,32 @@ let%expect_test "static int reduction" =
   go
     {|
 let _ = fn (static x : int) ->
-  let _ = assert static (x == x) in
-  let _ = assert static !(x != x) in
-  let _ = assert static !(x > x) in
-  let _ = assert static (x >= x) in
-  let _ = assert static !(x < x) in
-  let _ = assert static (x <= x) in
-  let _ = assert static (x + 0 == x) in
-  let _ = assert static (0 + x == x) in
-  let _ = assert static (x - x == 0) in
-  let _ = assert static (x - 0 == x) in
-  let _ = assert static (0 - x == -x) in
-  let _ = assert static (1 - (-x) == 1 + x) in
-  let _ = assert static (x * 1 == x) in
-  let _ = assert static (1 * x == x) in
-  let _ = assert static (x / 1 == x) in
-  let _ = assert static (x / -1 == -x) in
-  let _ = assert static (x == x / 1) in
-  let _ = assert static (-x == x / -1) in
-  let _ = assert static (x % 1 == 0) in
-  let _ = assert static (x % x == 0) in
-  let _ = assert static (-(-x) == x) in
-  let _ = assert static (x == -(-x)) in
-  let _ = assert static (x * -1 == -x) in
-  let _ = assert static (-x == x * -1) in
-  let _ = assert static (-1 * x == -x) in
-  let _ = assert static (-x == -1 * x) in
+  let _ = assert erased (x == x) in
+  let _ = assert erased !(x != x) in
+  let _ = assert erased !(x > x) in
+  let _ = assert erased (x >= x) in
+  let _ = assert erased !(x < x) in
+  let _ = assert erased (x <= x) in
+  let _ = assert erased (x + 0 == x) in
+  let _ = assert erased (0 + x == x) in
+  let _ = assert erased (x - x == 0) in
+  let _ = assert erased (x - 0 == x) in
+  let _ = assert erased (0 - x == -x) in
+  let _ = assert erased (1 - (-x) == 1 + x) in
+  let _ = assert erased (x * 1 == x) in
+  let _ = assert erased (1 * x == x) in
+  let _ = assert erased (x / 1 == x) in
+  let _ = assert erased (x / -1 == -x) in
+  let _ = assert erased (x == x / 1) in
+  let _ = assert erased (-x == x / -1) in
+  let _ = assert erased (x % 1 == 0) in
+  let _ = assert erased (x % x == 0) in
+  let _ = assert erased (-(-x) == x) in
+  let _ = assert erased (x == -(-x)) in
+  let _ = assert erased (x * -1 == -x) in
+  let _ = assert erased (-x == x * -1) in
+  let _ = assert erased (-1 * x == -x) in
+  let _ = assert erased (-x == -1 * x) in
   ()
 ;;
   |};
@@ -922,7 +936,7 @@ let _ = fn (static x : int) ->
 let%expect_test "static div by zero" =
   go
     {|
-let _ = assert static (0 / 0 == 0);;
+let _ = assert erased (0 / 0 == 0);;
   |};
   [%expect
     {|
@@ -934,7 +948,7 @@ let _ = assert static (0 / 0 == 0);;
 let%expect_test "static mod by zero" =
   go
     {|
-let _ = assert static (0 % 0 == 0);;
+let _ = assert erased (0 % 0 == 0);;
   |};
   [%expect
     {|
@@ -946,7 +960,7 @@ let _ = assert static (0 % 0 == 0);;
 let%expect_test "static div by zero" =
   go
     {|
-let _ = fn (static x : int) -> assert static (x / 0 == 1);;
+let _ = fn (static x : int) -> assert erased (x / 0 == 1);;
   |};
   [%expect
     {|
@@ -959,7 +973,7 @@ let _ = fn (static x : int) -> assert static (x / 0 == 1);;
 let%expect_test "static mod by zero" =
   go
     {|
-let _ = fn (static x : int) -> assert static (x % 0 == 1);;
+let _ = fn (static x : int) -> assert erased (x % 0 == 1);;
   |};
   [%expect
     {|
@@ -975,7 +989,7 @@ let%expect_test "var renaming" =
 let _ = fn (static x : bool) ->
   let y = !x in
   let z = if true then y else !y in
-  assert static (x || z)
+  assert erased (x || z)
 ;;
   |};
   [%expect {| |}]
@@ -1132,10 +1146,10 @@ let%expect_test "unreachable in nested binder defined during monomorphization" =
     {|
 let f = fn (static x : bool) ->
   let g = fn (static y : int) -> if static y == 0 then 42 else unreachable in
-  if static x then g 9 else 99;;
+  if static x then g 0 else 1;;
 let _ = f true;;
 |};
-  [%expect {| ((loc ((line 3) (column 63))) (reason Unreachable_reached)) |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "unreachable in inner binder, reached via inner monomorphization" =
@@ -1333,4 +1347,69 @@ let g = fn (static x : bool) -> if static x then 42 else 99;;
 let _ = if true then f else g;;
 |};
   [%expect {| |}]
+;;
+
+let%expect_test "if erased" =
+  go
+    {|
+let f = fn (erased x : bool) -> if x then 1 else 2;;
+let _ = f true;;
+let _ = f false;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 32)))
+     (reason
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
+    |}]
+;;
+
+let%expect_test "pi capturing dynamic cannot be applied" =
+  go
+    {|
+let outer = 1000 @ dynamic;;
+let f = fn (static n : int) -> outer + n;;
+let _ = print_int (f 1);;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 19)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
+;;
+
+let%expect_test "pi returning closure that captures dyn" =
+  go
+    {|
+let outer = 1000 @ dynamic;;
+let mk = fn (static n : int) -> fn (y : int) -> outer + n + y;;
+let _ = print_int (mk 5 10);;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 19)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
+;;
+
+let%expect_test "pi capturing parametric (from outer fn arg)" =
+  go
+    {|
+let f = fn (dyn : int) ->
+  let g = fn (static n : int) -> n + dyn in
+  g 5;;
+let _ = print_int (f 10);;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 2)))
+     (reason
+      (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
+       (need ((staticity Static) (erasure Erased))))))
+    |}]
 ;;

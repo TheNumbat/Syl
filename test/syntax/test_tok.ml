@@ -1,21 +1,7 @@
 open! Core
 open! Syl
-open Lex
 
-let go ?(print = false) input =
-  let tokenizer = Tokenizer.create input in
-  let rec loop () =
-    let loc = Tokenizer.loc tokenizer in
-    let token = Tokenizer.next tokenizer in
-    if print
-    then print_s [%message (token : Token.t) (loc : Location.t)]
-    else print_s [%message (token : Token.t)];
-    match token with
-    | Eof -> ()
-    | _ -> loop ()
-  in
-  loop ()
-;;
+let go = Common.tokenize
 
 let%expect_test _ =
   go "if then else ;;; fn -+*/&&||! let = () true and fun @ false -> : hello h_eL_O_o";

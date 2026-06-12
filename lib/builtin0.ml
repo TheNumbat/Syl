@@ -54,7 +54,7 @@ module Prim = struct
 
   type t =
     | Assert
-    | Assert_static
+    | Assert_erased
     | Int of Int.t
     | Bool of Bool.t
     | Type of Type.t
@@ -62,7 +62,7 @@ module Prim = struct
 
   let symbol = function
     | Assert -> "syl_assert"
-    | Assert_static -> "syl_assert_static"
+    | Assert_erased -> "syl_assert_erased"
     | Int Add -> "syl_int_add"
     | Int Sub -> "syl_int_sub"
     | Int Mul -> "syl_int_mul"
@@ -110,7 +110,7 @@ let builtins =
       ~f:(fun p -> Prim.symbol p, Prim p)
       Prim.
         [ Assert
-        ; Assert_static
+        ; Assert_erased
         ; Int Add
         ; Int Sub
         ; Int Mul
@@ -151,58 +151,3 @@ let builtins =
 ;;
 
 let find name = Hashtbl.find builtins name
-
-let prelude =
-  {|
-#include <assert.h>
-
-static syl_unit syl_assert(syl_bool cond) {
-  assert(cond);
-}
-static syl_int syl_int_add(syl_tuple<syl_int,syl_int> x) {
-  return x.first + x.rest.first;
-}
-static syl_int syl_int_sub(syl_tuple<syl_int,syl_int> x) {
-  return x.first - x.rest.first;
-}
-static syl_int syl_int_mul(syl_tuple<syl_int,syl_int> x) {
-  return x.first * x.rest.first;
-}
-static syl_int syl_int_div(syl_tuple<syl_int,syl_int> x) {
-  return x.first / x.rest.first;
-}
-static syl_int syl_int_mod(syl_tuple<syl_int,syl_int> x) {
-  return x.first % x.rest.first;
-}
-static syl_int syl_int_neg(syl_int x) {
-  return -x;
-}
-static syl_bool syl_int_eq(syl_tuple<syl_int,syl_int> x) {
-  return x.first == x.rest.first;
-}
-static syl_bool syl_int_neq(syl_tuple<syl_int,syl_int> x) {
-  return x.first != x.rest.first;
-}
-static syl_bool syl_int_lt(syl_tuple<syl_int,syl_int> x) {
-  return x.first < x.rest.first;
-}
-static syl_bool syl_int_lte(syl_tuple<syl_int,syl_int> x) {
-  return x.first <= x.rest.first;
-}
-static syl_bool syl_int_gt(syl_tuple<syl_int,syl_int> x) {
-  return x.first > x.rest.first;
-}
-static syl_bool syl_int_gte(syl_tuple<syl_int,syl_int> x) {
-  return x.first >= x.rest.first;
-}
-static syl_bool syl_bool_and(syl_tuple<syl_bool,syl_bool> x) {
-  return x.first && x.rest.first;
-}
-static syl_bool syl_bool_or(syl_tuple<syl_bool,syl_bool> x) {
-  return x.first || x.rest.first;
-}
-static syl_bool syl_bool_not(syl_bool x) {
-  return !x;
-}
-|}
-;;

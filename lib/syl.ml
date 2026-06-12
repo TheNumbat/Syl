@@ -78,8 +78,8 @@ let to_lst input =
   Linearize.linearize sst |> Result.return
 ;;
 
-let to_c input =
+let to_cpp input =
   let open Result.Let_syntax in
-  let%bind llir = to_lst input in
-  Codegen.c llir |> Result.return
+  let%bind lst = to_lst input in
+  Codegen.cpp lst |> Result.return
 ;;

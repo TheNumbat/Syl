@@ -1,6 +1,6 @@
 (library
- (name syl_test)
- (inline_tests)
+ (name syl_test_common)
+ (wrapped false)
  (libraries syl syl_fmt core core_unix)
  (preprocess
   (pps ppx_jane)))
