@@ -106,26 +106,26 @@ let _ = f 0;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with literal condition true" =
+let%expect_test "if erased with literal condition true" =
   go
     {|
-let _ = if static true then 1 else true;;
+let _ = if erased true then 1 else true;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with literal condition false" =
+let%expect_test "if erased with literal condition false" =
   go
     {|
-let _ = if static false then 1 else true;;
+let _ = if erased false then 1 else true;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with static variable condition" =
+let%expect_test "if erased with static variable condition" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let a = f 0;;
 let b = f 1;;
 let _ = print_int a;;
@@ -138,11 +138,11 @@ let _ = print_bool b;;
     |}]
 ;;
 
-let%expect_test "if static nested in let expression" =
+let%expect_test "if erased nested in let expression" =
   go
     {|
 let f = fn (static x : int) ->
-  let y = if static x == 0 then 1 else true in
+  let y = if erased x == 0 then 1 else true in
   y;;
 let _ = print_int (f 0);;
 let _ = print_bool (f 1);;

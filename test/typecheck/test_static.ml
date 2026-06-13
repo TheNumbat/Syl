@@ -1266,10 +1266,10 @@ fun f (dynamic x : int) : dynamic int = x;;
   [%expect {| |}]
 ;;
 
-let%expect_test "static if with phase cond -> error (phase is not static)" =
+let%expect_test "erased if with phase cond -> error (phase is not static)" =
   go
     {|
-let f = fn (x : bool) -> if static x then 1 else 0;;
+let f = fn (x : bool) -> if erased x then 1 else 0;;
 |};
   [%expect
     {|
@@ -1280,10 +1280,10 @@ let f = fn (x : bool) -> if static x then 1 else 0;;
     |}]
 ;;
 
-let%expect_test "static if with static cond -> ok" =
+let%expect_test "erased if with static cond -> ok" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 1 else 0;;
+let f = fn (static x : bool) -> if erased x then 1 else 0;;
 let _ = assert erased (f true == 1);;
 |};
   [%expect {| |}]
@@ -1514,10 +1514,10 @@ let _ = assert erased (f true == 1);;
   [%expect {| ((loc ((line 2) (column 42))) (reason Unreachable_reached)) |}]
 ;;
 
-let%expect_test "unreachable in static if -> ok" =
+let%expect_test "unreachable in erased if -> ok" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 1 else unreachable;;
+let f = fn (static x : bool) -> if erased x then 1 else unreachable;;
 let _ = assert erased (f true == 1);;
 |};
   [%expect {| |}]
@@ -1573,7 +1573,7 @@ let _ = use f;;
 let%expect_test "reject: application mode is the declared one, static branch" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 0 else (0 @ dynamic);;
+let f = fn (static b : bool) -> if erased b then 0 else (0 @ dynamic);;
 let _ = (f true) @ static;;
 |};
   [%expect
@@ -1588,7 +1588,7 @@ let _ = (f true) @ static;;
 let%expect_test "reject: application mode is the declared one, dynamic branch" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 0 else (0 @ dynamic);;
+let f = fn (static b : bool) -> if erased b then 0 else (0 @ dynamic);;
 let _ = (f false) @ static;;
 |};
   [%expect
@@ -1603,7 +1603,7 @@ let _ = (f false) @ static;;
 let%expect_test "instantiation errors are local to the application" =
   go
     {|
-fun pick (static b : bool) : int = if static b then 0 else unreachable;;
+fun pick (static b : bool) : int = if erased b then 0 else unreachable;;
 let _ = pick false;;
 let _ = (1 + 2) : bool;;
 |};
@@ -1613,7 +1613,7 @@ let _ = (1 + 2) : bool;;
 let%expect_test "instantiation error reports at the application" =
   go
     {|
-fun pick (static b : bool) : int = if static b then 0 else unreachable;;
+fun pick (static b : bool) : int = if erased b then 0 else unreachable;;
 let _ = pick false;;
 |};
   [%expect {| ((loc ((line 2) (column 59))) (reason Unreachable_reached)) |}]

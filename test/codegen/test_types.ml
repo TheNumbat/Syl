@@ -201,18 +201,18 @@ let _ = apply g;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static true selects then branch type" =
+let%expect_test "if erased true selects then branch type" =
   go
     {|
-let _ = (if static true then 1 else true) : (if true then int else bool);;
+let _ = (if erased true then 1 else true) : (if true then int else bool);;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static false selects else branch type" =
+let%expect_test "if erased false selects else branch type" =
   go
     {|
-let _ = (if static false then 1 else true) : (if false then int else bool);;
+let _ = (if erased false then 1 else true) : (if false then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -220,21 +220,21 @@ let _ = (if static false then 1 else true) : (if false then int else bool);;
 let%expect_test "pi and arrow join — if choosing between Pi and Arrow" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let _ = if true then f else g;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "nested if static with different types per level" =
+let%expect_test "nested if erased with different types per level" =
   go
     {|
 let f = fn (static x : int) -> fn (static y : int) ->
-  if static x == 0 then
-    (if static y == 0 then 1 else true)
+  if erased x == 0 then
+    (if erased y == 0 then 1 else true)
   else
-    (if static y == 0 then () else 2);;
+    (if erased y == 0 then () else 2);;
 let _ = f 0 0;;
 let _ = f 0 1;;
 let _ = f 1 0;;
@@ -243,7 +243,7 @@ let _ = f 1 1;;
   [%expect {| |}]
 ;;
 
-let%expect_test "nested if static with different types per level" =
+let%expect_test "nested if erased with different types per level" =
   go
     {|
 fun f (static x : int) : static
@@ -257,9 +257,9 @@ fun f (static x : int) : static
     then if y == 0 then int else bool
     else if y == 0 then unit else int
   =
-    if static x == 0
-    then if static y == 0 then 1 else true
-    else if static y == 0 then () else 2
+    if erased x == 0
+    then if erased y == 0 then 1 else true
+    else if erased y == 0 then () else 2
    in
   g
 ;;
@@ -271,7 +271,7 @@ let _ = f 1 1;;
   [%expect {| |}]
 ;;
 
-let%expect_test "nested if static with different types per level" =
+let%expect_test "nested if erased with different types per level" =
   go
     {|
 fun f (static x : int) : static
@@ -285,9 +285,9 @@ fun f (static x : int) : static
     then if y == 0 then int else bool
     else if y == 0 then unit else int
   =
-    if static x == 0
-    then if static y == 0 then x+y else true
-    else if static y == 0 then () else x-y
+    if erased x == 0
+    then if erased y == 0 then x+y else true
+    else if erased y == 0 then () else x-y
    in
   g
 ;;
@@ -299,10 +299,10 @@ let _ = f 1 1;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static in type annotation position" =
+let%expect_test "if erased in type annotation position" =
   go
     {|
-let f = fn (static b : bool) -> (if static b then 0 else true) : (if b then int else bool);;
+let f = fn (static b : bool) -> (if erased b then 0 else true) : (if b then int else bool);;
 let _ = f true;;
 let _ = f false;;
 |};
@@ -374,7 +374,7 @@ let%expect_test "pi calling arrow from same group at application" =
     {|
 fun inc (x : int) : int = let _ = choose true in x + 1
 and choose (static erased b : bool) : int -> int =
-  if static b then fn (x : int) -> inc x else fn (x : int) -> x;;
+  if erased b then fn (x : int) -> inc x else fn (x : int) -> x;;
 let _ = choose true 5;;
 let _ = choose false 5;;
 |};
@@ -387,7 +387,7 @@ let%expect_test "pi calling arrow from same group at application" =
 let _ =
 fun inc (x : int) : int = let _ = choose true in x + 1
 and choose (static erased b : bool) : int -> int =
-  if static b then fn (x : int) -> inc x else fn (x : int) -> x in
+  if erased b then fn (x : int) -> inc x else fn (x : int) -> x in
 let _ = choose true 5 in
 let _ = choose false 5 in
 ();;
@@ -420,7 +420,7 @@ let%expect_test "pi calling arrow from same group at application" =
     {|
 fun inc (x : int) : int = x + 1
 and choose (static erased b : bool) : int -> int =
-  if static b then fn (x : int) -> inc x else fn (x : int) -> x;;
+  if erased b then fn (x : int) -> inc x else fn (x : int) -> x;;
 let _ = choose true 5;;
 let _ = choose false 5;;
 |};
@@ -481,7 +481,7 @@ let%expect_test "fuzz: type computed from int" =
   go
     {|
 fun type_for (static x : int) : static erased type =
-  if static x > 0 then int else bool;;
+  if erased x > 0 then int else bool;;
 let _ = (42 : type_for 1);;
 let _ = (true : type_for 0);;
 |};

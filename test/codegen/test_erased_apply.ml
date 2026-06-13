@@ -6,7 +6,7 @@ let go ?print ?(check = `Run) input = Common.codegen ?print ~check input
 let%expect_test "type-level function drives codegen through erased application" =
   go
     {|
-let pick = fn (static erased b : bool) -> if static b then int else bool;;
+let pick = fn (static erased b : bool) -> if erased b then int else bool;;
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = print_int (id (pick true) 7);;
 let _ = print_bool (id (pick false) true);;
@@ -22,7 +22,7 @@ let%expect_test "erased recursion computes a type used at runtime" =
   go
     {|
 fun erased pick (static n : int) : erased type =
-  if static n == 0 then int else pick (n - 1)
+  if erased n == 0 then int else pick (n - 1)
 ;;
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = print_int (id (pick 0) 1);;
@@ -137,7 +137,7 @@ let%expect_test "ghost computation drives a dependent type" =
   go
     {|
 let ghost_pos = (fn (static x : int) -> x > 0) @ erased;;
-let pick = fn (static erased b : bool) -> if static b then int else bool;;
+let pick = fn (static erased b : bool) -> if erased b then int else bool;;
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = print_int (id (pick (ghost_pos 3)) 9);;
 let _ = print_bool (id (pick (ghost_pos 0)) true);;

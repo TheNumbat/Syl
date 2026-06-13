@@ -844,10 +844,10 @@ and typecheck state env expr =
 
 and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
   match expr with
-  | If { cond; then_; else_; static; loc } ->
-    typecheck_if state env ~cond ~then_ ~else_ ~static ~loc
-  | Match { cond; arms; static; loc } ->
-    typecheck_match state env ~scrutinee:cond ~arms ~static ~loc
+  | If { cond; then_; else_; erased; loc } ->
+    typecheck_if state env ~cond ~then_ ~else_ ~erased ~loc
+  | Match { cond; arms; eliminator; loc } ->
+    typecheck_match state env ~scrutinee:cond ~arms ~eliminator ~loc
   | Lambda { arg; arg_mode; arg_ty; body = body_dst; loc } ->
     typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc
   | Apply { fn; arg; loc } -> typecheck_apply state env ~fn ~arg ~loc
@@ -1240,12 +1240,12 @@ and typecheck_apply state env ~fn ~arg ~loc =
     else Apply { fn; arg; ty = ret_ty; mode; loc }, desc
   | _ -> Fail.expected_function [%here] ~loc fn_desc.ty arg_desc.ty
 
-and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
+and typecheck_if state env ~cond ~then_ ~else_ ~erased ~loc =
   let open Lazy.Let_syntax in
   let cond, cond_desc = typecheck state env cond in
   require_leq state ~loc cond_desc.ty (Type Bool);
-  match static with
-  | Static ->
+  match (erased : Modes.Erasure.t) with
+  | Erased ->
     require_static ~loc cond_desc;
     (match force_or_var state cond_desc.static with
      | Bool (T true) when State.monomorphizing state -> typecheck state env then_
@@ -1281,7 +1281,7 @@ and typecheck_if state env ~cond ~then_ ~else_ ~static ~loc =
          | None -> Value.reduce (If { cond = value; then_ = then_desc.ty; else_ = else_desc.ty })
        in
        If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
-  | Dynamic | Parametric ->
+  | Unerased ->
     require_unerased ~loc cond_desc;
     let then_, then_desc = typecheck state env then_ in
     let else_, else_desc = typecheck state env else_ in
@@ -1353,7 +1353,7 @@ and build_condition ~loc ~scrutinee ~scrutinee_desc (literal : Dst.Literal.t) : 
     in
     Builtin.apply ~loc (Int Eq) arg arg_desc
 
-and typecheck_match state env ~scrutinee ~arms ~static:_ ~loc =
+and typecheck_match state env ~scrutinee ~arms ~eliminator:_ ~loc =
   (* TODO dependent match *)
   let scrutinee, scrutinee_desc = typecheck state env scrutinee in
   require_unerased ~loc scrutinee_desc;

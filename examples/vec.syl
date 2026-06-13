@@ -1,12 +1,12 @@
 (* Length-indexed vectors represented as nested tuples *)
 fun vec (static n : int) : erased type =
-  if static n == 1 then int else int ^ vec (n - 1)
+  if erased n == 1 then int else int ^ vec (n - 1)
 ;;
 
 let _ = (1, (2, 3)) : vec 3;;
 
 fun replicate (static n : int) : int -> vec n =
-  fn (x : int) -> if static n == 1 then x else (x, replicate (n - 1) x)
+  fn (x : int) -> if erased n == 1 then x else (x, replicate (n - 1) x)
 ;;
 
 let _ = replicate 4 10 : vec 4;;
@@ -20,18 +20,18 @@ let sum4 =
 let _ = print_int (sum4 (replicate 4 10));;
 
 let safe_div =
-  fn (static d : int) -> if static d != 0 then (fn (x : int) -> x / d) else unreachable
+  fn (static d : int) -> if erased d != 0 then (fn (x : int) -> x / d) else unreachable
 ;;
 
 let _ = print_int (safe_div 2 10);;
 
 let safe_at =
   fn (static i : int) ->
-    if static 0 <= i && i < 2
+    if erased 0 <= i && i < 2
     then
       (fn (v : vec 2) ->
          match v with
-         | a, b -> if static i == 0 then a else b)
+         | a, b -> if erased i == 0 then a else b)
     else unreachable
 ;;
 

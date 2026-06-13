@@ -28,7 +28,7 @@ let%expect_test "pi calling arrow from same group at application" =
     {|
 fun inc (x : int) : int = x + 1
 and choose (static erased b : bool) : int -> int =
-  if static b then fn (x : int) -> inc x else fn (x : int) -> x;;
+  if erased b then fn (x : int) -> inc x else fn (x : int) -> x;;
 let _ = choose true 5;;
 let _ = choose false 5;;
 |};
@@ -48,7 +48,7 @@ let _ = g int 0;;
 let%expect_test "static recursion with base case" =
   go
     {|
-fun f (static x : int) : int = if static x == 0 then 42 else f (x - 1);;
+fun f (static x : int) : int = if erased x == 0 then 42 else f (x - 1);;
 let _ = f 3;;
 |};
   [%expect {| |}]
@@ -57,7 +57,7 @@ let _ = f 3;;
 let%expect_test "recursive erased application" =
   go
     {|
-fun f (static x : int) : erased int = (if static x == 0 then 42 else f (x - 1)) @ erased;;
+fun f (static x : int) : erased int = (if erased x == 0 then 42 else f (x - 1)) @ erased;;
 let _ = f 3;;
 |};
   [%expect {| |}]
@@ -445,14 +445,14 @@ let _ = f 0;;
     |}]
 ;;
 
-(* TODO do we want both if static and if erased? *)
+(* TODO do we want both if erased and if erased? *)
 (* The in-flight cond goes abstract; both branch types are int, so the if
    resolves to a concrete type and the definition is accepted (calling it
    diverges at runtime, like any non-terminating recursion). *)
-let%expect_test "static-if on a recursive static defines" =
+let%expect_test "erased-if on a recursive static defines" =
   go
     {|
-fun f (x : int) : static int = if static (f 0 == 0) then 0 else 1;;
+fun f (x : int) : static int = if erased (f 0 == 0) then 0 else 1;;
 let _ = f 0;;
 |};
   [%expect {| |}]

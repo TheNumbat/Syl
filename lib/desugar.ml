@@ -68,22 +68,22 @@ let rec desugar_pattern env seen (pattern : Cst.Expr.pattern)
 and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
   let loc = expr.loc in
   match expr.node with
-  | If { cond; then_; else_; static; _ } ->
+  | If { cond; then_; else_; erased; _ } ->
     If
       { cond = desugar_expr env cond
       ; then_ = desugar_expr env then_
       ; else_ = desugar_expr env else_
-      ; static
+      ; erased
       ; loc
       }
-  | Match { cond; arms; static; _ } ->
+  | Match { cond; arms; eliminator; _ } ->
     let cond = desugar_expr env cond in
     let arms =
       Nonempty_list.map arms ~f:(fun (pat, rhs) ->
         let env, _, pat = desugar_pattern env Ident.Raw.Set.empty pat in
         pat, desugar_expr env rhs)
     in
-    Match { cond; arms; static; loc }
+    Match { cond; arms; eliminator; loc }
   | Let { var; erased; bind; rest; _ } ->
     let bind = maybe_erased erased (desugar_expr env bind) loc in
     let env, var = Env.bind env var in

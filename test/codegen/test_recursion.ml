@@ -95,7 +95,7 @@ let _ = g int 0;;
 let%expect_test "static recursion with base case" =
   go
     {|
-fun f (static x : int) : int = if static x == 0 then x else f (x - 1);;
+fun f (static x : int) : int = if erased x == 0 then x else f (x - 1);;
 let _ = print_int (f 3);;
 |};
   [%expect {| 0 |}]
@@ -104,7 +104,7 @@ let _ = print_int (f 3);;
 let%expect_test "static recursion with base case" =
   go
     {|
-fun f (static x : int) : int = if static x == 10 then x else f (x + 1);;
+fun f (static x : int) : int = if erased x == 10 then x else f (x + 1);;
 let _ = print_int (f 3);;
 |};
   [%expect {| 10 |}]
@@ -113,7 +113,7 @@ let _ = print_int (f 3);;
 let%expect_test "recursive inlining" =
   go
     {|
-fun f (static x : int) : erased int = (if static x == 0 then 42 else f (x - 1)) @ erased;;
+fun f (static x : int) : erased int = (if erased x == 0 then 42 else f (x - 1)) @ erased;;
 let _ = f 3;;
 |};
   [%expect {| |}]
@@ -221,8 +221,8 @@ let _ = f 0;;
 let%expect_test "top-level mutual static recursion" =
   go
     {|
-fun f (static x : int) : int = if static x == 0 then 0 else g (x - 1)
-and g (static y : int) : int = if static y == 0 then 1 else f (y - 1);;
+fun f (static x : int) : int = if erased x == 0 then 0 else g (x - 1)
+and g (static y : int) : int = if erased y == 0 then 1 else f (y - 1);;
 let _ = f 2;;
 |};
   [%expect {| |}]
@@ -298,7 +298,7 @@ let%expect_test "fuzz: static recursion fibonacci" =
   go
     {|
 fun fib (static x : int) : static int =
-  if static x <= 1 then x else fib (x - 1) + fib (x - 2);;
+  if erased x <= 1 then x else fib (x - 1) + fib (x - 2);;
 let _ = fib 10;;
 |};
   [%expect {| |}]
@@ -353,7 +353,7 @@ let%expect_test "fuzz: static recursion with dependent type" =
   go
     {|
 fun choose (static b : bool) : static erased type =
-  if static b then int else bool;;
+  if erased b then int else bool;;
 let _ = (42 : choose true);;
 let _ = (false : choose false);;
 |};
@@ -386,7 +386,7 @@ let%expect_test "fuzz: static factorial" =
   go
     {|
 fun f (static x : int) : static int =
-  if static x == 0 then 1 else x * f (x - 1);;
+  if erased x == 0 then 1 else x * f (x - 1);;
 let _ = f 5;;
 |};
   [%expect {| |}]
@@ -396,7 +396,7 @@ let%expect_test "fuzz: static recursion with boolean" =
   go
     {|
 fun f (static b : bool) : static int =
-  if static b then 1 else 0;;
+  if erased b then 1 else 0;;
 let _ = f true;;
 let _ = f false;;
 |};
@@ -407,9 +407,9 @@ let%expect_test "fuzz: static mutual recursion" =
   go
     {|
 fun f (static x : int) : static int =
-  if static x <= 0 then 0 else g (x - 1) + 1
+  if erased x <= 0 then 0 else g (x - 1) + 1
 and g (static x : int) : static int =
-  if static x <= 0 then 0 else f (x - 1) + 2;;
+  if erased x <= 0 then 0 else f (x - 1) + 2;;
 let _ = f 4;;
 |};
   [%expect {| |}]

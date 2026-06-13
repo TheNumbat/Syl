@@ -191,30 +191,30 @@ let wrap = fn (static f : poly_ident) -> f;;
 let _ = wrap identity int 10;;
 
 (* -----------------------------------------------------
-   Depdendent types with if static
+   Depdendent types with if erased
    ----------------------------------------------------- *)
 
-(* If static splits types *)
+(* If erased splits types *)
 let f = fn (x : int) -> x @ dynamic;;
 
 let g = fn (static x : int) -> x;;
 
-let _ = (if static true then f else g) : int -> int;;
+let _ = (if erased true then f else g) : int -> int;;
 
-let _ = (if static false then f else g) : static int -> int;;
+let _ = (if erased false then f else g) : static int -> int;;
 
 (* Unless the condition is abstract *)
-let _ = fn (static b : bool) -> (if static b then f else g) : static int -> int;;
+let _ = fn (static b : bool) -> (if erased b then f else g) : static int -> int;;
 
 (* Simple reductions happen automatically. *)
 let _ = fn (static b : bool) -> assert erased (b || !b);;
 
 (* Branches can fail at compile time with unreachable. It's an error to emit an
    unreachable branch as runtime code. *)
-let needs_true = fn (static b : bool) -> if static b then 0 else unreachable;;
+let needs_true = fn (static b : bool) -> if erased b then 0 else unreachable;;
 
 (* Dependent functions can have branching types *)
-let choose = fn (static x : bool) -> if static x then 0 else false;;
+let choose = fn (static x : bool) -> if erased x then 0 else false;;
 
 let _ = choose : static bool \ x -> if x then int else bool;;
 
@@ -225,9 +225,9 @@ let _ = choose false : bool;;
 (* Conditions are reduced and compared structurally *)
 let mk_four = fn (static _ : unit) -> (2 * 2 * 2) / 2;;
 
-let f = fn (static x : int) -> if static x * 2 < 0 then 0 else false;;
+let f = fn (static x : int) -> if erased x * 2 < 0 then 0 else false;;
 
-let g = fn (static x : int) -> if static x * (1 + 1) < (4 - mk_four ()) then 0 else false;;
+let g = fn (static x : int) -> if erased x * (1 + 1) < (4 - mk_four ()) then 0 else false;;
 
 let _ = f : static int \ a -> if a * 2 < 0 then int else bool;;
 
@@ -236,7 +236,7 @@ let _ = g : static int \ b -> if b * 2 < 0 then int else bool;;
 let _ = if true then f else g;;
 
 (* Branching values can also be used as annotations *)
-let _ = f : static int \ c -> if static c * 2 < 0 then int else bool;;
+let _ = f : static int \ c -> if erased c * 2 < 0 then int else bool;;
 
 (* Dependent functions can have application types *)
 fun mk_ident
@@ -256,17 +256,17 @@ let _ = mk_ident (fn (static _ : unit) -> if 1 + 1 == 2 then bool else unit) tru
 
 (* Monomorphization can be recursive, up to a limit *)
 fun static_fib (static x : int) : static int =
-  if static x <= 1 then x else static_fib (x - 1) + static_fib (x - 2)
+  if erased x <= 1 then x else static_fib (x - 1) + static_fib (x - 2)
 ;;
 
 (* We can use the result statically *)
-let _ = (if static static_fib 5 == 5 then 0 else false) : int;;
+let _ = (if erased static_fib 5 == 5 then 0 else false) : int;;
 
 (* Mutual recursion also works *)
 fun f (static x : int) : static int =
-  if static x == 1
+  if erased x == 1
   then 0
-  else if static x % 2 == 0
+  else if erased x % 2 == 0
        then g x
        else h x
 and g (static x : int) : static int =
@@ -279,7 +279,7 @@ let _ = f 10;;
 
 (* Not all mutually recursive functions have to be monomorphized *)
 fun f (static x : int) : int =
-  if static x == 0 then g x else 2
+  if erased x == 0 then g x else 2
 and g (erased x : int) : int =
   f 3
 ;;
@@ -291,7 +291,7 @@ let _ = g 0;;
 (* Erased functions can be recursive, but every application must have
    an erased result, so the recursion lives entirely at compile time *)
 fun erased count (static x : int) : erased int =
-  if static x == 0 then 0 @ erased else count (x - 1)
+  if erased x == 0 then 0 @ erased else count (x - 1)
 ;;
 
 let _ = count 3;;

@@ -86,7 +86,7 @@ let _ = if true then fn (erased x : int) -> 1 else fn (x : int) -> 1;;
 let%expect_test "weaken if split: mode only" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else 1 @ erased;;
 |};
   [%expect {| |}]
 ;;
@@ -131,7 +131,7 @@ let _ = if true then 1 else x;;
 let%expect_test "weaken if split: staticity on branch" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 1 @ dynamic else 1;;
+let f = fn (static b : bool) -> if erased b then 1 @ dynamic else 1;;
 let _ = f false;;
 |};
   [%expect {| |}]
@@ -140,7 +140,7 @@ let _ = f false;;
 let%expect_test "weaken if split: both axes on branch" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 1 @ dynamic else 1;;
+let f = fn (static b : bool) -> if erased b then 1 @ dynamic else 1;;
 let _ = f false;;
 |};
   [%expect {| |}]

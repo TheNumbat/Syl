@@ -705,9 +705,9 @@ let%expect_test "fn: comment after args before arrow" =
   [%expect {| let _ = fn (x : int) (* c *) -> x;; |}]
 ;;
 
-let%expect_test "if: comment before static" =
-  fmt "let _ = if (* c *) static true then 1 else 0;;";
-  [%expect {| let _ = if (* c *) static true then 1 else 0;; |}]
+let%expect_test "if: comment before erased" =
+  fmt "let _ = if (* c *) erased true then 1 else 0;;";
+  [%expect {| let _ = if (* c *) erased true then 1 else 0;; |}]
 ;;
 
 let%expect_test "match: comment before static" =
@@ -721,12 +721,23 @@ let%expect_test "match: comment before static" =
     |}]
 ;;
 
-let%expect_test "assert: comment before static" =
+let%expect_test "match: comment before erased" =
+  fmt "let _ = match (* c *) erased x with | a -> 1;;";
+  [%expect
+    {|
+    let _ =
+      match (* c *) erased x with
+      | a -> 1
+    ;;
+    |}]
+;;
+
+let%expect_test "assert: comment before erased" =
   fmt "let _ = assert (* c *) erased true;;";
   [%expect {| let _ = assert (* c *) erased true;; |}]
 ;;
 
-let%expect_test "assert: comment after static" =
+let%expect_test "assert: comment after erased" =
   fmt "let _ = assert erased (* c *) true;;";
   [%expect {| let _ = assert erased (* c *) true;; |}]
 ;;
@@ -1183,6 +1194,18 @@ let%expect_test "match static narrow" =
     {|
     let _ =
       match static cond with
+      | a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
+let%expect_test "match erased narrow" =
+  fmt ~width:15 "let _ = match erased cond with | a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match erased cond with
       | a -> 1
       | b -> 2
     ;;

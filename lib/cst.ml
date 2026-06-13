@@ -67,14 +67,14 @@ module Expr = struct
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : Modes.Staticity.t
-        ; before_static : Lex.Comment.t list
+        ; erased : Modes.Erasure.t
+        ; before_erased : Lex.Comment.t list
         }
     | Match of
         { cond : t
         ; arms : (pattern * t) Nonempty_list.t
-        ; static : Modes.Staticity.t
-        ; before_static : Lex.Comment.t list
+        ; eliminator : Modes.Eliminator.t
+        ; before_elimination : Lex.Comment.t list
         }
     | Let of
         { var : Ident.Raw.t
@@ -152,20 +152,20 @@ module Expr = struct
     }
 
   and strip_node = function
-    | If { cond; then_; else_; static; before_static } ->
+    | If { cond; then_; else_; erased; before_erased } ->
       If
         { cond = strip cond
         ; then_ = strip then_
         ; else_ = strip else_
-        ; static
-        ; before_static = strip_comments before_static
+        ; erased
+        ; before_erased = strip_comments before_erased
         }
-    | Match { cond; arms; static; before_static } ->
+    | Match { cond; arms; eliminator; before_elimination } ->
       Match
         { cond = strip cond
         ; arms = Nonempty_list.map arms ~f:(fun (p, e) -> strip_pattern p, strip e)
-        ; static
-        ; before_static = strip_comments before_static
+        ; eliminator
+        ; before_elimination = strip_comments before_elimination
         }
     | Let { var; erased; bind; rest; before_erased; after_erased; after_var } ->
       Let

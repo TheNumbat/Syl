@@ -36,16 +36,17 @@ let fmt_with_loc cfg (expr : _ Cst.With_loc.t) inner =
   fmt_before cfg expr.before inner |> fmt_after cfg expr.after
 ;;
 
-let fmt_static (static : Modes.Staticity.t) =
-  match static with
-  | Static -> text " static"
-  | Parametric | Dynamic -> nil
-;;
-
 let fmt_erased (erased : Modes.Erasure.t) =
   match erased with
   | Erased -> text " erased"
   | Unerased -> nil
+;;
+
+let fmt_eliminator (eliminator : Modes.Eliminator.t) =
+  match eliminator with
+  | Static -> text " static"
+  | Erased -> text " erased"
+  | Dynamic -> nil
 ;;
 
 let fmt_modes (mode : Modes.Maybe.t) =
@@ -91,7 +92,7 @@ let rec fmt_expr ?(force_break_if = false) (cfg : Config.t) (expr : Cst.Expr.t) 
 and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
   let ind = cfg.indent in
   match expr.node with
-  | Match { cond; arms; static; before_static } ->
+  | Match { cond; arms; eliminator; before_elimination } ->
     let fmt_arm ((pat : Cst.Expr.pattern), rhs) =
       let pat_doc = fmt_pattern ~prec:`Or cfg pat in
       group (text "| " ^^ pat_doc ^^ text " ->" ^^ nest ind (line ^^ fmt_expr cfg rhs))
@@ -103,8 +104,8 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
     in
     group
       (text "match"
-       |> fmt_after cfg before_static
-       |> fun d -> d ^^ fmt_static static ^^ text " " ^^ fmt_expr cfg cond ^^ text " with")
+       |> fmt_after cfg before_elimination
+       |> fun d -> d ^^ fmt_eliminator eliminator ^^ text " " ^^ fmt_expr cfg cond ^^ text " with")
     ^^ hardline
     ^^ arms_doc
   | Literal { value } -> fmt_literal value
@@ -153,8 +154,8 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
     ^^ text "in"
     ^^ hardline
     ^^ fmt_expr cfg rest
-  | If { cond; then_; else_; static; before_static } ->
-    fmt_if cfg ~ind ~force_break:force_break_if ~before_static static cond then_ else_
+  | If { cond; then_; else_; erased; before_erased } ->
+    fmt_if cfg ~ind ~force_break:force_break_if ~before_erased erased cond then_ else_
   | Assert { cond; erased; before_erased } ->
     group
       (text "assert"
@@ -210,28 +211,28 @@ and is_if_expr (expr : Cst.Expr.t) =
   | Mode_annotation { expr; _ } -> is_if_expr expr
   | _ -> false
 
-and fmt_if cfg ~ind ?(force_break = false) ?(before_static = []) static cond then_ else_ =
+and fmt_if cfg ~ind ?(force_break = false) ?(before_erased = []) erased cond then_ else_ =
   let nested = force_break || is_if_expr then_ || is_if_expr else_ in
   let sep = if nested then hardline else line in
   let then_doc =
     match then_.node with
-    | If { cond; then_; else_; static; before_static } when nested ->
+    | If { cond; then_; else_; erased; before_erased } when nested ->
       text "then "
-      ^^ align (fmt_if cfg ~ind ~force_break:true ~before_static static cond then_ else_)
+      ^^ align (fmt_if cfg ~ind ~force_break:true ~before_erased erased cond then_ else_)
     | _ -> group (text "then" ^^ nest ind (line ^^ fmt_expr ~force_break_if:nested cfg then_))
   in
   let else_doc =
     match else_.node with
-    | If { cond; then_; else_; static; before_static } ->
+    | If { cond; then_; else_; erased; before_erased } ->
       text "else "
-      ^^ align (fmt_if cfg ~ind ~force_break:nested ~before_static static cond then_ else_)
+      ^^ align (fmt_if cfg ~ind ~force_break:nested ~before_erased erased cond then_ else_)
     | _ -> group (text "else" ^^ nest ind (line ^^ fmt_expr ~force_break_if:nested cfg else_))
   in
   group
     (text "if"
-     |> fmt_after cfg before_static
+     |> fmt_after cfg before_erased
      |> fun d ->
-     d ^^ fmt_static static ^^ text " " ^^ fmt_expr cfg cond ^^ sep ^^ then_doc ^^ sep ^^ else_doc)
+     d ^^ fmt_erased erased ^^ text " " ^^ fmt_expr cfg cond ^^ sep ^^ then_doc ^^ sep ^^ else_doc)
 
 and fmt_arg cfg (a : Cst.Expr.arg) =
   let n = a.node in

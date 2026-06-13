@@ -295,7 +295,7 @@ let _ = if true then 1 else 1 @ erased;;
 let%expect_test "weaken binder apply: erasure on body" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else 1 @ erased;;
 let _ = f 0;;
 |};
   [%expect {| |}]

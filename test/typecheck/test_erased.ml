@@ -233,7 +233,7 @@ let _ = f : int -> erased unit;;
 let%expect_test "accept: erased application consumed as a type annotation" =
   go
     {|
-let pick = fn (static erased b : bool) -> if static b then int else bool;;
+let pick = fn (static erased b : bool) -> if erased b then int else bool;;
 let _ = 0 : pick true;;
 let _ = false : pick false;;
 |};
@@ -255,7 +255,7 @@ let%expect_test "accept: erased recursion with erased results" =
   go
     {|
 fun erased count (static x : int) : erased int =
-  if static x == 0 then 0 @ erased else count (x - 1)
+  if erased x == 0 then 0 @ erased else count (x - 1)
 ;;
 let _ = count 3;;
 |};

@@ -65,14 +65,14 @@ module Expr : sig
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : Modes.Staticity.t
-        ; before_static : Lex.Comment.t list
+        ; erased : Modes.Erasure.t
+        ; before_erased : Lex.Comment.t list
         }
     | Match of
         { cond : t
         ; arms : (pattern * t) Nonempty_list.t
-        ; static : Modes.Staticity.t
-        ; before_static : Lex.Comment.t list
+        ; eliminator : Modes.Eliminator.t
+        ; before_elimination : Lex.Comment.t list
         }
     | Let of
         { var : Ident.Raw.t

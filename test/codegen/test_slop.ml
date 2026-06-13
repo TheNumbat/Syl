@@ -332,10 +332,10 @@ let _ = f (-1);;
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: BUG static if with negative literal" =
+let%expect_test "fuzz: BUG erased if with negative literal" =
   go
     {|
-let f = fn (static x : int) -> if static x == -5 then 1 else 2;;
+let f = fn (static x : int) -> if erased x == -5 then 1 else 2;;
 let _ = print_int (f (-5));;
 |};
   [%expect {| 1 |}]
@@ -669,7 +669,7 @@ let _ = print_int (f 5);;
 let%expect_test "fuzz: static recursion to 50" =
   go
     {|
-fun f (static x : int) : static int = if static x == 0 then 0 else f (x - 1) + 1;;
+fun f (static x : int) : static int = if erased x == 0 then 0 else f (x - 1) + 1;;
 let _ = print_int (f 50);;
 |};
   [%expect {| 50 |}]
@@ -684,12 +684,12 @@ let _ = print_int (id int (id int (id int (id int 7))));;
   [%expect {| 7 |}]
 ;;
 
-let%expect_test "fuzz: nested static if returning function" =
+let%expect_test "fuzz: nested erased if returning function" =
   go
     {|
 let f = fn (static x : int) ->
-  if static x == 0 then fn (y : int) -> y + 1
-  else if static x == 1 then fn (y : int) -> y + 2
+  if erased x == 0 then fn (y : int) -> y + 1
+  else if erased x == 1 then fn (y : int) -> y + 2
   else fn (y : int) -> y + 100;;
 let _ = print_int (f 0 10);;
 let _ = print_int (f 1 10);;
@@ -817,10 +817,10 @@ let _ = match x with | true -> () | false -> ();;
    Section 12: Unreachable / Bottom corners
    ---------------------------------------------------------------------------- *)
 
-let%expect_test "fuzz: unreachable inside static if (true branch taken)" =
+let%expect_test "fuzz: unreachable inside erased if (true branch taken)" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 0 else unreachable;;
+let f = fn (static x : int) -> if erased x == 0 then 0 else unreachable;;
 let _ = print_int (f 0);;
 |};
   [%expect {| 0 |}]
@@ -1026,11 +1026,11 @@ let _ = side 7;;
    Section 16: Static/dynamic interactions in conditionals
    ---------------------------------------------------------------------------- *)
 
-let%expect_test "fuzz: if static with both arms returning fns of different mode" =
+let%expect_test "fuzz: if erased with both arms returning fns of different mode" =
   go
     {|
 let f = fn (static x : int) ->
-  if static x == 0 then (fn (y : int) -> y) else (fn (y : int) -> y + 1);;
+  if erased x == 0 then (fn (y : int) -> y) else (fn (y : int) -> y + 1);;
 let _ = print_int (f 0 10);;
 let _ = print_int (f 1 10);;
 |};
@@ -1095,8 +1095,8 @@ let%expect_test "fuzz: nested dependent if-static" =
   go
     {|
 let f = fn (static x : int) ->
-  fn (y : if static x == 0 then int else bool) ->
-    if static x == 0 then y else 1;;
+  fn (y : if erased x == 0 then int else bool) ->
+    if erased x == 0 then y else 1;;
 let _ = print_int (f 0 5);;
 let _ = print_int (f 1 true);;
 |};
@@ -1344,9 +1344,9 @@ let%expect_test "fuzz: static dispatch via if chain" =
   go
     {|
 let dispatch = fn (static op : int) ->
-  if static op == 0 then fn (x : int) -> fn (y : int) -> x + y
-  else if static op == 1 then fn (x : int) -> fn (y : int) -> x - y
-  else if static op == 2 then fn (x : int) -> fn (y : int) -> x * y
+  if erased op == 0 then fn (x : int) -> fn (y : int) -> x + y
+  else if erased op == 1 then fn (x : int) -> fn (y : int) -> x - y
+  else if erased op == 2 then fn (x : int) -> fn (y : int) -> x * y
   else fn (x : int) -> fn (y : int) -> 0;;
 let _ = print_int (dispatch 0 5 3);;
 let _ = print_int (dispatch 1 5 3);;
@@ -1809,7 +1809,7 @@ let%expect_test "fuzz: static factorial up to 20 (within depth limit)" =
   go
     {|
 fun fact (static x : int) : static int =
-  if static x <= 1 then 1 else x * fact (x - 1);;
+  if erased x <= 1 then 1 else x * fact (x - 1);;
 let _ = print_int (fact 20);;
 |};
   [%expect {| 2432902008176640000 |}]
@@ -1819,7 +1819,7 @@ let%expect_test "fuzz: static recursion within limit" =
   go
     {|
 fun loop (static x : int) : static int =
-  if static x == 0 then 0 else loop (x - 1);;
+  if erased x == 0 then 0 else loop (x - 1);;
 let _ = print_int (loop 100);;
 |};
   [%expect {| 0 |}]
@@ -2266,22 +2266,22 @@ let _ = print_int (pi_apply arrow_fn);;
    Section 17: Unreachable in static branches
    ---------------------------------------------------------------------------- *)
 
-let%expect_test "fuzz: unreachable in static if (untaken)" =
+let%expect_test "fuzz: unreachable in erased if (untaken)" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 0 else unreachable;;
+let f = fn (static x : int) -> if erased x == 0 then 0 else unreachable;;
 let _ = print_int (f 0);;
 |};
   [%expect {| 0 |}]
 ;;
 
-let%expect_test "fuzz: chained static-if unreachable in last branch" =
+let%expect_test "fuzz: chained erased-if unreachable in last branch" =
   go
     {|
 let f = fn (static x : int) ->
-  if static x == 0 then 100
-  else if static x == 1 then 200
-  else if static x == 2 then 300
+  if erased x == 0 then 100
+  else if erased x == 1 then 200
+  else if erased x == 2 then 300
   else unreachable;;
 let _ = print_int (f 0);;
 let _ = print_int (f 2);;

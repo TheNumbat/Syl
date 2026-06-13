@@ -36,25 +36,33 @@ static syl_unit syl_assert(syl_bool cond) {
   if(!cond) abort();
 }
 static syl_int syl_int_add(syl_tuple<syl_int,syl_int> x) {
-  return x.first + x.rest.first;
+  return (syl_int)((uint64_t)x.first + (uint64_t)x.rest.first);
 }
 static syl_int syl_int_sub(syl_tuple<syl_int,syl_int> x) {
-  return x.first - x.rest.first;
+  return (syl_int)((uint64_t)x.first - (uint64_t)x.rest.first);
 }
 static syl_int syl_int_mul(syl_tuple<syl_int,syl_int> x) {
-  return x.first * x.rest.first;
+  return (syl_int)((uint64_t)x.first * (uint64_t)x.rest.first);
+}
+static void syl_divide_by_zero() {
+  fprintf(stderr, "divide by zero\n");
+  abort();
 }
 static syl_int syl_int_div(syl_tuple<syl_int,syl_int> x) {
+  if (x.rest.first == 0) syl_divide_by_zero();
+  if (x.rest.first == -1) return (syl_int)(0 - (uint64_t)x.first);
   return x.first / x.rest.first;
 }
 static syl_int syl_int_mod(syl_tuple<syl_int,syl_int> x) {
+  if (x.rest.first == 0) syl_divide_by_zero();
+  if (x.rest.first == -1) return 0;
   syl_int mod = x.first % x.rest.first;
-  syl_int abs = x.rest.first < 0 ? -x.rest.first : x.rest.first;
-  if (mod < 0) mod += abs;
+  syl_int abs = x.rest.first < 0 ? (syl_int)(0 - (uint64_t)x.rest.first) : x.rest.first;
+  if (mod < 0) mod = (syl_int)((uint64_t)mod + (uint64_t)abs);
   return mod;
 }
 static syl_int syl_int_neg(syl_int x) {
-  return -x;
+  return (syl_int)(0 - (uint64_t)x);
 }
 static syl_bool syl_int_eq(syl_tuple<syl_int,syl_int> x) {
   return x.first == x.rest.first;

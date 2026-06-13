@@ -86,7 +86,7 @@ let _ = if true then fn (erased x : int) -> 1 else fn (x : int) -> 1;;
 let%expect_test "weaken if split: mode only" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else 1 @ erased;;
 |};
   [%expect {| |}]
 ;;
@@ -154,7 +154,7 @@ let _ = if true then 1 else x @ erased;;
 let%expect_test "weaken if split: staticity on branch" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 1 @ dynamic else 1;;
+let f = fn (static b : bool) -> if erased b then 1 @ dynamic else 1;;
 let _ = f false;;
 |};
   [%expect {| |}]
@@ -163,7 +163,7 @@ let _ = f false;;
 let%expect_test "weaken if split: both axes on branch" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 1 @ dynamic erased else 1;;
+let f = fn (static b : bool) -> if erased b then 1 @ dynamic erased else 1;;
 let _ = f false;;
 let _ = f true;;
 |};
@@ -185,7 +185,7 @@ let _ = f true;;
 let%expect_test "weaken binder apply: erasure on body" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else 1 @ erased;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else 1 @ erased;;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -679,7 +679,7 @@ let%expect_test "leq If/If with distinct conds falls through to branch compariso
   go
     {|
 let f = fn (static a : bool) -> fn (static b : bool) ->
-  fn (x : (if static a then int else int)) -> (x : (if static b then int else int));;
+  fn (x : (if erased a then int else int)) -> (x : (if erased b then int else int));;
 let _ = f true false 1;;
 |};
   [%expect {| |}]
@@ -689,7 +689,7 @@ let%expect_test "join If/If with distinct conds falls through to branch collapse
   go
     {|
 let f = fn (static a : bool) -> fn (static b : bool) ->
-  fn (x : (if static a then int else int)) -> fn (y : (if static b then int else int)) ->
+  fn (x : (if erased a then int else int)) -> fn (y : (if erased b then int else int)) ->
     if true then x else y;;
 let _ = f true false 1 2;;
 |};
@@ -702,8 +702,8 @@ let%expect_test
   go
     {|
 let f = fn (static a : bool) -> fn (static b : bool) ->
-  fn (g : (if static a then int else int) -> int) ->
-    fn (h : (if static b then int else int) -> int) ->
+  fn (g : (if erased a then int else int) -> int) ->
+    fn (h : (if erased b then int else int) -> int) ->
       if true then g else h;;
 let _ = f true false (fn (v : int) -> v) (fn (v : int) -> v);;
 |};

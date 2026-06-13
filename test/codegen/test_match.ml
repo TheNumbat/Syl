@@ -3,10 +3,10 @@ open! Syl
 
 let go ?print ?(check = `Run) input = Common.codegen ?print ~check input
 
-let%expect_test "if static with mismatched branch types without annotation" =
+let%expect_test "if erased with mismatched branch types without annotation" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
 |};
   [%expect {| |}]
 ;;

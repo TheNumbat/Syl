@@ -41,6 +41,17 @@ module Staticity : sig
   val print : t -> string
 end
 
+module Eliminator : sig
+  type t =
+    | Dynamic
+    | Static
+    | Erased
+  [@@deriving sexp, compare, equal, hash]
+
+  val default : t
+  val print : t -> string
+end
+
 module Maybe : sig
   type t =
     { staticity : Staticity.t option

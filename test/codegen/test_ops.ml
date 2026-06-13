@@ -184,6 +184,108 @@ let _ = 10 % 3;;
   [%expect {| |}]
 ;;
 
+let go_killed input =
+  try go input with
+  | exn -> print_s (Exn.sexp_of_t exn)
+;;
+
+let%expect_test "runtime division by zero constant aborts" =
+  go_killed
+    {|
+let c = 1 / 0;;
+let _ = print_int c;;
+|};
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
+;;
+
+let%expect_test "runtime division by zero aborts" =
+  go_killed
+    {|
+let zero = 0;;
+let _ = print_int (1 / zero);;
+|};
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
+;;
+
+let%expect_test "runtime modulo by zero aborts" =
+  go_killed
+    {|
+let zero = 0;;
+let _ = print_int (7 % zero);;
+|};
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
+;;
+
+let%expect_test "runtime int_min div/mod by -1 wraps" =
+  go
+    {|
+let min = (0 - 9223372036854775807 - 1);;
+let neg_one = (0 - 1);;
+let _ = print_int (min / neg_one);;
+let _ = print_int (min % neg_one);;
+|};
+  [%expect
+    {|
+    -9223372036854775808
+    0
+    |}]
+;;
+
+let%expect_test "static int_min division by -1 wraps" =
+  go
+    {|
+let _ = assert erased ((0 - 9223372036854775807 - 1) / (0 - 1) == (0 - 9223372036854775807 - 1));;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "runtime signed arithmetic wraps" =
+  go
+    {|
+let max = 9223372036854775807;;
+let min = 0 - max - 1;;
+let one = 1;;
+let _ = print_int (max + one);;
+let _ = print_int (min - one);;
+let _ = print_int (max * 2);;
+let _ = print_int (- min);;
+|};
+  [%expect
+    {|
+    -9223372036854775808
+    9223372036854775807
+    -2
+    -9223372036854775808
+    |}]
+;;
+
+let%expect_test "runtime modulo by int_min" =
+  go
+    {|
+let min = 0 - 9223372036854775807 - 1;;
+let _ = print_int ((0 - 5) % min);;
+let _ = print_int (5 % min);;
+let _ = print_int (0 % min);;
+let _ = print_int (-1 % min);;
+|};
+  [%expect
+    {|
+    9223372036854775803
+    5
+    0
+    9223372036854775807
+    |}]
+;;
+
+let%expect_test "static signed arithmetic wraps" =
+  go
+    {|
+let _ = assert erased (9223372036854775807 + 1 == 0 - 9223372036854775807 - 1);;
+let _ = assert erased (- (0 - 9223372036854775807 - 1) == 0 - 9223372036854775807 - 1);;
+|};
+  [%expect {| |}]
+;;
+
 let%expect_test "fuzz: nested arithmetic" =
   go
     {|

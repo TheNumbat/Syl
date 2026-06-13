@@ -39,13 +39,13 @@ module Expr = struct
         { cond : t
         ; then_ : t
         ; else_ : t
-        ; static : Modes.Staticity.t
+        ; erased : Modes.Erasure.t
         ; loc : Lex.Location.t
         }
     | Match of
         { cond : t
         ; arms : (pattern * t) Nonempty_list.t
-        ; static : Modes.Staticity.t
+        ; eliminator : Modes.Eliminator.t
         ; loc : Lex.Location.t
         }
     | Let of

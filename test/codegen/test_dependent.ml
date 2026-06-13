@@ -188,7 +188,7 @@ let h = f bool;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let _ = f 0;;
 let _ = f 1;;
 |};
@@ -198,8 +198,8 @@ let _ = f 1;;
 let%expect_test "dependent if unify" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then true else 2;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then true else 2;;
 let _ = if true then f 0 else g 1;;
 |};
   [%expect {| |}]
@@ -246,8 +246,8 @@ let x = id2 int (0 @ dynamic);;
 let%expect_test "dependent if unify" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then 0 else false;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then 0 else false;;
 let h = if true then f else g;;
 let _ = h 0;;
 let _ = h 1;;
@@ -258,7 +258,7 @@ let _ = h 1;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 then int else bool);;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if x == 0 then int else bool);;
 let _ = f 0;;
 let _ = f 1;;
 |};
@@ -268,7 +268,7 @@ let _ = f 1;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 1 + 1 then 1 else true) : (if x == 2 then int else bool);;
+let f = fn (static x : int) -> (if erased x == 1 + 1 then 1 else true) : (if x == 2 then int else bool);;
 let _ = f 1;;
 let _ = f 2;;
 |};
@@ -278,7 +278,7 @@ let _ = f 2;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == (if true then x else 0) then 1 else true) : (if x == x then int else bool);;
+let f = fn (static x : int) -> (if erased x == (if true then x else 0) then 1 else true) : (if x == x then int else bool);;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -287,7 +287,7 @@ let _ = f 0;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == x + 1 then 1 else true) : (if x == x + 1 then int else bool);;
+let f = fn (static x : int) -> (if erased x == x + 1 then 1 else true) : (if x == x + 1 then int else bool);;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -296,7 +296,7 @@ let _ = f 0;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == (if x == 1 then x else 0) then 1 else true) : (if x == (if x == 1 then x else 0) then int else bool);;
+let f = fn (static x : int) -> (if erased x == (if x == 1 then x else 0) then 1 else true) : (if x == (if x == 1 then x else 0) then int else bool);;
 let _ = f 0;;
 let _ = f 1;;
 let _ = f 2;;
@@ -308,15 +308,15 @@ let%expect_test "dependent abstraction" =
   go
     {|
 let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
-let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
+let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with nested dependent types in branches" =
+let%expect_test "if erased with nested dependent types in branches" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then fn (y : int) -> y else fn (y : bool) -> y;;
+let f = fn (static x : int) -> if erased x == 0 then fn (y : int) -> y else fn (y : bool) -> y;;
 let g = f 0;;
 let _ = g 42;;
 let h = f 1;;
@@ -345,8 +345,8 @@ let f = fn (static g : static int \ x -> mk_int x) -> g 0;;
 let%expect_test "joining f 0 and g 1 resolves dependent types" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then true else 2;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then true else 2;;
 let _ = if true then f 0 else g 1;;
 |};
   [%expect {| |}]
@@ -377,7 +377,7 @@ let%expect_test "fuzz: dependent type computation" =
   go
     {|
 let choose_type = fn (static erased b : bool) ->
-  if static b then int else bool;;
+  if erased b then int else bool;;
 let _ = (42 : choose_type true);;
 let _ = (true : choose_type false);;
 |};
@@ -387,7 +387,7 @@ let _ = (true : choose_type false);;
 let%expect_test "fuzz: dependent return feeding another dependent" =
   go
     {|
-let choose = fn (static erased b : bool) -> if static b then int else bool;;
+let choose = fn (static erased b : bool) -> if erased b then int else bool;;
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = id (choose true) 42;;
 let _ = id (choose false) true;;
@@ -399,7 +399,7 @@ let%expect_test "fuzz: dependent type choosing function type" =
   go
     {|
 let choose = fn (static erased b : bool) ->
-  if static b then int -> int else bool -> bool;;
+  if erased b then int -> int else bool -> bool;;
 let f = (fn (x : int) -> x + 1) : choose true;;
 let g = (fn (x : bool) -> !x) : choose false;;
 let _ = f 10;;
@@ -411,7 +411,7 @@ let _ = g true;;
 let%expect_test "fuzz: dependent type in function param" =
   go
     {|
-let choose = fn (static erased b : bool) -> if static b then int else bool;;
+let choose = fn (static erased b : bool) -> if erased b then int else bool;;
 let f = fn (static erased b : bool) -> fn (x : choose b) -> x;;
 let _ = f true 42;;
 let _ = f false true;;
@@ -427,10 +427,10 @@ let%expect_test "recursive computed type built generically" =
   go
     {|
 fun ivec (static n : int) : erased type =
-  if static n == 1 then int else int ^ ivec (n - 1)
+  if erased n == 1 then int else int ^ ivec (n - 1)
 ;;
 fun replicate (static n : int) : int -> ivec n =
-  fn (x : int) -> if static n == 1 then x else (x, replicate (n - 1) x)
+  fn (x : int) -> if erased n == 1 then x else (x, replicate (n - 1) x)
 ;;
 let sum4 = fn (v : ivec 4) -> match v with | (a, (b, (c, d))) -> a + b + c + d;;
 let _ = print_int (sum4 (replicate 4 10));;
@@ -443,11 +443,11 @@ let _ = print_int (sum4 ((1, (2, (3, 4))) : ivec 4));;
     |}]
 ;;
 
-let%expect_test "instantiation check via static if and unreachable" =
+let%expect_test "instantiation check via erased if and unreachable" =
   go
     {|
 let div_by =
-  fn (static d : int) -> if static d != 0 then (fn (x : int) -> x / d) else unreachable
+  fn (static d : int) -> if erased d != 0 then (fn (x : int) -> x / d) else unreachable
 ;;
 let _ = print_int (div_by 2 10);;
 let _ = print_int (div_by 5 10);;
@@ -463,7 +463,7 @@ let _ = print_int (div_by 5 10);;
 let%expect_test "heterogeneous result types within a family" =
   go
     {|
-let choose = fn (static b : bool) -> if static b then 1 else false;;
+let choose = fn (static b : bool) -> if erased b then 1 else false;;
 let _ = print_int (choose true);;
 let _ = print_bool (choose false);;
 |};

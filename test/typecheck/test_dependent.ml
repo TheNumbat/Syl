@@ -107,44 +107,44 @@ let f = fn (erased ty : type) -> fn (x : ty) -> x;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with literal condition true" =
+let%expect_test "if erased with literal condition true" =
   go
     {|
-let _ = if static true then 1 else true;;
+let _ = if erased true then 1 else true;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with literal condition false" =
+let%expect_test "if erased with literal condition false" =
   go
     {|
-let _ = if static false then 1 else true;;
+let _ = if erased false then 1 else true;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with static variable condition" =
+let%expect_test "if erased with static variable condition" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let a = f 0;;
 let b = f 1;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with mismatched branch types without annotation" =
+let%expect_test "if erased with mismatched branch types without annotation" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with correct type annotation using non-static if" =
+let%expect_test "if erased with correct type annotation using non-erased if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 then int else bool);;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if x == 0 then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -161,10 +161,10 @@ let f = fn (static x : int) -> if x == 0 then 1 else true;;
     |}]
 ;;
 
-let%expect_test "if static wrong annotation type" =
+let%expect_test "if erased wrong annotation type" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : int;;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : int;;
 |};
   [%expect
     {|
@@ -179,19 +179,19 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : int;;
 ;;
 
 let%expect_test
-    "if static annotation uses static if — fails because type-level if static produces If of types"
+    "if erased annotation uses erased if — fails because type-level if erased produces If of types"
   =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static x == 0 then int else bool);;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if erased x == 0 then int else bool);;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with nested dependent types in branches" =
+let%expect_test "if erased with nested dependent types in branches" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then fn (y : int) -> y else fn (y : bool) -> y;;
+let f = fn (static x : int) -> if erased x == 0 then fn (y : int) -> y else fn (y : bool) -> y;;
 let g = f 0;;
 let _ = g 42;;
 let h = f 1;;
@@ -200,18 +200,18 @@ let _ = h true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static true selects then branch type" =
+let%expect_test "if erased true selects then branch type" =
   go
     {|
-let _ = (if static true then 1 else true) : (if true then int else bool);;
+let _ = (if erased true then 1 else true) : (if true then int else bool);;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "if static false selects else branch type" =
+let%expect_test "if erased false selects else branch type" =
   go
     {|
-let _ = (if static false then 1 else true) : (if false then int else bool);;
+let _ = (if erased false then 1 else true) : (if false then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -306,7 +306,7 @@ let%expect_test "static cond" =
   go
     {|
 let c = true @ dynamic;;
-let _ = if static c then 0 else 1;;
+let _ = if erased c then 0 else 1;;
 |};
   [%expect
     {|
@@ -394,8 +394,8 @@ let _ = true : f ();;
 let%expect_test "pi and arrow join — if choosing between Pi and Arrow" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let _ = if true then f else g;;
 |};
   [%expect {| |}]
@@ -404,8 +404,8 @@ let _ = if true then f else g;;
 let%expect_test "pi and arrow cannot join if return types differ structurally" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then true else 2;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then true else 2;;
 let _ = if true then f else g;;
 |};
   [%expect
@@ -435,7 +435,7 @@ let _ = if true then f else g;;
                 (loc ((line 2) (column 43)))))
               (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
               (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
-              (static Static) (loc ((line 2) (column 31)))))))
+              (erased Erased) (loc ((line 2) (column 31)))))))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (rhs
         (Type
@@ -459,7 +459,7 @@ let _ = if true then f else g;;
                 (loc ((line 3) (column 43)))))
               (then_ (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
               (else_ (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
-              (static Static) (loc ((line 3) (column 31)))))))
+              (erased Erased) (loc ((line 3) (column 31)))))))
           (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
@@ -467,8 +467,8 @@ let _ = if true then f else g;;
 let%expect_test "joining f 0 and g 1 resolves dependent types" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then true else 2;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then true else 2;;
 let _ = if true then f 0 else g 1;;
 |};
   [%expect {| |}]
@@ -487,14 +487,14 @@ let _ = f true;;
     |}]
 ;;
 
-let%expect_test "nested if static with different types per level" =
+let%expect_test "nested if erased with different types per level" =
   go
     {|
 let f = fn (static x : int) -> fn (static y : int) ->
-  if static x == 0 then
-    (if static y == 0 then 1 else true)
+  if erased x == 0 then
+    (if erased y == 0 then 1 else true)
   else
-    (if static y == 0 then () else 2);;
+    (if erased y == 0 then () else 2);;
 let _ = f 0 0;;
 let _ = f 0 1;;
 let _ = f 1 0;;
@@ -521,10 +521,10 @@ let _ = (id (int -> int)) (fn (x : int) -> x) 5;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with bool static arg" =
+let%expect_test "if erased with bool static arg" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 1 else true;;
+let f = fn (static b : bool) -> if erased b then 1 else true;;
 let _ = f true;;
 let _ = f false;;
 |};
@@ -570,7 +570,7 @@ let%expect_test "symbolic arrow type as static arg" =
   go
     {|
 let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
-let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
+let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]
 ;;
@@ -594,10 +594,10 @@ let _ = f 42;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static in type annotation position" =
+let%expect_test "if erased in type annotation position" =
   go
     {|
-let f = fn (static b : bool) -> (if static b then 0 else true) : (if b then int else bool);;
+let f = fn (static b : bool) -> (if erased b then 0 else true) : (if b then int else bool);;
 let _ = f true;;
 let _ = f false;;
 |};
@@ -635,11 +635,11 @@ let _ = f int bool 0 true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static nested in let expression" =
+let%expect_test "if erased nested in let expression" =
   go
     {|
 let f = fn (static x : int) ->
-  let y = if static x == 0 then 1 else true in
+  let y = if erased x == 0 then 1 else true in
   y;;
 let _ = f 0;;
 let _ = f 1;;
@@ -863,7 +863,7 @@ let _ = if true then f else g;;
 let%expect_test "assert erased" =
   go
     {|
-let _ = fn (static x : bool) -> if static x then () else assert erased x;;
+let _ = fn (static x : bool) -> if erased x then () else assert erased x;;
   |};
   [%expect
     {|
@@ -995,19 +995,19 @@ let _ = fn (static x : bool) ->
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable in else branch of if static" =
+let%expect_test "unreachable in else branch of if erased" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable;;
+let f = fn (static x : bool) -> if erased x then 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable in then branch of if static" =
+let%expect_test "unreachable in then branch of if erased" =
   go
     {|
-let f = fn (static x : bool) -> if static x then unreachable else 42;;
+let f = fn (static x : bool) -> if erased x then unreachable else 42;;
 let _ = f false;;
 |};
   [%expect {| |}]
@@ -1016,7 +1016,7 @@ let _ = f false;;
 let%expect_test "unreachable reached raises error" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable;;
+let f = fn (static x : bool) -> if erased x then 42 else unreachable;;
 let _ = f false;;
 |};
   [%expect {| ((loc ((line 2) (column 57))) (reason Unreachable_reached)) |}]
@@ -1025,7 +1025,7 @@ let _ = f false;;
 let%expect_test "unreachable with mismatched branch types" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable;;
+let f = fn (static x : bool) -> if erased x then 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -1034,7 +1034,7 @@ let _ = f true;;
 let%expect_test "unreachable in fun partial function" =
   go
     {|
-fun f (static x : int) : int = if static x == 0 then 1 else unreachable;;
+fun f (static x : int) : int = if erased x == 0 then 1 else unreachable;;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -1043,7 +1043,7 @@ let _ = f 0;;
 let%expect_test "unreachable reached in fun" =
   go
     {|
-fun f (static x : int) : int = if static x == 0 then 1 else unreachable;;
+fun f (static x : int) : int = if erased x == 0 then 1 else unreachable;;
 let _ = f 1;;
 |};
   [%expect {| ((loc ((line 2) (column 60))) (reason Unreachable_reached)) |}]
@@ -1053,19 +1053,19 @@ let%expect_test "unreachable with function type" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then fn (y : int) -> y else unreachable;;
+  if erased x then fn (y : int) -> y else unreachable;;
 let g = f true;;
 let _ = g 42;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable in nested if static" =
+let%expect_test "unreachable in nested if erased" =
   go
     {|
 let f = fn (static x : int) ->
-  if static x == 0 then 42
-  else if static x == 1 then 99
+  if erased x == 0 then 42
+  else if erased x == 1 then 99
   else unreachable;;
 let _ = f 0;;
 let _ = f 1;;
@@ -1073,12 +1073,12 @@ let _ = f 1;;
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable reached in nested if static" =
+let%expect_test "unreachable reached in nested if erased" =
   go
     {|
 let f = fn (static x : int) ->
-  if static x == 0 then 42
-  else if static x == 1 then 99
+  if erased x == 0 then 42
+  else if erased x == 1 then 99
   else unreachable;;
 let _ = f 2;;
 |};
@@ -1090,16 +1090,16 @@ let%expect_test "unreachable with polymorphic identity — only valid branch use
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let f = fn (static x : bool) ->
-  if static x then id int 42 else unreachable;;
+  if erased x then id int 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable does not poison mode of if static" =
+let%expect_test "unreachable does not poison mode of if erased" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable;;
+let f = fn (static x : bool) -> if erased x then 42 else unreachable;;
 let _ = f true + 1;;
 |};
   [%expect {| |}]
@@ -1121,11 +1121,11 @@ let _ = unreachable;;
   [%expect {| ((loc ((line 2) (column 8))) (reason Unreachable_reached)) |}]
 ;;
 
-let%expect_test "unreachable in both branches of if static" =
+let%expect_test "unreachable in both branches of if erased" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then unreachable else unreachable;;
+  if erased x then unreachable else unreachable;;
 |};
   [%expect {| |}]
 ;;
@@ -1134,8 +1134,8 @@ let%expect_test "unreachable in nested binder defined during monomorphization" =
   go
     {|
 let f = fn (static x : bool) ->
-  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable in
-  if static x then g 0 else 99;;
+  let g = fn (static y : int) -> if erased y == 0 then 42 else unreachable in
+  if erased x then g 0 else 99;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -1145,8 +1145,8 @@ let%expect_test "unreachable in nested binder defined during monomorphization" =
   go
     {|
 let f = fn (static x : bool) ->
-  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable in
-  if static x then g 0 else 1;;
+  let g = fn (static y : int) -> if erased y == 0 then 42 else unreachable in
+  if erased x then g 0 else 1;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -1156,8 +1156,8 @@ let%expect_test "unreachable in inner binder, reached via inner monomorphization
   go
     {|
 let f = fn (static x : bool) ->
-  let g = fn (static y : int) -> if static y == 0 then 42 else unreachable in
-  if static x then g 0 else g 1;;
+  let g = fn (static y : int) -> if erased y == 0 then 42 else unreachable in
+  if erased x then g 0 else g 1;;
 let _ = f false;;
 |};
   [%expect {| ((loc ((line 3) (column 63))) (reason Unreachable_reached)) |}]
@@ -1167,7 +1167,7 @@ let%expect_test "unreachable in dynamic lambda inside static lambda" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then fn (y : int) -> y else unreachable;;
+  if erased x then fn (y : int) -> y else unreachable;;
 let _ = f true 42;;
 |};
   [%expect {| |}]
@@ -1181,10 +1181,10 @@ let f = fn (static g : static bool \ x -> if x then int else unreachable) -> g t
   [%expect {| ((loc ((line 2) (column 61))) (reason Unreachable_reached)) |}]
 ;;
 
-let%expect_test "unreachable in dependent arrow return type with if static — not concrete" =
+let%expect_test "unreachable in dependent arrow return type with if erased — not concrete" =
   go
     {|
-let f = fn (static g : static bool \ x -> if static x then int else unreachable) -> g true;;
+let f = fn (static g : static bool \ x -> if erased x then int else unreachable) -> g true;;
 |};
   [%expect {| |}]
 ;;
@@ -1192,8 +1192,8 @@ let f = fn (static g : static bool \ x -> if static x then int else unreachable)
 let%expect_test "unreachable in dependent arrow return type — fires during dependent eval on apply" =
   go
     {|
-let f = fn (static g : static bool \ x -> if static x then int else unreachable) -> g true;;
-let _ = f (fn (static x : bool) -> if static x then 42 else unreachable);;
+let f = fn (static g : static bool \ x -> if erased x then int else unreachable) -> g true;;
+let _ = f (fn (static x : bool) -> if erased x then 42 else unreachable);;
 |};
   [%expect {| |}]
 ;;
@@ -1201,18 +1201,18 @@ let _ = f (fn (static x : bool) -> if static x then 42 else unreachable);;
 let%expect_test "unreachable in fun return type annotation — fires during body validation" =
   go
     {|
-fun f (static x : bool) : if static x then int else unreachable = if static x then 42 else unreachable;;
+fun f (static x : bool) : if erased x then int else unreachable = if erased x then 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
 ;;
 
 let%expect_test
-    "unreachable in fun return type annotation with non-static if — fires during definition"
+    "unreachable in fun return type annotation with non-erased if — fires during definition"
   =
   go
     {|
-fun f (static x : bool) : if x then int else unreachable = if static x then 42 else unreachable;;
+fun f (static x : bool) : if x then int else unreachable = if erased x then 42 else unreachable;;
 |};
   [%expect {| ((loc ((line 2) (column 45))) (reason Unreachable_reached)) |}]
 ;;
@@ -1220,7 +1220,7 @@ fun f (static x : bool) : if x then int else unreachable = if static x then 42 e
 let%expect_test "unreachable in fun body — not concrete during definition" =
   go
     {|
-fun f (static x : bool) : int = if static x then 42 else unreachable;;
+fun f (static x : bool) : int = if erased x then 42 else unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -1229,7 +1229,7 @@ let _ = f true;;
 let%expect_test "unreachable in fun body — reached when applied with bad arg" =
   go
     {|
-fun f (static x : bool) : int = if static x then 42 else unreachable;;
+fun f (static x : bool) : int = if erased x then 42 else unreachable;;
 let _ = f false;;
 |};
   [%expect {| ((loc ((line 2) (column 57))) (reason Unreachable_reached)) |}]
@@ -1238,7 +1238,7 @@ let _ = f false;;
 let%expect_test "unreachable in lambda body Pi computation — not concrete" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable;;
+let f = fn (static x : bool) -> if erased x then 42 else unreachable;;
 |};
   [%expect {| |}]
 ;;
@@ -1247,7 +1247,7 @@ let%expect_test "unreachable in fun returning lambda — not concrete during def
   go
     {|
 fun outer (static x : bool) : int -> int =
-  if static x then fn (y : int) -> y else unreachable;;
+  if erased x then fn (y : int) -> y else unreachable;;
 let g = outer true;;
 let _ = g 42;;
 |};
@@ -1258,13 +1258,13 @@ let%expect_test "unreachable in fun returning lambda — reached on application"
   go
     {|
 fun outer (static x : bool) : int -> int =
-  if static x then fn (y : int) -> y else unreachable;;
+  if erased x then fn (y : int) -> y else unreachable;;
 let _ = outer false;;
 |};
   [%expect {| ((loc ((line 3) (column 42))) (reason Unreachable_reached)) |}]
 ;;
 
-let%expect_test "unreachable in dependent arrow return type — non-static if survives definition" =
+let%expect_test "unreachable in dependent arrow return type — non-erased if survives definition" =
   go
     {|
 let f = fn (static g : static bool \ x -> if x then int else unreachable) -> ();;
@@ -1272,10 +1272,10 @@ let f = fn (static g : static bool \ x -> if x then int else unreachable) -> ();
   [%expect {| ((loc ((line 2) (column 61))) (reason Unreachable_reached)) |}]
 ;;
 
-let%expect_test "unreachable in dependent arrow return type — non-static if survives definition" =
+let%expect_test "unreachable in dependent arrow return type — non-erased if survives definition" =
   go
     {|
-let f = static bool \ x -> if static x then if x then int else unreachable else unreachable;;
+let f = static bool \ x -> if erased x then if x then int else unreachable else unreachable;;
 |};
   [%expect {| |}]
 ;;
@@ -1283,7 +1283,7 @@ let f = static bool \ x -> if static x then if x then int else unreachable else 
 let%expect_test "unreachable leq — Bottom type accepted where int expected" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else (unreachable : int);;
+let f = fn (static x : bool) -> if erased x then 42 else (unreachable : int);;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -1294,7 +1294,7 @@ let%expect_test "unreachable leq — Bottom type accepted as function argument" 
     {|
 let f = fn (static x : bool) ->
   let g = fn (y : int) -> y + 1 in
-  if static x then g 42 else g unreachable;;
+  if erased x then g 42 else g unreachable;;
 let _ = f true;;
 |};
   [%expect {| |}]
@@ -1304,36 +1304,36 @@ let%expect_test "unreachable leq — Bottom type accepted where function type ex
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then fn (y : int) -> y else unreachable;;
+  if erased x then fn (y : int) -> y else unreachable;;
 let g = f true;;
 let _ = g 42;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable join — non-static if joins Bottom with int (no application)" =
+let%expect_test "unreachable join — non-erased if joins Bottom with int (no application)" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then (if true then 42 else unreachable) else 99;;
+  if erased x then (if true then 42 else unreachable) else 99;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable join — non-static if joins int with Bottom (no application)" =
+let%expect_test "unreachable join — non-erased if joins int with Bottom (no application)" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then (if true then unreachable else 42) else 99;;
+  if erased x then (if true then unreachable else 42) else 99;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable join — non-static if with unreachable, applied" =
+let%expect_test "unreachable join — non-erased if with unreachable, applied" =
   go
     {|
 let f = fn (static x : bool) ->
-  if static x then (if true then 42 else unreachable) else 99;;
+  if erased x then (if true then 42 else unreachable) else 99;;
 let _ = f true;;
 |};
   [%expect {| ((loc ((line 3) (column 41))) (reason Unreachable_reached)) |}]
@@ -1342,8 +1342,8 @@ let _ = f true;;
 let%expect_test "unreachable leq — Bottom in Pi return type comparison" =
   go
     {|
-let f = fn (static x : bool) -> if static x then 42 else unreachable;;
-let g = fn (static x : bool) -> if static x then 42 else 99;;
+let f = fn (static x : bool) -> if erased x then 42 else unreachable;;
+let g = fn (static x : bool) -> if erased x then 42 else 99;;
 let _ = if true then f else g;;
 |};
   [%expect {| |}]

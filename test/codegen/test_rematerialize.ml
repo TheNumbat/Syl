@@ -8,7 +8,7 @@ let%expect_test "recursive reify through recursive captured binder" =
     {|
 let make_apply = fn (static f : static int -> int) -> f 2;;
 let n = 100;;
-fun down(static x : int) : int = if static x == 0 then n else down (x - 1);;
+fun down(static x : int) : int = if erased x == 0 then n else down (x - 1);;
 let _ = print_int (make_apply down);;
 |};
   [%expect {| 100 |}]
@@ -452,7 +452,7 @@ let%expect_test "recursive binder specialization shared across applications" =
   go
     {|
 let n = 100;;
-fun down (static x : int) : int = if static x == 0 then n else down (x - 1);;
+fun down (static x : int) : int = if erased x == 0 then n else down (x - 1);;
 let make_apply = fn (static f : static int -> int) -> f 2 + f 3;;
 let _ = print_int (make_apply down);;
 let _ = print_int (make_apply down);;
@@ -470,7 +470,7 @@ let%expect_test "recursive binder specialization shared via closure boundary" =
   go
     {|
 let n = 100;;
-fun down (static x : int) : int = if static x == 0 then n else down (x - 1);;
+fun down (static x : int) : int = if erased x == 0 then n else down (x - 1);;
 let make_apply = fn (static f : static int -> int) -> f 2;;
 let go = fn (k : int) -> make_apply down + k;;
 let _ = print_int (go 1);;
@@ -512,7 +512,7 @@ let%expect_test "reify rematerialized closure selected by static branch" =
     {|
 let choose =
   fn (static b : bool) ->
-    if static b then fn (x : int) -> x + 1 else fn (x : int) -> x + 2;;
+    if erased b then fn (x : int) -> x + 1 else fn (x : int) -> x + 2;;
 let use = fn (static f : int -> int) -> f 10;;
 let _ = print_int (use (choose true));;
 let _ = print_int (use (choose false));;
@@ -742,7 +742,7 @@ let%expect_test "generic-pass mono with residual function capture is not compile
     {|
 let use = fn (static h : int -> int) -> h 1;;
 let outer = fn (static b : bool) ->
-  let c = if static b then (fn (x : int) -> x) else (fn (x : int) -> 0 - x) in
+  let c = if erased b then (fn (x : int) -> x) else (fn (x : int) -> 0 - x) in
   use (fn (y : int) -> c y);;
 let _ = print_int (outer true);;
 let _ = print_int (outer false);;
@@ -762,7 +762,7 @@ let%expect_test "quoted closure chain rebinds same-ident captures per level" =
   go
     {|
 fun mk (static n : int) : static (int -> int) =
-  if static n == 0 then (fn (x : int) -> x) else (let f = mk (n - 1) in fn (x : int) -> f x + 1)
+  if erased n == 0 then (fn (x : int) -> x) else (let f = mk (n - 1) in fn (x : int) -> f x + 1)
 ;;
 let use = fn (static h : int -> int) -> h 0;;
 let _ = print_int (mk 3 100);;
@@ -779,7 +779,7 @@ let%expect_test "two chain depths quoted as distinct keys" =
   go
     {|
 fun mk (static n : int) : static (int -> int) =
-  if static n == 0 then (fn (x : int) -> x) else (let f = mk (n - 1) in fn (x : int) -> f x + 1)
+  if erased n == 0 then (fn (x : int) -> x) else (let f = mk (n - 1) in fn (x : int) -> f x + 1)
 ;;
 let use = fn (static h : int -> int) -> h 0;;
 let _ = print_int (use (mk 2));;
@@ -810,7 +810,7 @@ let%expect_test "chain closure over a fun-group base" =
     {|
 fun double (x : int) : int = x + x;;
 fun mk (static n : int) : static (int -> int) =
-  if static n == 0 then (fn (x : int) -> double x) else (let f = mk (n - 1) in fn (x : int) -> f x + 1)
+  if erased n == 0 then (fn (x : int) -> double x) else (let f = mk (n - 1) in fn (x : int) -> f x + 1)
 ;;
 let use = fn (static h : int -> int) -> h 10;;
 let _ = print_int (use (mk 2));;
@@ -857,7 +857,7 @@ let%expect_test "chain closure capturing its own fun" =
   go
     {|
 fun f (static n : int) : static (int -> int) =
-  if static n == 0 then (fn (x : int) -> x) else (fn (x : int) -> (f (n - 1)) x + 1)
+  if erased n == 0 then (fn (x : int) -> x) else (fn (x : int) -> (f (n - 1)) x + 1)
 ;;
 let use = fn (static h : int -> int) -> h 0;;
 let _ = print_int (use (f 2));;
@@ -884,7 +884,7 @@ let%expect_test "same-ident chain over a fun-group base" =
 fun even (x : int) : bool = if x == 0 then true else odd (x - 1)
 and odd (x : int) : bool = if x == 0 then false else even (x - 1);;
 fun mk (static n : int) : static (int -> bool) =
-  if static n == 0 then (fn (x : int) -> even x) else (let f = mk (n - 1) in fn (x : int) -> f (x + 1))
+  if erased n == 0 then (fn (x : int) -> even x) else (let f = mk (n - 1) in fn (x : int) -> f (x + 1))
 ;;
 let use = fn (static h : int -> bool) -> h 0;;
 let _ = print_bool (use (mk 2));;
@@ -920,7 +920,7 @@ let%expect_test "dispatches in uninstantiated branches are not compiled" =
   go
     {|
 let lit = fn (static k : int) -> k;;
-fun pick (static b : bool) : int = if static b then lit 1 else lit 2;;
+fun pick (static b : bool) : int = if erased b then lit 1 else lit 2;;
 let _ = print_int (pick true);;
 |};
   [%expect {| 1 |}]

@@ -140,10 +140,10 @@ let _ = h true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with correct type annotation using non-static if" =
+let%expect_test "if erased with correct type annotation using non-erased if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 then int else bool);;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if x == 0 then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -195,10 +195,10 @@ let _ = f 0;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if static with bool static arg" =
+let%expect_test "if erased with bool static arg" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 1 else true;;
+let f = fn (static b : bool) -> if erased b then 1 else true;;
 let _ = f true;;
 let _ = f false;;
 |};
@@ -218,7 +218,7 @@ let%expect_test "symbolic arrow type as static arg" =
   go
     {|
 let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
-let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
+let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]
 ;;
@@ -259,22 +259,22 @@ let _ = (fn (static x : int) -> x + 1) 0;;
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: static if with different result types" =
+let%expect_test "fuzz: erased if with different result types" =
   go
     {|
-let f = fn (static b : bool) -> if static b then 42 else true;;
+let f = fn (static b : bool) -> if erased b then 42 else true;;
 let _ = f true;;
 let _ = f false;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: nested static if" =
+let%expect_test "fuzz: nested erased if" =
   go
     {|
 let f = fn (static x : int) ->
-  if static x > 0 then
-    if static x > 10 then 100 else x
+  if erased x > 0 then
+    if erased x > 10 then 100 else x
   else 0;;
 let _ = f 5;;
 let _ = f 15;;
@@ -305,18 +305,18 @@ let _ = y + 1;;
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: static if with unreachable else" =
+let%expect_test "fuzz: erased if with unreachable else" =
   go
     {|
-let _ = if static true then 42 else unreachable;;
+let _ = if erased true then 42 else unreachable;;
 |};
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: static if with unreachable then" =
+let%expect_test "fuzz: erased if with unreachable then" =
   go
     {|
-let _ = if static false then unreachable else 42;;
+let _ = if erased false then unreachable else 42;;
 |};
   [%expect {| |}]
 ;;
@@ -363,7 +363,7 @@ let _ = f bool true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: gte in non-static if (exposes wrong branch)" =
+let%expect_test "fuzz: gte in non-erased if (exposes wrong branch)" =
   go
     {|
 let _ = if (10 >= 5) then 1 else 2;;

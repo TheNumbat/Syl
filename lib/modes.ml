@@ -103,6 +103,22 @@ module Staticity = struct
   ;;
 end
 
+module Eliminator = struct
+  type t =
+    | Dynamic
+    | Static
+    | Erased
+  [@@deriving sexp, compare, equal, hash]
+
+  let default = Dynamic
+
+  let print = function
+    | Dynamic -> "dynamic"
+    | Static -> "static"
+    | Erased -> "erased"
+  ;;
+end
+
 module Maybe = struct
   type t =
     { staticity : Staticity.t option

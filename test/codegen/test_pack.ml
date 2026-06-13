@@ -332,9 +332,9 @@ let%expect_test "if on int with pack arms" =
 let _ =
   fun f (x : int) : static (static int \ x -> if x == 0 then unit else int) =
   if x == 0 then
-    (fn (static x : int) -> if static x == 0 then () else x)
+    (fn (static x : int) -> if erased x == 0 then () else x)
   else
-    (fn (static x : int) -> if static x == 0 then () else x)
+    (fn (static x : int) -> if erased x == 0 then () else x)
   in
   let _ = f 5 in
   let _ = f 6 in
@@ -368,9 +368,9 @@ let%expect_test "if on int with pack arms" =
 let _ =
   let f = fn (x : int) ->
   if x == 0 then
-    (fn (static x : int) -> if static x == 0 then () else x)
+    (fn (static x : int) -> if erased x == 0 then () else x)
   else
-    (fn (static x : int) -> if static x == 0 then () else x)
+    (fn (static x : int) -> if erased x == 0 then () else x)
   in
   let _ = f 5 in
   let _ = f 6 in
@@ -385,7 +385,7 @@ let%expect_test "lambda with pack return" =
     {|
 let _ =
   let f = fn (x : int) ->
-    (fn (static x : int) -> if static x == 0 then () else print_int x)
+    (fn (static x : int) -> if erased x == 0 then () else print_int x)
   in
   let f5 = f 5 in
   let f6 = f 6 in
@@ -400,7 +400,7 @@ let%expect_test "fun with pack return" =
     {|
 let _ =
   fun f (x : int) : static (static int \ x -> if x == 0 then unit else int) =
-    (fn (static x : int) -> if static x == 0 then () else x)
+    (fn (static x : int) -> if erased x == 0 then () else x)
   in
   let _ = f 5 in
   let _ = f 6 in

@@ -75,20 +75,23 @@ let expect_ident t =
   | tok -> Fail.unexpected [%here] ~loc tok
 ;;
 
-let maybe_static t : Modes.Staticity.t =
-  match Tokenizer.peek t.tokens with
-  | Static ->
-    expect t ~kind:Static;
-    Static
-  | _ -> Dynamic
-;;
-
 let maybe_erased t : Modes.Erasure.t =
   match Tokenizer.peek t.tokens with
   | Erased ->
     expect t ~kind:Erased;
     Erased
   | _ -> Unerased
+;;
+
+let maybe_eliminator t : Modes.Eliminator.t =
+  match Tokenizer.peek t.tokens with
+  | Static ->
+    expect t ~kind:Static;
+    Static
+  | Erased ->
+    expect t ~kind:Erased;
+    Erased
+  | _ -> Dynamic
 ;;
 
 let maybe_modes ~required t : Modes.Maybe.t =
@@ -369,21 +372,21 @@ and expr_primary t : Expr.t =
       let cond = expr_lnot t in
       Assert { cond; erased; before_erased }
     | Match ->
-      let _, before_static = leading t in
-      let static = maybe_static t in
+      let _, before_elimination = leading t in
+      let eliminator = maybe_eliminator t in
       let cond = expr t in
       expect t ~kind:With;
       let arms = match_arms t in
-      Match { cond; arms; static; before_static }
+      Match { cond; arms; eliminator; before_elimination }
     | If ->
-      let _, before_static = leading t in
-      let static = maybe_static t in
+      let _, before_erased = leading t in
+      let erased = maybe_erased t in
       let cond = expr t in
       expect t ~kind:Then;
       let then_ = expr t in
       expect t ~kind:Else;
       let else_ = expr t in
-      If { cond; then_; else_; static; before_static }
+      If { cond; then_; else_; erased; before_erased }
     | Fun ->
       let funs = expr_funs ~loc t [] in
       let rest = expr t in

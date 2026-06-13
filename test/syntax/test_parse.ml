@@ -744,6 +744,18 @@ let%expect_test "match static" =
     |}]
 ;;
 
+let%expect_test "match erased" =
+  go "let _ = match erased x with | a -> 1 | b -> 2;;";
+  [%expect
+    {|
+    let _ =
+      match erased x with
+      | a -> 1
+      | b -> 2
+    ;;
+    |}]
+;;
+
 let%expect_test "match complex rhs" =
   go "let _ = match x with | a -> a + 1 | b -> b * 2;;";
   [%expect

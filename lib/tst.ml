@@ -713,10 +713,10 @@ module Int = struct
     | Mul (Int i, Int (T 1L)) | Mul (Int (T 1L), Int i) -> reduce i
     | Mul (v, Int (T -1L)) | Mul (Int (T -1L), v) -> reduce (Neg v)
     | Mul (v, Int (T 1L)) | Mul (Int (T 1L), v) -> v
+    | Div (v, Int (T -1L)) -> reduce (Neg v) (* Before eval so INT_MIN/-1 wraps. *)
     | Div (Int (T x), Int (T y)) -> const (x / y)
     | Div (Int i, Int (T 1L)) -> reduce i
     | Div (v, Int (T 1L)) -> v
-    | Div (v, Int (T -1L)) -> reduce (Neg v)
     | Mod (Int (T x), Int (T y)) -> const (x % y)
     | Mod (_, Int (T 1L)) -> const 0L
     | Mod (Var x, Var y) when Ident.equal x y -> const 0L

@@ -2210,7 +2210,7 @@ let h = f bool;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let _ = f 0;;
 let _ = f 1;;
 |};
@@ -2232,7 +2232,7 @@ let f = fn (static x : int) -> if x == 0 then 1 else true;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : int;;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : int;;
 |};
   [%expect
     {|
@@ -2249,7 +2249,7 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : int;;
 let%expect_test "dependent if" =
   go
     {|
-let _ = (if static true then 1 else true) : (if true then int else bool);;
+let _ = (if erased true then 1 else true) : (if true then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -2257,7 +2257,7 @@ let _ = (if static true then 1 else true) : (if true then int else bool);;
 let%expect_test "dependent if" =
   go
     {|
-let _ = (if static true then 1 else true) : (if static true then int else bool);;
+let _ = (if erased true then 1 else true) : (if erased true then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -2265,7 +2265,7 @@ let _ = (if static true then 1 else true) : (if static true then int else bool);
 let%expect_test "dependent if" =
   go
     {|
-let _ = (if static true then 1 else true + 1) : int;;
+let _ = (if erased true then 1 else true + 1) : int;;
 |};
   [%expect
     {|
@@ -2279,7 +2279,7 @@ let _ = (if static true then 1 else true + 1) : int;;
 let%expect_test "dependent if" =
   go
     {|
-let _ = fn (static x : int) -> (if static x==0 then 1 else true + 1) : int;;
+let _ = fn (static x : int) -> (if erased x==0 then 1 else true + 1) : int;;
 |};
   [%expect
     {|
@@ -2294,7 +2294,7 @@ let%expect_test "dependent if" =
   go
     {|
 let f = fn (static _ : unit) -> int;;
-let _ = (if static true then 1 else (0 : f ())) : int;;
+let _ = (if erased true then 1 else (0 : f ())) : int;;
 |};
   [%expect {| |}]
 ;;
@@ -2302,7 +2302,7 @@ let _ = (if static true then 1 else (0 : f ())) : int;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 then int else bool);;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if x == 0 then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -2310,7 +2310,7 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if x == 0 
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static x == 0 then int else bool);;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if erased x == 0 then int else bool);;
 |};
   [%expect {| |}]
 ;;
@@ -2318,7 +2318,7 @@ let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static 
 let%expect_test "bad annotation" =
   go
     {|
-let f = fn (static x : int) -> (if static x == 0 then 1 else true) : (if static x == 0 then 0 else bool);;
+let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if erased x == 0 then 0 else bool);;
 |};
   [%expect
     {|
@@ -2383,8 +2383,8 @@ fun f (x : int) : 0 = 0;;
 let%expect_test "dependent if unify" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then 1 else true;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let _ = if true then f else g;;
 |};
   [%expect {| |}]
@@ -2393,8 +2393,8 @@ let _ = if true then f else g;;
 let%expect_test "dependent if unify" =
   go
     {|
-let f = fn (static x : int) -> if static x == 0 then 1 else true;;
-let g = fn (static x : int) -> if static x == 0 then true else 2;;
+let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
+let g = fn (static x : int) -> if erased x == 0 then true else 2;;
 let _ = if true then f 0 else g 1;;
 |};
   [%expect {| |}]
@@ -2404,7 +2404,7 @@ let%expect_test "symbolic arrow type" =
   go
     {|
 let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
-let _ = choose (fn (static x : int) -> if static x == 0 then 0 else true);;
+let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]
 ;;
@@ -2626,7 +2626,7 @@ let%expect_test "join" =
     {|
 fun a (_ : unit) : unit = ();;
 fun b (_ : unit) : unit -> unit = fn (_ : unit) -> ();;
-let x = if static false then a else b;;
+let x = if erased false then a else b;;
 let _ = x () ();;
 |};
   [%expect {| |}]
@@ -2935,14 +2935,14 @@ let _ = assert erased (f 0 == 0);;
     |}]
 ;;
 
-let%expect_test "nested if static with different types per level" =
+let%expect_test "nested if erased with different types per level" =
   go
     {|
 let f = fn (static x : int) -> fn (static y : int) ->
-  if static x == 0 then
-    (if static y == 0 then 1 else true)
+  if erased x == 0 then
+    (if erased y == 0 then 1 else true)
   else
-    (if static y == 0 then () else 2);;
+    (if erased y == 0 then () else 2);;
 let _ = f 0 0;;
 let _ = f 0 1;;
 let _ = f 1 0;;
@@ -3053,7 +3053,7 @@ let _ = fn (static x : bool) -> assert erased x;;
 let%expect_test "assert erased" =
   go
     {|
-let _ = fn (static x : bool) -> if static x then assert erased x else ();;
+let _ = fn (static x : bool) -> if erased x then assert erased x else ();;
   |};
   [%expect {| |}]
 ;;
@@ -3543,7 +3543,7 @@ let%expect_test "pi calling arrow from same group at application" =
     {|
 fun inc (x : int) : int = let _ = choose true in x + 1
 and choose (static erased b : bool) : int -> int =
-  if static b then fn (x : int) -> inc x else fn (x : int) -> x;;
+  if erased b then fn (x : int) -> inc x else fn (x : int) -> x;;
 let _ = choose true 5;;
 let _ = choose false 5;;
 |};
