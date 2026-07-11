@@ -73,7 +73,7 @@ let take_erased = fn (erased y : int) -> let _ = y in 42;;
 
 let take_static_erased = fn (static erased x : int) -> x;;
 
-(* Modes in arrows types *)
+(* Modes in arrow types. Returns default to static *)
 let f_ty = static int -> erased int;;
 
 let g_ty = erased int -> int;;
@@ -88,7 +88,7 @@ let f = fn (x : int) -> x @ dynamic;;
 
 let g = fn (static x : int) -> x;;
 
-let _ = (if true then f else g) : static int -> int;;
+let _ = (if true then f else g) : static int -> dynamic int;;
 
 (* Literals are static unerased *)
 let _ = take_static 0;;
@@ -199,12 +199,12 @@ let f = fn (x : int) -> x @ dynamic;;
 
 let g = fn (static x : int) -> x;;
 
-let _ = (if erased true then f else g) : int -> int;;
+let _ = (if erased true then f else g) : int -> dynamic int;;
 
 let _ = (if erased false then f else g) : static int -> int;;
 
 (* Unless the condition is abstract *)
-let _ = fn (static b : bool) -> (if erased b then f else g) : static int -> int;;
+let _ = fn (static b : bool) -> (if erased b then f else g) : static int -> dynamic int;;
 
 (* Simple reductions happen automatically. *)
 let _ = fn (static b : bool) -> assert erased (b || !b);;

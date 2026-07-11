@@ -656,7 +656,7 @@ let%expect_test "fuzz: recursive function captures dyn" =
   go
     {|
 let x = 1 @ dynamic;;
-fun f (n : int) : int = if n == 0 then x else f (n - 1) + 1;;
+fun f (n : int) : dynamic int = if n == 0 then x else f (n - 1) + 1;;
 let _ = print_int (f 5);;
 |};
   [%expect {| 6 |}]
@@ -1468,8 +1468,8 @@ let%expect_test "fuzz: local mutual recursion with distinct dynamics" =
 let _ =
   let a = 1 @ dynamic in
   let b = 2 @ dynamic in
-  fun f (n : int) : int = if n == 0 then a else g (n - 1) + 1
-  and g (n : int) : int = if n == 0 then b else f (n - 1) + 1 in
+  fun f (n : int) : dynamic int = if n == 0 then a else g (n - 1) + 1
+  and g (n : int) : dynamic int = if n == 0 then b else f (n - 1) + 1 in
   print_int (f 4);;
 |};
   [%expect {| 5 |}]
@@ -1480,7 +1480,7 @@ let%expect_test "fuzz: local rec returning closure that captures" =
     {|
 let _ =
   let z = 100 @ dynamic in
-  fun mk (n : int) : int -> int =
+  fun mk (n : int) : dynamic (int -> dynamic int) =
     if n == 0 then fn (x : int) -> x + z
     else fn (x : int) -> x + n in
   let f = mk 5 in

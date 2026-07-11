@@ -34,6 +34,7 @@ module Error : sig
     | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
     | Static_failure of Builtin.Error.t
+    | Static_cycle
     | Erased_application of
         { fn : Value.t
         ; result : Modes.t

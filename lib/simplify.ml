@@ -46,9 +46,9 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Closure _
   | Binder _
   | Var _
-  | If _
   | Apply _
   | Proj _
+  | Match _
   | External _
   | Prim _
   | Tuple _
@@ -103,7 +103,7 @@ let rec simplify_value ~loc (value : Tst.Value.t) : Expr.t =
   | Tuple elts ->
     let elts = Nonempty_list.map elts ~f:(simplify_value ~loc) in
     Tuple { elts; ty = Tuple (Nonempty_list.map elts ~f:Expr.ty); loc }
-  | Bottom | Var _ | If _ | Apply _ | Proj _ ->
+  | Bottom | Var _ | Apply _ | Proj _ | Match _ ->
     raise_s [%message "Bug: expected runtime value" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
 and simplify_expr (expr : Tst.Expr.t) : Expr.t =

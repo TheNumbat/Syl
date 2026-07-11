@@ -567,3 +567,21 @@ let _ = apply inc (5 @ dynamic);;
 |};
   [%expect {| |}]
 ;;
+
+let%expect_test "unerase" =
+  go
+    {|
+let u = () @ erased;;
+let b = true @ erased;;
+let i = 42 @ erased;;
+let _ = print_unit (unerase_unit u);;
+let _ = print_bool (unerase_bool b);;
+let _ = print_int (unerase_int i);;
+|};
+  [%expect
+    {|
+    ()
+    true
+    42
+    |}]
+;;

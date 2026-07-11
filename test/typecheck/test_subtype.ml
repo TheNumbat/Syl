@@ -63,7 +63,7 @@ let _ = f : int -> int;;
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -241,7 +241,7 @@ let _ = apply g;;
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -300,10 +300,10 @@ let _ = apply g;;
   [%expect {| |}]
 ;;
 
-let%expect_test "erased closure taking closure arg" =
+let%expect_test "erased closure taking closure arg returning dynamic" =
   go
     {|
-let apply = fn (f : int -> int) -> f 0;;
+let apply = fn (f : int -> dynamic int) -> f 0;;
 let _ = (apply @ erased) (fn (x : int) -> x);;
 |};
   [%expect
@@ -324,6 +324,15 @@ let _ = (apply @ erased) (fn (x : int) -> x);;
           (ret_mode ((staticity Dynamic) (erasure Unerased))))))
        (result ((staticity Dynamic) (erasure Unerased))))))
     |}]
+;;
+
+let%expect_test "erased closure taking closure arg" =
+  go
+    {|
+let apply = fn (f : int -> int) -> f 0;;
+let _ = (apply @ erased) (fn (x : int) -> x);;
+|};
+  [%expect {| |}]
 ;;
 
 let%expect_test "binder taking closure, applied erased inside" =
@@ -376,7 +385,7 @@ let _ = f : static int -> int;;
          (Pi (arg_ty (Type Int))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty (T (ty (Type Int)) (memo <opaque>)))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -490,7 +499,7 @@ let _ = id : static type \ t -> erased t -> t;;
               (ret (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 44)))))
               (ret_mode ((staticity ()) (erasure ())))
               (loc ((line 3) (column 20)))))))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -555,7 +564,7 @@ let%expect_test "leq Pi/Pi function-type ret" =
   go
     {|
 let f = fn (static g : static type \ t -> erased t) -> ();;
-let _ = f : static (static erased type \ t -> t) -> unit;;
+let _ = f : static (static erased type \ t -> dynamic t) -> unit;;
 |};
   [%expect
     {|
@@ -587,11 +596,11 @@ let _ = f : static (static erased type \ t -> t) -> unit;;
              (ret_ty
               (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
                (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
-               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 46)))))))
+               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 54)))))))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 

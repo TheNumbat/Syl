@@ -1,4 +1,4 @@
-fun f (x : int) : unit =
+fun f (x : int) : dynamic unit =
   if x < 10
   then print_int 1
   else if x <= 27
@@ -6,7 +6,7 @@ fun f (x : int) : unit =
        else print_int 3
 ;;
 
-fun g (x : int) : unit =
+fun g (x : int) : dynamic unit =
   if x > 123
   then print_int 1
   else if x >= 27
@@ -14,7 +14,7 @@ fun g (x : int) : unit =
        else print_int 3
 ;;
 
-fun h (x : int) : unit =
+fun h (x : int) : dynamic unit =
   if x != 27
   then print_int 1
   else if x == 27

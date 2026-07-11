@@ -3,7 +3,7 @@ open! Syl
 
 let loc = Lex.Location.empty
 let mode = Modes.bottom ()
-let binding_desc ty = { Tst.Desc.ty; mode; static = Lazy.from_val Tst.Value.Bottom }
+let binding_desc ty = { Tst.Desc.ty; mode; static = Lazy.from_val Tst.Value.bottom }
 let id name stamp = Ident.create (Ident.Raw.id name) ~stamp
 let bool_pat value = Syl.Match.Pattern.Literal { value = Bool value; loc }
 let int_pat value = Syl.Match.Pattern.Literal { value = Int (Int64.of_int value); loc }
@@ -26,7 +26,7 @@ let compile patterns ~scrutinee_ty =
 
 let%expect_test "var" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty) ] ~scrutinee_ty:int_ty;
   [%expect
     {|
@@ -40,7 +40,7 @@ let%expect_test "var" =
 let%expect_test "bool exhaustive" =
   compile
     [ bool_pat true, Ident.Map.empty; bool_pat false, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -54,7 +54,7 @@ let%expect_test "bool exhaustive" =
 ;;
 
 let%expect_test "bool missing case" =
-  compile [ bool_pat true, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+  compile [ bool_pat true, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -68,7 +68,7 @@ let%expect_test "bool missing case" =
 let%expect_test "or pattern exhaustive" =
   compile
     [ or_pat (bool_pat true) (bool_pat false), Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -84,7 +84,7 @@ let%expect_test "or pattern exhaustive" =
 let%expect_test "redundant" =
   let x = id "x" 0 in
   let y = id "y" 1 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty)
     ; var_pat "y" 1, Ident.Map.singleton y (binding_desc int_ty)
@@ -103,13 +103,13 @@ let%expect_test "redundant" =
 let%expect_test "tuple paths" =
   let x = id "x" 0 in
   let y = id "y" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
     [ tuple_pat [ bool_pat true; var_pat "x" 0 ], Ident.Map.singleton x (binding_desc bool_ty)
     ; tuple_pat [ bool_pat false; var_pat "y" 0 ], Ident.Map.singleton y (binding_desc bool_ty)
     ]
     ~scrutinee_ty:
-      (Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ]));
+      (Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ]));
   [%expect
     {|
     ((tree
@@ -133,13 +133,13 @@ let%expect_test "tuple paths" =
 
 let%expect_test "nested or" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
     [ ( tuple_pat [ or_pat (bool_pat true) (bool_pat false); var_pat "x" 0 ]
       , Ident.Map.singleton x (binding_desc bool_ty) )
     ]
     ~scrutinee_ty:
-      (Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ]));
+      (Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ]));
   [%expect
     {|
     ((tree
@@ -162,7 +162,7 @@ let%expect_test "nested or" =
 ;;
 
 let%expect_test "bool only false - missing true" =
-  compile [ bool_pat false, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+  compile [ bool_pat false, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -174,7 +174,7 @@ let%expect_test "bool only false - missing true" =
 ;;
 
 let%expect_test "int literal without wildcard - non-exhaustive" =
-  compile [ int_pat 42, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Int);
+  compile [ int_pat 42, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Int);
   [%expect
     {|
     ((tree
@@ -187,7 +187,7 @@ let%expect_test "int literal without wildcard - non-exhaustive" =
 
 let%expect_test "int literal with wildcard - wildcard not redundant" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ int_pat 42, Ident.Map.empty; var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty) ]
     ~scrutinee_ty:int_ty;
@@ -206,7 +206,7 @@ let%expect_test "int literal with wildcard - wildcard not redundant" =
 let%expect_test "two int literals without wildcard - non-exhaustive" =
   compile
     [ int_pat 0, Ident.Map.empty; int_pat 1, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Int);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Int);
   [%expect
     {|
     ((tree
@@ -221,7 +221,7 @@ let%expect_test "two int literals without wildcard - non-exhaustive" =
 
 let%expect_test "int wildcard then literal - literal is redundant" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty); int_pat 42, Ident.Map.empty ]
     ~scrutinee_ty:int_ty;
@@ -236,7 +236,7 @@ let%expect_test "int wildcard then literal - literal is redundant" =
 ;;
 
 let%expect_test "unit is exhaustive" =
-  compile [ unit_pat, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Unit);
+  compile [ unit_pat, Ident.Map.empty ] ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Unit);
   [%expect
     {|
     ((tree
@@ -248,7 +248,7 @@ let%expect_test "unit is exhaustive" =
 
 let%expect_test "bool wildcard is exhaustive" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile [ var_pat "x" 0, Ident.Map.singleton x (binding_desc bool_ty) ] ~scrutinee_ty:bool_ty;
   [%expect
     {|
@@ -261,7 +261,7 @@ let%expect_test "bool wildcard is exhaustive" =
 
 let%expect_test "bool true then wildcard - exhaustive, wildcard not redundant" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
     [ bool_pat true, Ident.Map.empty; var_pat "x" 0, Ident.Map.singleton x (binding_desc bool_ty) ]
     ~scrutinee_ty:bool_ty;
@@ -279,7 +279,7 @@ let%expect_test "bool true then wildcard - exhaustive, wildcard not redundant" =
 
 let%expect_test "bool wildcard then true - true is redundant" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
     [ var_pat "x" 0, Ident.Map.singleton x (binding_desc bool_ty); bool_pat true, Ident.Map.empty ]
     ~scrutinee_ty:bool_ty;
@@ -295,7 +295,7 @@ let%expect_test "bool wildcard then true - true is redundant" =
 
 let%expect_test "tuple (bool, bool) one case - three missing" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile [ tuple_pat [ bool_pat true; bool_pat true ], Ident.Map.empty ] ~scrutinee_ty:tuple_ty;
   [%expect
@@ -324,7 +324,7 @@ let%expect_test "tuple (bool, bool) one case - three missing" =
 
 let%expect_test "tuple (bool, bool) full coverage" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ bool_pat true; bool_pat true ], Ident.Map.empty
@@ -362,9 +362,9 @@ let%expect_test "tuple (bool, bool) full coverage" =
 
 let%expect_test "tuple (bool, bool) wildcard second - exhaustive" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ bool_pat true; var_pat "x" 0 ], Ident.Map.singleton x (binding_desc bool_ty)
@@ -394,7 +394,7 @@ let%expect_test "tuple (bool, bool) wildcard second - exhaustive" =
 
 let%expect_test "tuple (int, bool) - int column needs default" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Int; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Int; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ int_pat 0; bool_pat true ], Ident.Map.empty
@@ -427,7 +427,7 @@ let%expect_test "tuple (int, bool) - int column needs default" =
 let%expect_test "or pattern missing one case" =
   compile
     [ or_pat (bool_pat true) (bool_pat true), Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -445,7 +445,7 @@ let%expect_test "three bool cases - middle redundant" =
     ; bool_pat true, Ident.Map.empty
     ; bool_pat false, Ident.Map.empty
     ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -461,9 +461,9 @@ let%expect_test "three bool cases - middle redundant" =
 
 let%expect_test "deeply nested tuple ((bool, bool), bool)" =
   let inner_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
-  let outer_ty = Tst.Value.Type (Tst.Ty.Tuple [ inner_ty; Tst.Value.Type Tst.Ty.Bool ]) in
+  let outer_ty = Tst.Value.type_ (Tst.Ty.Tuple [ inner_ty; Tst.Value.type_ Tst.Ty.Bool ]) in
   compile
     [ tuple_pat [ tuple_pat [ bool_pat true; bool_pat true ]; bool_pat true ], Ident.Map.empty ]
     ~scrutinee_ty:outer_ty;
@@ -514,7 +514,7 @@ let%expect_test "deeply nested tuple ((bool, bool), bool)" =
 
 let%expect_test "or pattern tuple cross product" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ ( tuple_pat
@@ -551,7 +551,7 @@ let%expect_test "or pattern tuple cross product" =
 
 let%expect_test "multiple int literals with wildcard" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ int_pat 0, Ident.Map.empty
     ; int_pat 1, Ident.Map.empty
@@ -577,7 +577,7 @@ let%expect_test "multiple int literals with wildcard" =
 let%expect_test "int overlapping literals - second redundant" =
   compile
     [ int_pat 42, Ident.Map.empty; int_pat 42, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Int);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Int);
   [%expect
     {|
     ((tree
@@ -592,7 +592,7 @@ let%expect_test "int overlapping literals - second redundant" =
 let%expect_test "bool false then true - exhaustive" =
   compile
     [ bool_pat false, Ident.Map.empty; bool_pat true, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -607,7 +607,7 @@ let%expect_test "bool false then true - exhaustive" =
 
 let%expect_test "tuple (bool, bool) diagonal - two missing" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ bool_pat true; bool_pat false ], Ident.Map.empty
@@ -642,7 +642,7 @@ let%expect_test "tuple (bool, bool) diagonal - two missing" =
 
 let%expect_test "tuple (bool, bool) three of four" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ bool_pat true; bool_pat true ], Ident.Map.empty
@@ -679,11 +679,11 @@ let%expect_test "tuple (bool, bool) three of four" =
 let%expect_test "tuple with all wildcards - exhaustive" =
   let x = id "x" 0 in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ ( tuple_pat [ var_pat "x" 0; var_pat "x" 0 ]
-      , Ident.Map.singleton x (binding_desc (Tst.Value.Type Tst.Ty.Bool)) )
+      , Ident.Map.singleton x (binding_desc (Tst.Value.type_ Tst.Ty.Bool)) )
     ]
     ~scrutinee_ty:tuple_ty;
   [%expect
@@ -703,11 +703,11 @@ let%expect_test "tuple with all wildcards - exhaustive" =
 let%expect_test "tuple wildcard then specific - specific redundant" =
   let x = id "x" 0 in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ ( tuple_pat [ var_pat "x" 0; var_pat "x" 0 ]
-      , Ident.Map.singleton x (binding_desc (Tst.Value.Type Tst.Ty.Bool)) )
+      , Ident.Map.singleton x (binding_desc (Tst.Value.type_ Tst.Ty.Bool)) )
     ; tuple_pat [ bool_pat true; bool_pat false ], Ident.Map.empty
     ]
     ~scrutinee_ty:tuple_ty;
@@ -734,7 +734,7 @@ let%expect_test "tuple wildcard then specific - specific redundant" =
 let%expect_test "or pattern both sides same" =
   compile
     [ or_pat (bool_pat false) (bool_pat false), Ident.Map.empty; bool_pat true, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -751,7 +751,7 @@ let%expect_test "or pattern both sides same" =
 let%expect_test "nested or left-deep" =
   compile
     [ or_pat (or_pat (bool_pat true) (bool_pat false)) (bool_pat true), Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -766,9 +766,9 @@ let%expect_test "nested or left-deep" =
 ;;
 
 let%expect_test "tuple (int, int) both wildcards - exhaustive" =
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Int; Tst.Value.Type Tst.Ty.Int ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Int; Tst.Value.type_ Tst.Ty.Int ])
   in
   compile
     [ ( tuple_pat [ var_pat "x" 0; var_pat "y" 1 ]
@@ -793,9 +793,9 @@ let%expect_test "tuple (int, int) both wildcards - exhaustive" =
 
 let%expect_test "tuple (int, bool) partial with wildcard fallback" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Int; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Int; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ int_pat 0; bool_pat true ], Ident.Map.empty
@@ -829,7 +829,7 @@ let%expect_test "tuple (int, bool) partial with wildcard fallback" =
 
 let%expect_test "all redundant after wildcard" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty)
     ; int_pat 0, Ident.Map.empty
@@ -857,7 +857,7 @@ let%expect_test "bool triple redundancy" =
     ; bool_pat true, Ident.Map.empty
     ; bool_pat false, Ident.Map.empty
     ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -876,7 +876,7 @@ let%expect_test "bool triple redundancy" =
 let%expect_test "unit then unit - second redundant" =
   compile
     [ unit_pat, Ident.Map.empty; unit_pat, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Unit);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Unit);
   [%expect
     {|
     ((tree
@@ -889,9 +889,9 @@ let%expect_test "unit then unit - second redundant" =
 
 let%expect_test "triple tuple (bool, bool, bool) one case" =
   let triple_ty =
-    Tst.Value.Type
+    Tst.Value.type_
       (Tst.Ty.Tuple
-         [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+         [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ bool_pat true; bool_pat true; bool_pat true ], Ident.Map.empty ]
@@ -933,7 +933,7 @@ let%expect_test "triple tuple (bool, bool, bool) one case" =
 
 let%expect_test "tuple (bool, int) - column selection prefers bool" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Int ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Int ])
   in
   compile
     [ tuple_pat [ bool_pat true; int_pat 0 ], Ident.Map.empty
@@ -968,9 +968,9 @@ let%expect_test "tuple (bool, int) - column selection prefers bool" =
 
 let%expect_test "or pattern in tuple with wildcard fallback" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ or_pat (bool_pat true) (bool_pat false); bool_pat true ], Ident.Map.empty
@@ -1004,7 +1004,7 @@ let%expect_test "or pattern in tuple with wildcard fallback" =
 let%expect_test "or-pattern makes subsequent case redundant" =
   compile
     [ or_pat (bool_pat true) (bool_pat false), Ident.Map.empty; bool_pat true, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -1020,7 +1020,7 @@ let%expect_test "or-pattern makes subsequent case redundant" =
 
 let%expect_test "redundant tuple after full tuple coverage" =
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ bool_pat true; bool_pat true ], Ident.Map.empty
@@ -1065,9 +1065,9 @@ let%expect_test "redundant tuple after full tuple coverage" =
 
 let%expect_test "partial tuple redundancy - (true, _) then (true, false)" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ bool_pat true; var_pat "x" 0 ], Ident.Map.singleton x (binding_desc bool_ty)
@@ -1109,7 +1109,7 @@ let%expect_test "partial tuple redundancy - (true, _) then (true, false)" =
 let%expect_test "or-pattern partial coverage - missing with or" =
   compile
     [ or_pat (bool_pat true) (bool_pat true), Ident.Map.empty; bool_pat true, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -1126,7 +1126,7 @@ let%expect_test "or-pattern partial coverage - missing with or" =
 let%expect_test "mixed redundant and missing" =
   compile
     [ bool_pat true, Ident.Map.empty; bool_pat true, Ident.Map.empty ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -1140,13 +1140,13 @@ let%expect_test "mixed redundant and missing" =
 
 let%expect_test "nested tuple with wildcard - missing inner cases" =
   let inner_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
-  let outer_ty = Tst.Value.Type (Tst.Ty.Tuple [ inner_ty; Tst.Value.Type Tst.Ty.Bool ]) in
+  let outer_ty = Tst.Value.type_ (Tst.Ty.Tuple [ inner_ty; Tst.Value.type_ Tst.Ty.Bool ]) in
   let x = id "x" 0 in
   compile
     [ ( tuple_pat [ tuple_pat [ bool_pat true; var_pat "x" 0 ]; bool_pat true ]
-      , Ident.Map.singleton x (binding_desc (Tst.Value.Type Tst.Ty.Bool)) )
+      , Ident.Map.singleton x (binding_desc (Tst.Value.type_ Tst.Ty.Bool)) )
     ]
     ~scrutinee_ty:outer_ty;
   [%expect
@@ -1194,9 +1194,9 @@ let%expect_test "nested tuple with wildcard - missing inner cases" =
 
 let%expect_test "tuple (int, bool) wildcard int exhaustive" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Int; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Int; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ var_pat "x" 0; bool_pat true ], Ident.Map.singleton x (binding_desc int_ty)
@@ -1229,7 +1229,7 @@ let%expect_test "multiple or-patterns both redundant and missing" =
     [ or_pat (bool_pat true) (bool_pat true), Ident.Map.empty
     ; or_pat (bool_pat true) (bool_pat true), Ident.Map.empty
     ]
-    ~scrutinee_ty:(Tst.Value.Type Tst.Ty.Bool);
+    ~scrutinee_ty:(Tst.Value.type_ Tst.Ty.Bool);
   [%expect
     {|
     ((tree
@@ -1246,9 +1246,9 @@ let%expect_test "multiple or-patterns both redundant and missing" =
 
 let%expect_test "tuple (bool, bool) wildcard first, constructor second - partial" =
   let x = id "x" 0 in
-  let bool_ty = Tst.Value.Type Tst.Ty.Bool in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
-    Tst.Value.Type (Tst.Ty.Tuple [ Tst.Value.Type Tst.Ty.Bool; Tst.Value.Type Tst.Ty.Bool ])
+    Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ var_pat "x" 0; bool_pat true ], Ident.Map.singleton x (binding_desc bool_ty) ]
@@ -1277,7 +1277,7 @@ let%expect_test "tuple (bool, bool) wildcard first, constructor second - partial
 
 let%expect_test "int three literals then wildcard - wildcard needed" =
   let x = id "x" 0 in
-  let int_ty = Tst.Value.Type Tst.Ty.Int in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ int_pat 0, Ident.Map.empty
     ; int_pat 1, Ident.Map.empty

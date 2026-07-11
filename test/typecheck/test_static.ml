@@ -52,13 +52,7 @@ fun f (x : int) : static (static int -> int) = fn (static y : int) -> x + y;;
 let _ = (f 0) @ static;;
 let _ = assert erased (f 0 1 == 1);;
 |};
-  [%expect
-    {|
-    ((loc ((line 4) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "lambda static -> arg" =
@@ -328,13 +322,7 @@ let%expect_test "fun static -> _" =
 fun f (static x : int) : int = x;;
 let _ = assert erased (f 0 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "fun static -> dynamic" =
@@ -382,6 +370,15 @@ let%expect_test "fun _ -> _" =
 fun f (x : int) : int = x;;
 let _ = assert erased (f 0 == 0);;
 |};
+  [%expect {| |}]
+;;
+
+let%expect_test "fun _ -> _" =
+  go
+    {|
+fun f (x : int) : dynamic int = x;;
+let _ = assert erased (f 0 == 0);;
+|};
   [%expect
     {|
     ((loc ((line 3) (column 8)))
@@ -421,13 +418,7 @@ let%expect_test "fun dynamic -> static" =
 fun f (dynamic x : int) : int = 0;;
 let _ = assert erased (f 0 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "fun dynamic -> static" =
@@ -466,13 +457,7 @@ let%expect_test "fun dynamic -> static" =
 fun f (dynamic x : int) : int = 0;;
 let _ = assert erased (f 0 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "fun dynamic -> static" =
@@ -498,10 +483,10 @@ let _ = assert erased (f 0 == 0);;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 8)))
+    ((loc ((line 2) (column 4)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
+       (need ((staticity Static) (erasure Unerased))))))
     |}]
 ;;
 
@@ -529,7 +514,7 @@ let _ = f @ static;;
 |};
   [%expect
     {|
-    ((loc ((line 4) (column 10)))
+    ((loc ((line 3) (column 4)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Unerased))))))
@@ -588,7 +573,7 @@ let _ = f @ static;;
 |};
   [%expect
     {|
-    ((loc ((line 5) (column 10)))
+    ((loc ((line 3) (column 4)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Unerased))))))
@@ -700,34 +685,22 @@ let _ = f : dynamic int -> dynamic int;;
   [%expect {| |}]
 ;;
 
-let%expect_test "arrow annotation: int -> int loses compile-time callability" =
+let%expect_test "arrow annotation: int -> int preserves compile-time callability" =
   go
     {|
 let f = (fn (x : int) -> x) : int -> int;;
 let _ = assert erased (f 0 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
-let%expect_test "arrow annotation: static int -> int still has dynamic return" =
+let%expect_test "arrow annotation: static int -> int has static return" =
   go
     {|
 let f = (fn (x : int) -> x) : static int -> int;;
 let _ = assert erased (f 0 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "phase fn applied to static arg -> static result" =
@@ -779,19 +752,13 @@ let _ = assert erased (f 5 == 6);;
     |}]
 ;;
 
-let%expect_test "named fun with omitted return mode stays dynamic on static args" =
+let%expect_test "named fun with omitted return is compile-time callable on static args" =
   go
     {|
 fun f (x : int) : int = x;;
 let _ = assert erased (f 0 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "dynamic ret in arrow, called with static -> stays dynamic" =
@@ -809,19 +776,13 @@ let _ = assert erased (f 0 == 0);;
     |}]
 ;;
 
-let%expect_test "higher-order: int -> int parameter is not compile-time callable" =
+let%expect_test "higher-order: int -> int parameter is compile-time callable" =
   go
     {|
 let apply = fn (f : int -> int) -> fn (x : int) -> f x;;
 let _ = assert erased (apply (fn (x : int) -> x + 1) 5 == 6);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "higher-order: int -> int plus dynamic arg stays dynamic" =
@@ -948,19 +909,13 @@ let _ = assert erased (f 0 == 1);;
     |}]
 ;;
 
-let%expect_test "recursive fun with omitted return mode is runtime-only" =
+let%expect_test "recursive fun with omitted return is compile-time callable" =
   go
     {|
 fun f (x : int) : int = if x == 0 then 0 else f (x - 1);;
 let _ = assert erased (f 3 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "recursive fun with explicit dynamic return stays dynamic" =
@@ -988,20 +943,14 @@ let _ = f 3;;
   [%expect {| |}]
 ;;
 
-let%expect_test "mutual recursion without static returns is runtime-only" =
+let%expect_test "mutual recursion with omitted returns is compile-time callable" =
   go
     {|
 fun f (x : int) : int = if x <= 0 then 0 else g (x - 1)
 and g (x : int) : int = if x <= 0 then 1 else f (x - 1);;
 let _ = assert erased (f 3 == 1);;
 |};
-  [%expect
-    {|
-    ((loc ((line 4) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "phase erased lambda" =
@@ -1030,31 +979,20 @@ let _ = assert erased (f 0 == 0);;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 23)))
+    ((loc ((line 3) (column 27)))
      (reason
-      (Erased_application
-       (fn
-        (Type
-         (Arrow (arg_ty (Type Int))
-          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
-let%expect_test "arrow type: int -> int parameter returns dynamic results" =
+let%expect_test "arrow type: int -> int parameter returns static results for static inputs" =
   go
     {|
 let f = fn (g : int -> int) -> fn (x : int) -> g x;;
 let _ = assert erased (f (fn (x : int) -> x + 1) 5 == 6);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow type: pi-typed parameter must itself be static for compile-time use" =
@@ -1087,19 +1025,13 @@ let _ = f ((fn (static x : int) -> x + 1) @ dynamic);;
     |}]
 ;;
 
-let%expect_test "arrow type: static parameter alone does not make the callee return static" =
+let%expect_test "arrow type: static pi parameter with omitted return is compile-time callable" =
   go
     {|
 let f = fn (static g : static int -> int) -> g 5;;
 let _ = assert erased (f (fn (static x : int) -> x + 1) == 6);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow type: dynamic arg keeps dynamic" =
@@ -1179,10 +1111,10 @@ let _ = assert erased (g 3 == 8);;
     |}]
 ;;
 
-let%expect_test "fun with omitted return is runtime-only even when body uses arg" =
+let%expect_test "fun with dynamic return is runtime-only even when body uses arg" =
   go
     {|
-fun f (x : int) : int = x + 1;;
+fun f (x : int) : dynamic int = x + 1;;
 let _ = assert erased (f 5 == 6);;
 |};
   [%expect
@@ -1194,19 +1126,22 @@ let _ = assert erased (f 5 == 6);;
     |}]
 ;;
 
-let%expect_test "fun with omitted return is runtime-only even with a static body" =
+let%expect_test "fun with omitted return is compile-time callable when body uses arg" =
+  go
+    {|
+fun f (x : int) : int = x + 1;;
+let _ = assert erased (f 5 == 6);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "fun with omitted return is compile-time callable with a static body" =
   go
     {|
 fun f (x : int) : int = 0;;
 let _ = assert erased (f 5 == 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 8)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
-       (need ((staticity Static) (erasure Erased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "fun with static return may read an unannotated arg in the body" =
@@ -1226,10 +1161,10 @@ let _ = assert erased (f 5 == 0);;
   [%expect {| |}]
 ;;
 
-let%expect_test "fun with static arg but omitted return is still runtime-only" =
+let%expect_test "fun with static arg but dynamic return is still runtime-only" =
   go
     {|
-fun f (static x : int) : int = x + 1;;
+fun f (static x : int) : dynamic int = x + 1;;
 let _ = assert erased (f 5 == 6);;
 |};
   [%expect
@@ -1241,6 +1176,15 @@ let _ = assert erased (f 5 == 6);;
     |}]
 ;;
 
+let%expect_test "fun with static arg and omitted return is compile-time callable" =
+  go
+    {|
+fun f (static x : int) : int = x + 1;;
+let _ = assert erased (f 5 == 6);;
+|};
+  [%expect {| |}]
+;;
+
 let%expect_test "fun with static arg and static return is compile-time callable" =
   go
     {|
@@ -1250,12 +1194,18 @@ let _ = assert erased (f 5 == 6);;
   [%expect {| |}]
 ;;
 
-let%expect_test "fun with dynamic arg may still typecheck with omitted return" =
+let%expect_test "fun with dynamic arg and omitted return is rejected" =
   go
     {|
 fun f (dynamic x : int) : int = x;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "fun with dynamic arg and dynamic return is allowed" =
@@ -1403,11 +1353,11 @@ let _ = assert erased (g (f 3) == 8);;
     |}]
 ;;
 
-let%expect_test "lambda is compile-time callable by default; fun needs static return" =
+let%expect_test "lambda and fun are compile-time callable unless dynamic" =
   go
     {|
 let f1 = fn (x : int) -> x + 1;;
-fun f2 (x : int) : int = x + 1;;
+fun f2 (x : int) : dynamic int = x + 1;;
 let _ = assert erased (f1 5 == f2 5);;
 |};
   [%expect
@@ -1417,6 +1367,16 @@ let _ = assert erased (f1 5 == f2 5);;
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
     |}]
+;;
+
+let%expect_test "lambda and fun are compile-time callable by default" =
+  go
+    {|
+let f1 = fn (x : int) -> x + 1;;
+fun f2 (x : int) : int = x + 1;;
+let _ = assert erased (f1 5 == f2 5);;
+|};
+  [%expect {| |}]
 ;;
 
 let%expect_test "triple nested phase: all static" =
@@ -1454,13 +1414,19 @@ let _ = f 3;;
   [%expect {| |}]
 ;;
 
-let%expect_test "fun capturing dynamic outer with omitted return is also allowed" =
+let%expect_test "fun capturing dynamic outer with omitted return is rejected" =
   go
     {|
 let d = 10 @ dynamic;;
 fun f (x : int) : int = d + x;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 4)))
+     (reason
+      (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
+       (need ((staticity Static) (erasure Unerased))))))
+    |}]
 ;;
 
 let%expect_test "static fn applied in static assert" =

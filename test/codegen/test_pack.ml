@@ -494,7 +494,7 @@ let%expect_test "effects around fun returning pack" =
   go
     {|
 let _ =
-  fun make (tag : int) : static (static int -> unit) =
+  fun make (tag : int) : static (static int -> dynamic unit) =
     let _ = print_int tag in
     (fn (static k : int) -> print_int k)
   in

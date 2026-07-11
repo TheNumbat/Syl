@@ -6,7 +6,7 @@ let go ?print ?(check = `Run) input = Common.codegen ?print ~check input
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let print = fn (static x : int) -> print_int x;;
 let _ = print 0;;
 let _ = print 0;;
@@ -23,7 +23,7 @@ let _ = print 1;;
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let _ =
 let print = fn (static x : int) -> print_int x in
 let _ = print 0 in
@@ -42,7 +42,7 @@ let _ = print 1 in
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let print = fn (static x : int) ->
   let _ = print_int x in
   fn (static y : int) -> print_int y;;
@@ -64,8 +64,8 @@ let _ = print 1 3;;
 let%expect_test "monomorphizing side effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
-fun print (static _ : unit) : unit = print_int 0;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
+fun print (static _ : unit) : dynamic unit = print_int 0;;
 let _ = print ();;
 |};
   [%expect {| 0 |}]
@@ -74,7 +74,7 @@ let _ = print ();;
 let%expect_test "external" =
   go
     {|
-external f : int -> unit = syl_std_print_int;;
+external f : int -> dynamic unit = syl_std_print_int;;
 let _ = f 0;;
 |};
   [%expect {| 0 |}]
@@ -98,7 +98,7 @@ let _ = print_int a, print_int b;;
 let%expect_test "external" =
   go
     {|
-external f : int -> unit = syl_std_print_int;;
+external f : int -> dynamic unit = syl_std_print_int;;
 let _ = f 0;;
 let _ = f 1;;
 |};
@@ -112,7 +112,7 @@ let _ = f 1;;
 let%expect_test "external" =
   go
     {|
-external f : int -> unit = syl_std_print_int;;
+external f : int -> dynamic unit = syl_std_print_int;;
 let g = f;;
 let _ = g 0;;
 let _ = g 1;;
@@ -127,8 +127,8 @@ let _ = g 1;;
 let%expect_test "external" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
-let apply = fn (static g : int -> unit) -> g 42;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
+let apply = fn (static g : int -> dynamic unit) -> g 42;;
 let _ = apply print_int;;
 |};
   [%expect {| 42 |}]
@@ -137,7 +137,7 @@ let _ = apply print_int;;
 let%expect_test "static lambda effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let print = fn (static x : int) -> print_int x;;
 let _ = print 0;;
 let _ = print 1;;
@@ -186,7 +186,7 @@ let _ = print_bool b;;
 let%expect_test "static lambda effects are thunked" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 
 fun mk_ident (static pick_t : static unit -> static int) : static (let t = if pick_t () == 0 then int else bool in t -> t) =
   let _ = pick_t () in
@@ -206,7 +206,7 @@ let _ = mk_ident (fn (static _ : unit) -> let _ = print_int 10 in 1) true;;
 let%expect_test "external" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 |};
   [%expect {| |}]
 ;;
@@ -232,7 +232,7 @@ let _ = if c then 0 else if !c then 1 else 2;;
 let%expect_test "fuzz: external print" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let _ = print_int 42;;
 |};
   [%expect {| 42 |}]
@@ -241,8 +241,8 @@ let _ = print_int 42;;
 let%expect_test "fuzz: external in higher-order context" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
-let apply = fn (f : int -> unit) -> f 42;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
+let apply = fn (f : int -> dynamic unit) -> f 42;;
 let _ = apply print_int;;
 |};
   [%expect {| 42 |}]
@@ -251,8 +251,8 @@ let _ = apply print_int;;
 let%expect_test "fuzz: multiple externals" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
-external print_bool : bool -> unit = syl_std_print_bool;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
+external print_bool : bool -> dynamic unit = syl_std_print_bool;;
 let _ = print_int 1;;
 let _ = print_bool true;;
 let _ = print_int 2;;
@@ -268,7 +268,7 @@ let _ = print_int 2;;
 let%expect_test "apply fold: lambda returning non-pack preserves effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let _ = (fn (x : int) -> let _ = print_int x in x) 10;;
 |};
   [%expect {| 10 |}]
@@ -277,7 +277,7 @@ let _ = (fn (x : int) -> let _ = print_int x in x) 10;;
 let%expect_test "apply fold: non-lambda returning non-pack preserves effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let f = fn (x : int) -> let _ = print_int x in x;;
 let _ = f 20;;
 |};
@@ -287,7 +287,7 @@ let _ = f 20;;
 let%expect_test "apply fold: lambda returning pack preserves effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let p =
   (fn (tag : int) ->
     let _ = print_int tag in
@@ -306,7 +306,7 @@ let _ = p 31;;
 let%expect_test "apply fold: lambda returning pack captures argument" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let p =
   (fn (tag : int) ->
     fn (static k : int) -> print_int (tag + k))
@@ -320,7 +320,7 @@ let _ = p 7;;
 let%expect_test "pack-returning thunk effects at each function level" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let make = fn (static i : int) ->
   let _ = print_int (100 + i) in
   fn (static j : int) ->
@@ -352,7 +352,7 @@ let _ = low 6;;
 let%expect_test "symbol fold preserves effects" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let _ = (fn (static k : int) -> print_int k) 50;;
 |};
   [%expect {| 50 |}]
@@ -361,7 +361,7 @@ let _ = (fn (static k : int) -> print_int k) 50;;
 let%expect_test "symbol captures only the selected pack specialization" =
   go
     {|
-external print_int : int -> unit = syl_std_print_int;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 let p = fn (static k : int) -> print_int k;;
 let f = fn (_ : unit) -> p 1;;
 let _ = p 2;;

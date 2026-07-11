@@ -97,7 +97,7 @@ let _ = ghost d;;
 let%expect_test "reject: erased fun with dynamic result applied" =
   go
     {|
-fun erased f (x : int) : int = x;;
+fun erased f (x : int) : dynamic int = x;;
 let _ = f 0;;
 |};
   [%expect
@@ -135,17 +135,14 @@ let _ = ghost_print 0;;
     |}]
 ;;
 
-(* The pi's return is unannotated, so it defaults to dynamic staticity; an
-   erased parameter of this type stays unusable. Annotate the return static
-   to apply it (next test). *)
 let%expect_test "reject: erased parameter with dynamic-result type applied" =
   go
     {|
-let use = fn (static erased f : static int -> int) -> f 0;;
+let use = fn (static erased f : static int -> dynamic int) -> f 0;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 54)))
+    ((loc ((line 2) (column 62)))
      (reason
       (Erased_application
        (fn
@@ -161,7 +158,7 @@ let use = fn (static erased f : static int -> int) -> f 0;;
 let%expect_test "accept: erased parameter with static-result type applied" =
   go
     {|
-let use = fn (static erased f : static int -> static int) -> f 0;;
+let use = fn (static erased f : static int -> int) -> f 0;;
 let g = fn (static x : int) -> x;;
 let _ = use g;;
 |};
@@ -171,7 +168,7 @@ let _ = use g;;
 let%expect_test "reject: applying an erased result whose type has a dynamic return" =
   go
     {|
-let cap = fn (static erased f : static int -> int) -> f;;
+let cap = fn (static erased f : static int -> dynamic int) -> f;;
 let g = fn (static x : int) -> x;;
 let _ = (cap g) 5;;
 |};
@@ -243,7 +240,7 @@ let _ = false : pick false;;
 let%expect_test "accept: erased result bound and consumed erased" =
   go
     {|
-let cap = fn (static erased f : static int -> int) -> f;;
+let cap = fn (static erased f : static int -> dynamic int) -> f;;
 let g = fn (static x : int) -> x;;
 let h = cap g;;
 let _ = h @ static erased;;

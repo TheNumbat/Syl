@@ -29,7 +29,7 @@ module rec Ty : sig
 end
 
 and Dependent : sig
-  type t =
+  type t = private
     | T of
         { ty : Value.t
         ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
@@ -55,8 +55,6 @@ and Dependent : sig
   [@@deriving sexp]
 
   val mono : Value.t -> t
-
-  (* Smart constructors fold concrete types *)
   val meet : t -> t -> t
   val join : t -> t -> t
 
@@ -80,7 +78,7 @@ and Dependent : sig
 end
 
 and Bool : sig
-  type t =
+  type t = private
     | T of bool
     | And of Value.t * Value.t
     | Or of Value.t * Value.t
@@ -93,11 +91,20 @@ and Bool : sig
     | Not of Value.t
   [@@deriving sexp]
 
-  val reduce : t -> Value.t
+  val const : bool -> Value.t
+  val and_ : Value.t -> Value.t -> Value.t
+  val or_ : Value.t -> Value.t -> Value.t
+  val eq : Value.t -> Value.t -> Value.t
+  val neq : Value.t -> Value.t -> Value.t
+  val lt : Value.t -> Value.t -> Value.t
+  val lte : Value.t -> Value.t -> Value.t
+  val gt : Value.t -> Value.t -> Value.t
+  val gte : Value.t -> Value.t -> Value.t
+  val not_ : Value.t -> Value.t
 end
 
 and Int : sig
-  type t =
+  type t = private
     | T of int64
     | Add of Value.t * Value.t
     | Sub of Value.t * Value.t
@@ -107,7 +114,16 @@ and Int : sig
     | Neg of Value.t
   [@@deriving sexp]
 
-  val reduce : t -> Value.t
+  exception Divide_by_zero of t
+  exception Negative_modulus of t
+
+  val const : int64 -> Value.t
+  val add : Value.t -> Value.t -> Value.t
+  val sub : Value.t -> Value.t -> Value.t
+  val mul : Value.t -> Value.t -> Value.t
+  val div : Value.t -> Value.t -> Value.t
+  val mod_ : Value.t -> Value.t -> Value.t
+  val neg : Value.t -> Value.t
 end
 
 and Closure : sig
@@ -158,7 +174,7 @@ and Value : sig
     include Hashable.S with type t := t
   end
 
-  type t =
+  type t = private
     | Bottom
     | Unit
     | Bool of Bool.t
@@ -168,11 +184,6 @@ and Value : sig
     | Binder of Binder.t
     | Var of Ident.t
     | Tuple of t Nonempty_list.t
-    | If of
-        { cond : t
-        ; then_ : t
-        ; else_ : t
-        }
     | Apply of
         { fn : t
         ; arg : t
@@ -180,6 +191,10 @@ and Value : sig
     | Proj of
         { tuple : t
         ; index : int
+        }
+    | Match of
+        { scrutinee : t
+        ; arms : (Dst.Expr.pattern * t) Nonempty_list.t
         }
     | External of
         { symbol : string
@@ -189,9 +204,45 @@ and Value : sig
   [@@deriving sexp]
 
   val ty : t -> Ty.t
-  val reduce : t -> t
+  val bottom : t
+  val unit : t
+  val type_ : Ty.t -> t
+  val closure : Closure.t -> t
+  val binder : Binder.t -> t
+  val var : Ident.t -> t
+  val prim : Builtin0.Prim.t -> t
+  val external_ : symbol:string -> ty:t -> t
   val of_literal : Dst.Literal.t -> t
-  val is_true : t -> bool
+  val tuple : t Nonempty_list.t -> t
+  val proj : t -> int -> t
+  val apply : fn:t -> arg:t -> t
+  val match_ : scrutinee:t -> arms:(Dst.Expr.pattern * t) Nonempty_list.t -> t
+  val if_ : loc:Lex.Location.t -> cond:t -> then_:t -> else_:t -> t
+
+  (* Patterns must agree structurally, except the last arm, which
+     exhaustiveness makes unconditional. *)
+  val arms_unify
+    :  (Dst.Expr.pattern * t) Nonempty_list.t
+    -> (Dst.Expr.pattern * t) Nonempty_list.t
+    -> bool
+
+  (* Combine two arm lists positionally, keeping the first list's patterns.
+     [None] if the arms don't unify (per [arms_unify]) or [f] fails on a pair
+     of leaves. *)
+  val merge_arms
+    :  (Dst.Expr.pattern * t) Nonempty_list.t
+    -> (Dst.Expr.pattern * t) Nonempty_list.t
+    -> f:(t -> t -> t option)
+    -> (Dst.Expr.pattern * t) Nonempty_list.t option
+
+  module Matched : sig
+    type t =
+      | Match of (Ident.t * int list) list
+      | No_match
+      | Unknown
+  end
+
+  val matches_pattern : t -> Dst.Expr.pattern -> Matched.t
 end
 
 and Desc : sig
@@ -372,6 +423,10 @@ and Expr : sig
   val literal : loc:Lex.Location.t -> Dst.Literal.t -> t
   val rebind : t -> stamp:int -> f:(t -> t) -> t
   val tuple : loc:Lex.Location.t -> (t * Desc.t) Nonempty_list.t -> t * Desc.t
+
+  (* Project a runtime component out of the scrutinee (a tuple path of
+     indices), tracking its type and static value. *)
+  val project : loc:Lex.Location.t -> t -> Desc.t -> int list -> t * Desc.t
 
   (* Util *)
 

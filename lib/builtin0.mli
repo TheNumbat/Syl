@@ -52,12 +52,21 @@ module Prim : sig
     [@@deriving sexp, compare, equal, hash]
   end
 
+  module Unerase : sig
+    type t =
+      | Unit
+      | Bool
+      | Int
+    [@@deriving sexp, compare, equal, hash]
+  end
+
   type t =
     | Assert
     | Assert_erased
     | Int of Int.t
     | Bool of Bool.t
     | Type of Type.t
+    | Unerase of Unerase.t
   [@@deriving sexp, compare, equal, hash]
 
   val symbol : t -> string

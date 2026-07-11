@@ -57,16 +57,15 @@ module Func = struct
   ;;
 end
 
-let rec value_needs_reify value = reduced_value_needs_reify (Value.reduce value)
-
-and reduced_value_needs_reify (value : Value.t) =
+let rec value_needs_reify (value : Value.t) =
   match value with
   | Closure _ | Binder _ -> true
   | Tuple elts -> Nonempty_list.exists elts ~f:value_needs_reify
-  | If { cond; then_; else_ } ->
-    value_needs_reify cond || value_needs_reify then_ || value_needs_reify else_
   | Apply { fn; arg } -> value_needs_reify fn || value_needs_reify arg
   | Proj { tuple; _ } -> value_needs_reify tuple
+  | Match { scrutinee; arms } ->
+    value_needs_reify scrutinee
+    || Nonempty_list.exists arms ~f:(fun (_, leaf) -> value_needs_reify leaf)
   | Bottom | Unit | Bool _ | Int _ | Type _ | Var _ | External _ | Prim _ -> false
 ;;
 
@@ -74,9 +73,8 @@ let rec reify_expr t bound (expr : Expr.t) : Expr.t =
   match expr with
   | Erased _ | Builtin _ | Var _ -> expr
   | Literal { value; ty; mode; loc } when Modes.is_static mode ->
-    let value = Value.reduce value in
-    if reduced_value_needs_reify value
-    then quote_reduced_value t bound ~loc { ty; mode; static = Lazy.from_val value } value
+    if value_needs_reify value
+    then quote_value t bound ~loc { ty; mode; static = Lazy.from_val value } value
     else expr
   | Literal _ -> expr
   | Extcall x -> Extcall { x with arg = reify_expr t bound x.arg }
@@ -126,14 +124,11 @@ and reify_fun t bound (fun_ : Expr.fun_) : Expr.fun_ =
 and reify_monos t bound monos = Map.map monos ~f:(reify_expr t bound)
 
 and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
-  quote_reduced_value t bound ~loc desc (Value.reduce value)
-
-and quote_reduced_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
   match value with
   | Bottom | Unit | Bool _ | Int _ | Type _ | External _ | Prim _ | Var _ | Proj _ ->
     Literal { value; ty = desc.ty; mode = desc.mode; loc }
-  | (If _ | Apply _) as value ->
-    if reduced_value_needs_reify value
+  | (Apply _ | Match _) as value ->
+    if value_needs_reify value
     then raise_s [%message "Bug: stuck value cannot be reified" (value : Value.t)]
     else Literal { value; ty = desc.ty; mode = desc.mode; loc }
   | Tuple elts ->

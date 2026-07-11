@@ -6,7 +6,7 @@ let go ?print ?(check = `Run) input = Common.codegen ?print ~check input
 let%expect_test "basic: receiver applies static lambda once" =
   go
     {|
-let apply = fn (static f : int -> unit) -> f 1;;
+let apply = fn (static f : int -> dynamic unit) -> f 1;;
 let _ = apply (fn (x : int) -> print_int x);;
 |};
   [%expect {| 1 |}]
@@ -15,7 +15,7 @@ let _ = apply (fn (x : int) -> print_int x);;
 let%expect_test "static erased lambda is inlined and effects still fire" =
   go
     {|
-let apply = fn (static f : int -> unit) -> f 5;;
+let apply = fn (static f : int -> dynamic unit) -> f 5;;
 let _ = apply (fn (x : int) -> print_int x);;
 |};
   [%expect {| 5 |}]
@@ -24,7 +24,7 @@ let _ = apply (fn (x : int) -> print_int x);;
 let%expect_test "receiver applies lambda multiple times in one call" =
   go
     {|
-let apply3 = fn (static f : int -> unit) ->
+let apply3 = fn (static f : int -> dynamic unit) ->
   let _ = f 1 in
   let _ = f 2 in
   f 3;;
@@ -41,7 +41,7 @@ let _ = apply3 (fn (x : int) -> print_int x);;
 let%expect_test "receiver effects interleave with lambda body effects" =
   go
     {|
-let triple = fn (static f : int -> unit) ->
+let triple = fn (static f : int -> dynamic unit) ->
   let _ = print_int 0 in
   let _ = f 1 in
   let _ = print_int 0 in
@@ -78,7 +78,7 @@ let _ = print_int (twice (fn (x : int) -> let _ = print_int x in x * 10));;
 let%expect_test "two distinct lambdas → two monomorphizations, distinct effects" =
   go
     {|
-let apply = fn (static f : int -> unit) -> f 0;;
+let apply = fn (static f : int -> dynamic unit) -> f 0;;
 let _ = apply (fn (x : int) -> print_int (x + 10));;
 let _ = apply (fn (x : int) -> print_int (x + 20));;
 |};
@@ -92,7 +92,7 @@ let _ = apply (fn (x : int) -> print_int (x + 20));;
 let%expect_test "same named lambda at two call sites — body fires per call" =
   go
     {|
-let apply = fn (static f : int -> unit) -> f 0;;
+let apply = fn (static f : int -> dynamic unit) -> f 0;;
 let g = fn (x : int) -> print_int (x + 100);;
 let _ = apply g;;
 let _ = apply g;;
@@ -133,7 +133,7 @@ let _ = print_int (unused (fn (x : int) -> let _ = print_int 7 in x));;
 let%expect_test "receiver applies lambda only on one branch — effect fires selectively" =
   go
     {|
-let runner = fn (static f : int -> unit) ->
+let runner = fn (static f : int -> dynamic unit) ->
   fn (b : bool) -> if b then f 1 else ();;
 let r = runner (fn (x : int) -> print_int (x + 100));;
 let _ = r false;;
@@ -150,7 +150,7 @@ let _ = r true;;
 let%expect_test "lambda used inside match arms in receiver body" =
   go
     {|
-let dispatch = fn (static f : int -> unit) ->
+let dispatch = fn (static f : int -> dynamic unit) ->
   fn (x : int) -> match x with
     | 0 -> f 100
     | 1 -> f 200
@@ -171,7 +171,7 @@ let _ = go 5;;
 let%expect_test "receiver returns closure capturing the static lambda" =
   go
     {|
-let make_iter = fn (static f : int -> unit) ->
+let make_iter = fn (static f : int -> dynamic unit) ->
   fn (n : int) ->
     let _ = f n in
     let _ = f (n + 1) in
@@ -198,7 +198,7 @@ let a = 1000;;
 let b = 2000;;
 let f1 = fn (k : int) -> print_int (k + a);;
 let f2 = fn (k : int) -> print_int (k + b);;
-let runner = fn (static f : int -> unit) -> f 5;;
+let runner = fn (static f : int -> dynamic unit) -> f 5;;
 let _ = runner f1;;
 let _ = runner f2;;
 |};
@@ -261,7 +261,7 @@ let _ = zip (fn (x : int) -> x + 100) (fn (x : int) -> x * 10);;
 let%expect_test "lambda returns lambda; receiver drives both layers" =
   go
     {|
-let twostage = fn (static mk : int -> int -> unit) ->
+let twostage = fn (static mk : int -> int -> dynamic unit) ->
   let h = mk 100 in
   let _ = h 1 in
   let _ = h 2 in
@@ -279,7 +279,7 @@ let _ = twostage (fn (a : int) -> let _ = print_int a in fn (b : int) -> print_i
 let%expect_test "cascading mono: lambda arg is itself a binder over static int" =
   go
     {|
-let invoke = fn (static f : static int -> unit) ->
+let invoke = fn (static f : static int -> dynamic unit) ->
   let _ = f 1 in
   let _ = f 2 in
   f 3;;
@@ -296,7 +296,7 @@ let _ = invoke (fn (static k : int) -> print_int (k + 100));;
 let%expect_test "cascading mono: same key applied multiple times — effects per call" =
   go
     {|
-let invoke = fn (static f : static int -> unit) ->
+let invoke = fn (static f : static int -> dynamic unit) ->
   let _ = f 5 in
   let _ = f 5 in
   f 5;;
@@ -317,7 +317,7 @@ let%expect_test "lambda arg's body delegates to another binder" =
   go
     {|
 let print_with = fn (static k : int) -> print_int (k + 1000);;
-let invoke = fn (static f : static int -> unit) -> f 5;;
+let invoke = fn (static f : static int -> dynamic unit) -> f 5;;
 let _ = invoke (fn (static x : int) -> print_with x);;
 let _ = invoke (fn (static x : int) -> print_with (x * 2));;
 |};
@@ -331,8 +331,8 @@ let _ = invoke (fn (static x : int) -> print_with (x * 2));;
 let%expect_test "outer mono forwards its static lambda to an inner mono" =
   go
     {|
-let inner = fn (static g : int -> unit) -> g 7;;
-let outer = fn (static f : int -> unit) -> inner f;;
+let inner = fn (static g : int -> dynamic unit) -> g 7;;
+let outer = fn (static f : int -> dynamic unit) -> inner f;;
 let _ = outer (fn (x : int) -> print_int (x + 1000));;
 |};
   [%expect {| 1007 |}]
@@ -341,8 +341,8 @@ let _ = outer (fn (x : int) -> print_int (x + 1000));;
 let%expect_test "outer mono uses inner mono with both forwarded and fresh lambdas" =
   go
     {|
-let inner = fn (static g : int -> unit) -> g 7;;
-let outer = fn (static f : int -> unit) ->
+let inner = fn (static g : int -> dynamic unit) -> g 7;;
+let outer = fn (static f : int -> dynamic unit) ->
   let _ = inner f in
   let _ = inner (fn (x : int) -> print_int (x * 2)) in
   f 100;;
@@ -370,7 +370,7 @@ let%expect_test "polymorphic binder applied at multiple types in receiver" =
   go
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
-fun use_thrice (static p : static erased type \ t -> t -> t) : unit =
+fun use_thrice (static p : static erased type \ t -> t -> t) : dynamic unit =
   let _ = print_int (p int 1) in
   let _ = print_bool (p bool true) in
   let _ = print_int (p int 2) in
@@ -427,7 +427,7 @@ let _ = use_at_int pred;;
 let%expect_test "fun-form receiver with effects between applications" =
   go
     {|
-fun runner (static f : int -> unit) : int -> unit =
+fun runner (static f : int -> dynamic unit) : int -> dynamic unit =
   fn (x : int) -> let _ = f x in f (x + 1);;
 let _ =
   let r = runner (fn (k : int) -> print_int k) in
@@ -447,7 +447,7 @@ let _ =
 let%expect_test "fun-form receiver: lambda passed at multiple call sites" =
   go
     {|
-fun apply (static f : int -> unit) : unit =
+fun apply (static f : int -> dynamic unit) : dynamic unit =
   let _ = print_int 999 in f 7;;
 let _ = apply (fn (x : int) -> print_int x);;
 let _ = apply (fn (x : int) -> print_int (x + 1));;
@@ -464,7 +464,7 @@ let _ = apply (fn (x : int) -> print_int (x + 1));;
 let%expect_test "construction-time effect at lambda definition site fires once" =
   go
     {|
-let runner = fn (static f : int -> unit) -> fn (x : int) -> f x;;
+let runner = fn (static f : int -> dynamic unit) -> fn (x : int) -> f x;;
 let g_with_print =
   let _ = print_int 99 in
   fn (x : int) -> print_int x;;
@@ -615,7 +615,7 @@ let _ = print_int (make_apply h 2);;
 let%expect_test "lambda captures local let binding outside receiver's scope" =
   go
     {|
-let runner = fn (static f : int -> unit) ->
+let runner = fn (static f : int -> dynamic unit) ->
   fn (x : int) -> let _ = f x in f (x + 1);;
 let _ =
   let n = 100 in
@@ -637,7 +637,7 @@ let _ =
 let%expect_test "fun-form receiver, lambda captures binding declared after fun" =
   go
     {|
-fun runner (static f : int -> unit) : int -> unit =
+fun runner (static f : int -> dynamic unit) : int -> dynamic unit =
   fn (x : int) -> let _ = f x in f (x + 1);;
 let n = 100;;
 let g = fn (k : int) -> print_int (k + n);;
@@ -690,7 +690,7 @@ let _ = print_int (use ((fn (x : int) -> x + 1), (fn (y : int) -> y * 2)));;
 let%expect_test "external as a specialization key" =
   go
     {|
-let use = fn (static h : int -> unit) -> h 5;;
+let use = fn (static h : int -> dynamic unit) -> h 5;;
 let _ = use print_int;;
 |};
   [%expect {| 5 |}]

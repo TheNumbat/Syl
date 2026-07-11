@@ -104,11 +104,6 @@ and value =
   | Binder of binder
   | Var of Ident.t
   | Tuple of value Nonempty_list.t
-  | If of
-      { cond : value
-      ; then_ : value
-      ; else_ : value
-      }
   | Apply of
       { fn : value
       ; arg : value
@@ -116,6 +111,10 @@ and value =
   | Proj of
       { tuple : value
       ; index : int
+      }
+  | Match of
+      { scrutinee : value
+      ; arms : (Dst.Expr.pattern * value) Nonempty_list.t
       }
   | External of
       { symbol : string
@@ -335,13 +334,50 @@ end
 
 let mono ty : dependent = T { ty; memo = Hashtbl.create (module Concrete) }
 
+let rec patterns_unify (a : Dst.Expr.pattern) (b : Dst.Expr.pattern) =
+  match a, b with
+  | Var _, Var _ ->
+    (* Arm leaves are closed, so binder names are irrelevant. *)
+    true
+  | Literal { value = a; _ }, Literal { value = b; _ } -> Dst.Literal.equal a b
+  | Tuple { elts = a; _ }, Tuple { elts = b; _ } ->
+    (match Nonempty_list.zip a b with
+     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> patterns_unify a b)
+     | Unequal_lengths -> false)
+  | Or { left = a_left; right = a_right; _ }, Or { left = b_left; right = b_right; _ } ->
+    patterns_unify a_left b_left && patterns_unify a_right b_right
+  | (Var _ | Literal _ | Tuple _ | Or _), _ -> false
+;;
+
+let arms_unify a_arms b_arms =
+  match Nonempty_list.zip a_arms b_arms with
+  | Ok zip ->
+    let zip = Nonempty_list.to_list zip in
+    let last = List.length zip - 1 in
+    List.for_alli zip ~f:(fun i ((a_pattern, _), (b_pattern, _)) ->
+      i = last || patterns_unify a_pattern b_pattern)
+  | Unequal_lengths -> false
+;;
+
+let merge_arms a_arms b_arms ~f =
+  if arms_unify a_arms b_arms
+  then
+    Nonempty_list.zip_exn a_arms b_arms
+    |> Nonempty_list.map ~f:(fun ((pattern, a_leaf), (_, b_leaf)) ->
+      Option.map (f a_leaf b_leaf) ~f:(fun leaf -> pattern, leaf))
+    |> Nonempty_list.to_list
+    |> Option.all
+    |> Option.map ~f:Nonempty_list.of_list_exn
+  else None
+;;
+
 let rec is_concrete_value : value -> _ = function
   | Unit | Closure _ | Binder _ | External _ | Prim _ -> true
   | Bool b -> is_concrete_bool b
   | Int i -> is_concrete_int i
   | Type ty -> is_concrete_ty ty
   | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
-  | Bottom | Var _ | If _ | Apply _ | Proj _ -> false
+  | Bottom | Var _ | Apply _ | Proj _ | Match _ -> false
 
 and is_concrete_bool : vbool -> _ = function
   | T _ -> true
@@ -380,30 +416,30 @@ let rec join_concrete_ty (a : ty) (b : ty) : ty option =
     ->
     let arg_mode = Modes.meet a_arg_mode b_arg_mode in
     let ret_mode = Modes.join a_ret_mode b_ret_mode in
-    let%map arg_ty = meet_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = join_concrete_value a_ret_ty b_ret_ty in
+    let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = join_concrete_value a_ret_ty b_ret_ty in
     Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
     let arg_mode = Modes.meet a_arg_mode b_arg_mode in
     let ret_mode = Modes.join a_ret_mode b_ret_mode in
-    let%map arg_ty = meet_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = join_concrete_dependent (mono a_ret_ty) b_ret_ty in
+    let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = join_concrete_dependent (mono a_ret_ty) b_ret_ty in
     Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
   | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
     let arg_mode = Modes.meet a_arg_mode b_arg_mode in
     let ret_mode = Modes.join a_ret_mode b_ret_mode in
-    let%map arg_ty = meet_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = join_concrete_dependent a_ret_ty (mono b_ret_ty) in
+    let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = join_concrete_dependent a_ret_ty (mono b_ret_ty) in
     Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
   | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
     let arg_mode = Modes.meet a_arg_mode b_arg_mode in
     let ret_mode = Modes.join a_ret_mode b_ret_mode in
-    let%map arg_ty = meet_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = join_concrete_dependent a_ret_ty b_ret_ty in
+    let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = join_concrete_dependent a_ret_ty b_ret_ty in
     Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
   | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
 
@@ -425,30 +461,30 @@ and meet_concrete_ty (a : ty) (b : ty) : ty option =
     ->
     let arg_mode = Modes.join a_arg_mode b_arg_mode in
     let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-    let%map arg_ty = join_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = meet_concrete_value a_ret_ty b_ret_ty in
+    let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = meet_concrete_value a_ret_ty b_ret_ty in
     Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
     let arg_mode = Modes.join a_arg_mode b_arg_mode in
     let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-    let%map arg_ty = join_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = meet_concrete_dependent (mono a_ret_ty) b_ret_ty in
+    let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = meet_concrete_dependent (mono a_ret_ty) b_ret_ty in
     Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
   | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
     let arg_mode = Modes.join a_arg_mode b_arg_mode in
     let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-    let%map arg_ty = join_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = meet_concrete_dependent a_ret_ty (mono b_ret_ty) in
+    let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = meet_concrete_dependent a_ret_ty (mono b_ret_ty) in
     Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
   | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
     let arg_mode = Modes.join a_arg_mode b_arg_mode in
     let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-    let%map arg_ty = join_concrete_value a_arg_ty b_arg_ty
-    and ret_ty = meet_concrete_dependent a_ret_ty b_ret_ty in
+    let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
+    let%map ret_ty = meet_concrete_dependent a_ret_ty b_ret_ty in
     Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
   | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
 
@@ -479,15 +515,14 @@ and join_concrete_value (a : value) (b : value) : value option =
   | Type a, Type b ->
     let%map ty = join_concrete_ty a b in
     (Type ty : value)
-  | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
-    , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
-    let%map cond = join_concrete_value a_cond b_cond
-    and then_ = join_concrete_value a_then b_then
-    and else_ = join_concrete_value a_else b_else in
-    If { cond; then_; else_ }
+  | ( Match { scrutinee = a_scrutinee; arms = a_arms }
+    , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
+    let%bind arms = merge_arms a_arms b_arms ~f:join_concrete_value in
+    let%map scrutinee = join_concrete_value a_scrutinee b_scrutinee in
+    Match { scrutinee; arms }
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-    let%map fn = join_concrete_value a_fn b_fn
-    and arg = join_concrete_value a_arg b_arg in
+    let%bind fn = join_concrete_value a_fn b_fn in
+    let%map arg = join_concrete_value a_arg b_arg in
     Apply { fn; arg }
   | Proj a, Proj b when a.index = b.index ->
     let%map tuple = join_concrete_value a.tuple b.tuple in
@@ -506,9 +541,9 @@ and join_concrete_value (a : value) (b : value) : value option =
       | Bool _
       | Int _
       | Type _
-      | If _
       | Apply _
       | Proj _
+      | Match _
       | Var _
       | Tuple _
       | Closure _
@@ -531,15 +566,14 @@ and meet_concrete_value (a : value) (b : value) : value option =
   | Type a, Type b ->
     let%map ty = meet_concrete_ty a b in
     (Type ty : value)
-  | ( If { cond = a_cond; then_ = a_then; else_ = a_else }
-    , If { cond = b_cond; then_ = b_then; else_ = b_else } ) ->
-    let%map cond = meet_concrete_value a_cond b_cond
-    and then_ = meet_concrete_value a_then b_then
-    and else_ = meet_concrete_value a_else b_else in
-    If { cond; then_; else_ }
+  | ( Match { scrutinee = a_scrutinee; arms = a_arms }
+    , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
+    let%bind arms = merge_arms a_arms b_arms ~f:meet_concrete_value in
+    let%map scrutinee = meet_concrete_value a_scrutinee b_scrutinee in
+    Match { scrutinee; arms }
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-    let%map fn = meet_concrete_value a_fn b_fn
-    and arg = meet_concrete_value a_arg b_arg in
+    let%bind fn = meet_concrete_value a_fn b_fn in
+    let%map arg = meet_concrete_value a_arg b_arg in
     Apply { fn; arg }
   | Proj a, Proj b when a.index = b.index ->
     let%map tuple = meet_concrete_value a.tuple b.tuple in
@@ -558,9 +592,9 @@ and meet_concrete_value (a : value) (b : value) : value option =
       | Bool _
       | Int _
       | Type _
-      | If _
       | Apply _
       | Proj _
+      | Match _
       | Var _
       | Tuple _
       | Closure _
@@ -616,6 +650,23 @@ module Bool = struct
 
   (* Only does rewrites that remove terms. *)
   let rec reduce : t -> value = function
+    | And (Bottom, _)
+    | And (_, Bottom)
+    | Or (Bottom, _)
+    | Or (_, Bottom)
+    | Eq (Bottom, _)
+    | Eq (_, Bottom)
+    | Neq (Bottom, _)
+    | Neq (_, Bottom)
+    | Lt (Bottom, _)
+    | Lt (_, Bottom)
+    | Lte (Bottom, _)
+    | Lte (_, Bottom)
+    | Gt (Bottom, _)
+    | Gt (_, Bottom)
+    | Gte (Bottom, _)
+    | Gte (_, Bottom)
+    | Not Bottom -> Bottom
     | And (Bool (T x), Bool (T y)) -> const (x && y)
     | And (Bool (T false), _) | And (_, Bool (T false)) -> const false
     | (And (Var x, Bool (Not (Var y))) | And (Bool (Not (Var x)), Var y)) when Ident.equal x y ->
@@ -650,6 +701,16 @@ module Bool = struct
     | Gte (Int x, Int y) when eq_int x y -> const true
     | Gte (Var x, Var y) when Ident.equal x y -> const true
     | (T _ | And _ | Or _ | Eq _ | Neq _ | Lt _ | Lte _ | Gt _ | Gte _ | Not _) as expr -> Bool expr
+
+  and and_ a b = reduce (And (a, b))
+  and or_ a b = reduce (Or (a, b))
+  and eq a b = reduce (Eq (a, b))
+  and neq a b = reduce (Neq (a, b))
+  and lt a b = reduce (Lt (a, b))
+  and lte a b = reduce (Lte (a, b))
+  and gt a b = reduce (Gt (a, b))
+  and gte a b = reduce (Gte (a, b))
+  and not_ v = reduce (Not v)
 
   and eq_int x y =
     match x, y with
@@ -697,6 +758,17 @@ module Int = struct
 
   (* Only does rewrites that remove terms. *)
   let rec reduce : t -> value = function
+    | Add (Bottom, _)
+    | Add (_, Bottom)
+    | Sub (Bottom, _)
+    | Sub (_, Bottom)
+    | Mul (Bottom, _)
+    | Mul (_, Bottom)
+    | Div (Bottom, _)
+    | Div (_, Bottom)
+    | Mod (Bottom, _)
+    | Mod (_, Bottom)
+    | Neg Bottom -> Bottom
     | Add (Int (T x), Int (T y)) -> const (x + y)
     | (Add (Var x, Int (Neg (Var y))) | Add (Int (Neg (Var x)), Var y)) when Ident.equal x y ->
       const 0L
@@ -724,6 +796,29 @@ module Int = struct
     | Neg (Int (Neg (Int x))) -> reduce x
     | Neg (Int (Neg v)) -> v
     | (T _ | Add _ | Sub _ | Mul _ | Div _ | Mod _ | Neg _) as expr -> Int expr
+  ;;
+
+  exception Divide_by_zero of t
+  exception Negative_modulus of t
+
+  let add a b = reduce (Add (a, b))
+  let sub a b = reduce (Sub (a, b))
+  let mul a b = reduce (Mul (a, b))
+  let neg v = reduce (Neg v)
+
+  let div a (b : value) =
+    match a, b with
+    | Bottom, _ | _, Bottom -> Bottom
+    | _, Int (T 0L) -> raise (Divide_by_zero (Div (a, b)))
+    | _ -> reduce (Div (a, b))
+  ;;
+
+  let mod_ a (b : value) =
+    match a, b with
+    | Bottom, _ | _, Bottom -> Bottom
+    | _, Int (T 0L) -> raise (Divide_by_zero (Mod (a, b)))
+    | _, Int (T n) when Int64.is_negative n -> raise (Negative_modulus (Mod (a, b)))
+    | _ -> reduce (Mod (a, b))
   ;;
 end
 
@@ -788,11 +883,6 @@ module Value = struct
     | Binder of binder
     | Var of Ident.t
     | Tuple of t Nonempty_list.t
-    | If of
-        { cond : t
-        ; then_ : t
-        ; else_ : t
-        }
     | Apply of
         { fn : t
         ; arg : t
@@ -800,6 +890,10 @@ module Value = struct
     | Proj of
         { tuple : t
         ; index : int
+        }
+    | Match of
+        { scrutinee : t
+        ; arms : (Dst.Expr.pattern * t) Nonempty_list.t
         }
     | External of
         { symbol : string
@@ -813,41 +907,115 @@ module Value = struct
     | value -> raise_s [%message "Bug: expected concrete type" (value : t)]
   ;;
 
-  (* Only does rewrites that remove terms. *)
-  let rec reduce = function
-    | Bool b -> Bool.reduce b
-    | Int i -> Int.reduce i
-    | If { cond; then_; else_ } ->
-      (match reduce cond with
-       | Bottom -> Bottom
-       | Bool (T true) -> reduce then_
-       | Bool (T false) -> reduce else_
-       | cond ->
-         (match reduce then_, reduce else_ with
-          | Bottom, else_ -> else_
-          | then_, Bottom -> then_
-          | then_, else_ -> If { cond; then_; else_ }))
-    | Proj { tuple; index } ->
-      (match reduce tuple with
-       | Tuple elts -> reduce (Nonempty_list.nth_exn elts index)
-       | Bottom -> Bottom
-       | tuple -> Proj { tuple; index })
-    | Apply { fn; arg } ->
-      (match reduce fn, reduce arg with
-       | Bottom, _ | _, Bottom -> Bottom
-       | fn, arg -> Apply { fn; arg })
-    | value -> value
+  module Matched = struct
+    type t =
+      | Match of (Ident.t * int list) list
+      | No_match
+      | Unknown
+  end
+
+  (* Values are reduced on construction, so every value is in normal form. *)
+
+  let bottom = Bottom
+  let unit = Unit
+  let type_ ty = Type ty
+  let closure closure = Closure closure
+  let binder binder = Binder binder
+  let var id = Var id
+  let prim prim = Prim prim
+  let external_ ~symbol ~ty = External { symbol; ty }
+
+  let tuple elts =
+    (* A tuple with an unreachable component is unreachable. *)
+    if
+      Nonempty_list.exists elts ~f:(function
+        | Bottom -> true
+        | _ -> false)
+    then Bottom
+    else Tuple elts
   ;;
+
+  let proj tuple index =
+    match tuple with
+    | Tuple elts -> Nonempty_list.nth_exn elts index
+    | Bottom -> Bottom
+    | tuple -> Proj { tuple; index }
+  ;;
+
+  let apply ~fn ~arg =
+    match fn, arg with
+    | Bottom, _ | _, Bottom -> Bottom
+    | fn, arg -> Apply { fn; arg }
+  ;;
+
+  let rec matches_pattern value pattern : Matched.t = match_at [] value pattern
+
+  and match_at path value (pattern : Dst.Expr.pattern) : Matched.t =
+    match pattern with
+    | Var { id; _ } -> Match (if Ident.is_anon id then [] else [ id, List.rev path ])
+    | Literal { value = literal; _ } ->
+      (match literal, value with
+       | Unit, _ (* We know value has unit type. *) -> Match []
+       | Bool want, Bool (T got) -> if Core.Bool.equal got want then Match [] else No_match
+       | Int want, Int (T got) -> if Int64.equal got want then Match [] else No_match
+       | (Bool _ | Int _), _ -> Unknown)
+    | Tuple { elts; _ } ->
+      Nonempty_list.to_list elts
+      |> List.foldi ~init:(Matched.Match []) ~f:(fun index acc elt ->
+        let matched = match_at (index :: path) (proj value index) elt in
+        match acc, matched with
+        | No_match, _ | _, No_match -> Matched.No_match
+        | Unknown, _ | _, Unknown -> Unknown
+        | Match bindings, Match elt_bindings -> Match (bindings @ elt_bindings))
+    | Or { left; right; _ } ->
+      (match match_at path value left with
+       | (Match _ | Unknown) as matched -> matched
+       | No_match -> match_at path value right)
+  ;;
+
+  let match_ ~scrutinee ~arms : t =
+    match scrutinee with
+    | Bottom -> Bottom
+    | scrutinee ->
+      (* Arms with [Bottom] bodies are provably dead. *)
+      let arms =
+        Nonempty_list.to_list arms
+        |> List.filter ~f:(fun (_, leaf) ->
+          match leaf with
+          | Bottom -> false
+          | _ -> true)
+      in
+      (* Matches are exhaustive, so a sole surviving arm is unconditional. *)
+      let rec select = function
+        | [] -> Some (Bottom : t)
+        | [ (_, leaf) ] -> Some leaf
+        | (pattern, leaf) :: rest ->
+          (match matches_pattern scrutinee pattern with
+           | Matched.Match _ -> Some leaf
+           | No_match -> select rest
+           | Unknown -> None)
+      in
+      (match select arms with
+       | Some value -> value
+       | None -> Match { scrutinee; arms = Nonempty_list.of_list_exn arms })
+  ;;
+
+  let if_ ~loc ~cond ~then_ ~else_ : t =
+    match_
+      ~scrutinee:cond
+      ~arms:
+        (Nonempty_list.create
+           ((Literal { value = Bool true; loc } : Dst.Expr.pattern), then_)
+           [ (Literal { value = Bool false; loc } : Dst.Expr.pattern), else_ ])
+  ;;
+
+  let arms_unify = arms_unify
+  let merge_arms = merge_arms
 
   let of_literal : Dst.Literal.t -> t = function
     | Unit -> Unit
     | Bool b -> Bool (T b)
     | Int i -> Int (T i)
-  ;;
-
-  let is_true : t -> bool = function
-    | Bool (T true) -> true
-    | _ -> false
   ;;
 end
 
@@ -1241,13 +1409,11 @@ module Expr = struct
   ;;
 
   let rebind bind ~stamp ~f =
-    let ty = ty bind in
-    let mode = mode bind in
     let loc = loc bind in
     let var = Ident.create Ident.Raw.anon ~stamp in
-    let ref = Var { id = var; ty; mode; loc } in
+    let ref = Var { id = var; ty = ty bind; mode = mode bind; loc } in
     let rest = f ref in
-    Let { var; bind; rest; ty; mode; loc }
+    Let { var; bind; rest; ty = ty rest; mode = mode rest; loc }
   ;;
 
   let tuple ~loc (elts : (t * desc) Nonempty_list.t) : t * desc =
@@ -1261,9 +1427,27 @@ module Expr = struct
       Nonempty_list.map descs ~f:(fun (d : desc) -> d.static)
       |> Nonempty_list.to_list
       |> Lazy.all
-      |> Lazy.map ~f:(fun elts -> Value.Tuple (Nonempty_list.of_list_exn elts))
+      |> Lazy.map ~f:(fun elts -> Value.tuple (Nonempty_list.of_list_exn elts))
     in
     Tuple { elts = exprs; ty; mode; loc }, { ty; mode; static }
+  ;;
+
+  (* Project a runtime component out of the scrutinee, tracking its type and
+     static value. *)
+  let project ~loc scrutinee (scrutinee_desc : desc) path =
+    let rec aux path expr (desc : desc) =
+      match path with
+      | [] -> expr, desc
+      | index :: rest ->
+        (match desc.ty with
+         | Type (Tuple elt_tys) ->
+           let ty = Nonempty_list.nth_exn elt_tys index in
+           let get = Tuple_get { tuple = expr; index; ty; mode = desc.mode; loc } in
+           let static = Lazy.map desc.static ~f:(fun tuple -> Value.proj tuple index) in
+           aux rest get { ty; mode = desc.mode; static }
+         | ty -> raise_s [%message "Bug: expected tuple" (ty : value) (loc : Lex.Location.t)])
+    in
+    aux path scrutinee scrutinee_desc
   ;;
 end
 

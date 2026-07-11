@@ -1039,18 +1039,7 @@ let f = fn (x : int) -> 1;;
 let g = fn (erased f : int -> int) -> f 0;;
 let _ = g f;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 38)))
-     (reason
-      (Erased_application
-       (fn
-        (Type
-         (Arrow (arg_ty (Type Int))
-          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -1076,18 +1065,7 @@ let f1 = (fn (x : int) -> 1) @ erased;;
 let g = fn (erased f2 : int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 39)))
-     (reason
-      (Erased_application
-       (fn
-        (Type
-         (Arrow (arg_ty (Type Int))
-          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure nest" =
@@ -1097,18 +1075,7 @@ let f1 = (fn (x : int) -> 1) @ erased;;
 let g = fn (static erased f2 : int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 46)))
-     (reason
-      (Erased_application
-       (fn
-        (Type
-         (Arrow (arg_ty (Type Int))
-          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "inlined closure nest" =
@@ -1154,18 +1121,7 @@ let f1 = fn (erased x : int) -> 1;;
 let g = fn (static erased f2 : erased int -> int) -> f2 0;;
 let _ = g f1;;
 |};
-  [%expect
-    {|
-    ((loc ((line 3) (column 53)))
-     (reason
-      (Erased_application
-       (fn
-        (Type
-         (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
-          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "closure static" =
@@ -1907,18 +1863,7 @@ let%expect_test "arrow typechecking" =
 let f = fn (erased g : erased int -> int) -> g 0;;
 let _ = f (fn (erased x : int) -> 0);;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 45)))
-     (reason
-      (Erased_application
-       (fn
-        (Type
-         (Pi (arg_ty (Type Int)) (arg_mode ((staticity Static) (erasure Erased)))
-          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "arrow-pi join" =
@@ -2075,19 +2020,7 @@ let%expect_test "Pi typechecking" =
 let f = fn (static erased g : static int -> int) -> g 0;;
 let _ = f (fn (static x : int) -> x + 1);;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 52)))
-     (reason
-      (Erased_application
-       (fn
-        (Type
-         (Pi (arg_ty (Type Int))
-          (arg_mode ((staticity Static) (erasure Unerased)))
-          (ret_ty (T (ty (Type Int)) (memo <opaque>)))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "Pi typechecking" =
@@ -2240,8 +2173,12 @@ let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : int;;
      (reason
       (Type_mismatch
        (got
-        (If (cond (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
-         (then_ (Type Int)) (else_ (Type Bool))))
+        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 2) (column 32))))
+            (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 2) (column 32))))
+            (Type Bool))))))
        (need (Type Int)))))
     |}]
 ;;
@@ -2326,8 +2263,12 @@ let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if erased 
      (reason
       (Type_mismatch
        (got
-        (If (cond (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
-         (then_ (Type Int)) (else_ (Type Type))))
+        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 2) (column 70))))
+            (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 2) (column 70))))
+            (Type Type))))))
        (need (Type Type)))))
     |}]
 ;;
@@ -2444,7 +2385,7 @@ let y = (f 0) @ unerased;;
     ((loc ((line 2) (column 4)))
      (reason
       (Mode_mismatch (got ((staticity Static) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
+       (need ((staticity Static) (erasure Unerased))))))
     |}]
 ;;
 
@@ -2874,7 +2815,7 @@ let _ = f (fn (x : int) -> 0 @ erased);;
 let%expect_test "external" =
   go
     {|
-external f : int -> int = asdf;;
+external f : int -> dynamic int = asdf;;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -2883,7 +2824,7 @@ let _ = f 0;;
 let%expect_test "external" =
   go
     {|
-external f : int -> int = asdf;;
+external f : int -> dynamic int = asdf;;
 let _ = (f @ erased) 0;;
 |};
   [%expect
@@ -2916,7 +2857,7 @@ let _ = f 0;;
 let%expect_test "external" =
   go
     {|
-external f : int -> int = asdf;;
+external f : int -> dynamic int = asdf;;
 let _ = f 0;;
 |};
   [%expect {| |}]
@@ -3319,8 +3260,8 @@ let _ = apply add_n 5;;
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (result ((staticity Parametric) (erasure Unerased))))))
     |}]
 ;;
 
@@ -3342,8 +3283,8 @@ let _ = apply combine 5;;
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (result ((staticity Parametric) (erasure Unerased))))))
     |}]
 ;;
 
@@ -3357,15 +3298,10 @@ let _ = apply2 inc;;
   |};
   [%expect
     {|
-    ((loc ((line 4) (column 46)))
+    ((loc ((line 4) (column 43)))
      (reason
-      (Erased_application
-       (fn
-        (Type
-         (Arrow (arg_ty (Type Int))
-          (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+      (Mode_mismatch (got ((staticity Static) (erasure Erased)))
+       (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
@@ -3389,8 +3325,8 @@ let _ = map int int (fn (x : int) -> x + base) 42;;
          (Arrow (arg_ty (Var (Anon <opaque>)))
           (arg_mode ((staticity Dynamic) (erasure Unerased)))
           (ret_ty (Var (Anon <opaque>)))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (result ((staticity Parametric) (erasure Unerased))))))
     |}]
 ;;
 
@@ -3412,8 +3348,8 @@ let _ = apply bool (fn (x : bool) -> x) true;;
          (Arrow (arg_ty (Var (Anon <opaque>)))
           (arg_mode ((staticity Dynamic) (erasure Unerased)))
           (ret_ty (Var (Anon <opaque>)))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (result ((staticity Parametric) (erasure Unerased))))))
     |}]
 ;;
 
@@ -3434,8 +3370,8 @@ let _ = compose (fn (x : int) -> x + a) (fn (x : int) -> x * b) 5;;
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (result ((staticity Parametric) (erasure Unerased))))))
     |}]
 ;;
 
@@ -3458,8 +3394,8 @@ let _ =
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased))))))
-       (result ((staticity Dynamic) (erasure Unerased))))))
+          (ret_mode ((staticity Static) (erasure Unerased))))))
+       (result ((staticity Parametric) (erasure Unerased))))))
     |}]
 ;;
 

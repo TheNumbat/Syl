@@ -52,12 +52,21 @@ module Prim = struct
     [@@deriving sexp, compare, equal, hash]
   end
 
+  module Unerase = struct
+    type t =
+      | Unit
+      | Bool
+      | Int
+    [@@deriving sexp, compare, equal, hash]
+  end
+
   type t =
     | Assert
     | Assert_erased
     | Int of Int.t
     | Bool of Bool.t
     | Type of Type.t
+    | Unerase of Unerase.t
   [@@deriving sexp, compare, equal, hash]
 
   let symbol = function
@@ -90,6 +99,9 @@ module Prim = struct
     | Type Arrow_arg -> "syl_type_arrow_arg"
     | Type Arrow_ret -> "syl_type_arrow_ret"
     | Type Pi_arg -> "syl_type_pi_arg"
+    | Unerase Unit -> "syl_unerase_unit"
+    | Unerase Bool -> "syl_unerase_bool"
+    | Unerase Int -> "syl_unerase_int"
   ;;
 end
 
@@ -138,6 +150,9 @@ let builtins =
         ; Type Arrow_arg
         ; Type Arrow_ret
         ; Type Pi_arg
+        ; Unerase Unit
+        ; Unerase Bool
+        ; Unerase Int
         ]
   in
   Hashtbl.of_alist_exn

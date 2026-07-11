@@ -34,7 +34,7 @@ let _ =
 let%expect_test "static fun" =
   go
     {|
-fun f (static x : int) : unit = print_int x;;
+fun f (static x : int) : dynamic unit = print_int x;;
 let _ = f 42;;
 let _ = f 69;;
 |};

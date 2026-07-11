@@ -22,9 +22,13 @@ builtin ( && ) = syl_bool_and;;
 builtin ( || ) = syl_bool_or;;
 builtin ( ! ) = syl_bool_not;;
 
-external print_unit : unit -> unit = syl_std_print_unit;;
-external print_bool : bool -> unit = syl_std_print_bool;;
-external print_int : int -> unit = syl_std_print_int;;
+builtin unerase_unit = syl_unerase_unit;;
+builtin unerase_bool = syl_unerase_bool;;
+builtin unerase_int = syl_unerase_int;;
+
+external print_unit : unit -> dynamic unit = syl_std_print_unit;;
+external print_bool : bool -> dynamic unit = syl_std_print_bool;;
+external print_int : int -> dynamic unit = syl_std_print_int;;
 |}
 ;;
 
@@ -91,7 +95,6 @@ static syl_bool syl_bool_or(syl_tuple<syl_bool,syl_bool> x) {
 static syl_bool syl_bool_not(syl_bool x) {
   return !x;
 }
-
 syl_unit syl_std_print_unit() {
   printf("()\n");
 }

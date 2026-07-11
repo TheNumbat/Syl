@@ -33,7 +33,7 @@ let%expect_test "fun recurse" =
   go
     {|
 let a = 0 @ dynamic;;
-fun f (x : int) : int = let _ = a in f x;;
+fun f (x : int) : dynamic int = let _ = a in f x;;
 |};
   [%expect {| |}]
 ;;
@@ -43,7 +43,7 @@ let%expect_test "fun recurse" =
     {|
 let a = 0 @ dynamic;;
 let _ =
-fun f (x : int) : int = let _ = a in f x in
+fun f (x : int) : dynamic int = let _ = a in f x in
 ()
 ;;
 |};
@@ -56,8 +56,8 @@ let%expect_test "recursive env" =
 let a = 0 @ dynamic;;
 let b = 1 @ dynamic;;
 let c = 2 @ dynamic;;
-fun f (x : int) : int = let _ = a in let _ = b in g x
-and g (y : int) : int = let _ = a in let _ = c in f y;;
+fun f (x : int) : dynamic int = let _ = a in let _ = b in g x
+and g (y : int) : dynamic int = let _ = a in let _ = c in f y;;
 |};
   [%expect {| |}]
 ;;

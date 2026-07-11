@@ -99,7 +99,7 @@ let _ = 0 : pi_arg (int -> int);;
         (Type
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased))) (ret_ty (Type Int))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 
@@ -136,7 +136,7 @@ let _ = use (length (int -> bool));;
          (Arrow (arg_ty (Type Int))
           (arg_mode ((staticity Dynamic) (erasure Unerased)))
           (ret_ty (Type Bool))
-          (ret_mode ((staticity Dynamic) (erasure Unerased)))))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
 

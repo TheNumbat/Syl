@@ -172,8 +172,12 @@ let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : int;;
      (reason
       (Type_mismatch
        (got
-        (If (cond (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
-         (then_ (Type Int)) (else_ (Type Bool))))
+        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 2) (column 32))))
+            (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 2) (column 32))))
+            (Type Bool))))))
        (need (Type Int)))))
     |}]
 ;;
@@ -1411,5 +1415,273 @@ let _ = print_int (f 10);;
      (reason
       (Mode_mismatch (got ((staticity Parametric) (erasure Unerased)))
        (need ((staticity Static) (erasure Erased))))))
+    |}]
+;;
+
+(* TODO need the is_ty prims to refine t, or a proper dependent match on t as a variant *)
+let%expect_test "polymorphic unerase" =
+  go
+    {|
+builtin is_unit = syl_type_is_unit;;
+builtin is_bool = syl_type_is_bool;;
+builtin is_int = syl_type_is_int;;
+
+fun erased unerase (erased t : type) : erased (erased t -> t) =
+  if erased is_unit t then unerase_unit
+  else if erased is_bool t then unerase_bool
+  else if erased is_int t then unerase_int
+  else unreachable
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 6) (column 4)))
+     (reason
+      (Type_mismatch
+       (got
+        (Match
+         (scrutinee
+          (Apply (fn (Prim (Type Is_unit))) (arg (Var (Anon <opaque>)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 7) (column 2))))
+            (Type
+             (Pi (arg_ty (Type Unit))
+              (arg_mode ((staticity Static) (erasure Erased)))
+              (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
+              (ret_mode ((staticity Static) (erasure Unerased))))))
+           ((Literal (value (Bool false)) (loc ((line 7) (column 2))))
+            (Match
+             (scrutinee
+              (Apply (fn (Prim (Type Is_bool))) (arg (Var (Anon <opaque>)))))
+             (arms
+              (((Literal (value (Bool true)) (loc ((line 8) (column 7))))
+                (Type
+                 (Pi (arg_ty (Type Bool))
+                  (arg_mode ((staticity Static) (erasure Erased)))
+                  (ret_ty (T (ty (Type Bool)) (memo <opaque>)))
+                  (ret_mode ((staticity Static) (erasure Unerased))))))
+               ((Literal (value (Bool false)) (loc ((line 8) (column 7))))
+                (Type
+                 (Pi (arg_ty (Type Int))
+                  (arg_mode ((staticity Static) (erasure Erased)))
+                  (ret_ty (T (ty (Type Int)) (memo <opaque>)))
+                  (ret_mode ((staticity Static) (erasure Unerased))))))))))))))
+       (need
+        (Type
+         (Pi (arg_ty (Var (Anon <opaque>)))
+          (arg_mode ((staticity Static) (erasure Erased)))
+          (ret_ty
+           (Reduce (env <opaque>) (arg (Anon <opaque>))
+            (arg_ty (Var (Anon <opaque>)))
+            (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
+            (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 6) (column 59)))))))
+          (ret_mode ((staticity Static) (erasure Unerased)))))))))
+    |}]
+;;
+
+let%expect_test "match static with literal scrutinee selects branch type" =
+  go
+    {|
+let _ = (match static 0 with | 0 -> 1 | _ -> true) : int;;
+let _ = (match static 3 with | 0 -> 1 | _ -> true) : bool;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match static with static variable scrutinee" =
+  go
+    {|
+let f = fn (static x : int) -> match static x with | 0 -> 1 | _ -> true;;
+let a = f 0;;
+let b = f 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "no cross-shape equality with the equivalent if" =
+  go
+    {|
+let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : (if x == 0 then int else bool);;
+|};
+  [%expect {|
+    ((loc ((line 2) (column 74)))
+     (reason
+      (Type_mismatch
+       (got
+        (Match (scrutinee (Var (Anon <opaque>)))
+         (arms
+          (((Literal (value (Int 0)) (loc ((line 2) (column 54)))) (Type Int))
+           ((Var (id (Anon <opaque>)) (loc ((line 2) (column 63)))) (Type Bool))))))
+       (need
+        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 2) (column 77))))
+            (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 2) (column 77))))
+            (Type Bool)))))))))
+    |}]
+;;
+
+let%expect_test "match static annotated with the equivalent match" =
+  go
+    {|
+let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : (match static x with | 0 -> int | _ -> bool);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "match static wrong annotation shows the stuck case" =
+  go
+    {|
+let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : int;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 74)))
+     (reason
+      (Type_mismatch
+       (got
+        (Match (scrutinee (Var (Anon <opaque>)))
+         (arms
+          (((Literal (value (Int 0)) (loc ((line 2) (column 54)))) (Type Int))
+           ((Var (id (Anon <opaque>)) (loc ((line 2) (column 63)))) (Type Bool))))))
+       (need (Type Int)))))
+    |}]
+;;
+
+let%expect_test "match static refines the scrutinee value inside arms" =
+  go
+    {|
+let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
+let h = fn (static n : int) -> match static n with | 0 -> g n 5 | 1 -> g n true | _ -> 0;;
+let _ = h 0;;
+let _ = h 1;;
+let _ = h 2;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "wildcard arms get no negative refinement" =
+  go
+    {|
+let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
+let h = fn (static n : int) -> match static n with | 0 -> g n 5 | _ -> g n true;;
+|};
+  [%expect
+    {|
+    ((loc ((line 3) (column 71)))
+     (reason
+      (Type_mismatch (got (Type Bool))
+       (need
+        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 2) (column 39))))
+            (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 2) (column 39))))
+            (Type Bool)))))))))
+    |}]
+;;
+
+let%expect_test "match static refines tuple components" =
+  go
+    {|
+let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
+let h = fn (static p : int ^ int) -> match static p with | (0, y) -> g 0 y | _ -> 0;;
+let _ = h ((0, 5) @ static);;
+let _ = h ((1, 5) @ static);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "tuple scrutinees refine their components inside arms" =
+  go
+    {|
+let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
+let h = fn (static a : int) -> fn (static b : int) -> match static (a, b) with | (0, y) -> g a 5 | _ -> 0;;
+let _ = h 0 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "or-pattern arms get no scrutinee refinement" =
+  go
+    {|
+let g = fn (static m : int) -> fn (x : if m < 2 then int else bool) -> x;;
+let h = fn (static n : int) -> match static n with | 0 | 1 -> g n 5 | _ -> 0;;
+|};
+  [%expect {|
+    ((loc ((line 3) (column 62)))
+     (reason
+      (Type_mismatch (got (Type Int))
+       (need
+        (Match (scrutinee (Bool (Lt (Var (Anon <opaque>)) (Int (T 2)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 2) (column 39))))
+            (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 2) (column 39))))
+            (Type Bool)))))))))
+    |}]
+;;
+
+let%expect_test "prims do not reduce over stuck matches" =
+  go
+    {|
+let f = fn (static x : int) -> (0 : if ((match static x with | 0 -> 1 | _ -> 2) < 3) then int else unit);;
+|};
+  [%expect {|
+    ((loc ((line 2) (column 34)))
+     (reason
+      (Type_mismatch (got (Type Int))
+       (need
+        (Match
+         (scrutinee
+          (Bool
+           (Lt
+            (Match (scrutinee (Var (Anon <opaque>)))
+             (arms
+              (((Literal (value (Int 0)) (loc ((line 2) (column 63))))
+                (Int (T 1)))
+               ((Var (id (Anon <opaque>)) (loc ((line 2) (column 72))))
+                (Int (T 2))))))
+            (Int (T 3)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 2) (column 36))))
+            (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 2) (column 36))))
+            (Type Unit)))))))))
+    |}]
+;;
+
+let%expect_test "no cross-shape equality across an if chain" =
+  go
+    {|
+let f = fn (static x : int) ->
+  (match static x with | 0 -> 1 | 1 -> true | _ -> ())
+    : (if x == 0 then int else if x == 1 then bool else unit);;
+let _ = f 0;;
+let _ = f 1;;
+let _ = f 2;;
+|};
+  [%expect {|
+    ((loc ((line 4) (column 4)))
+     (reason
+      (Type_mismatch
+       (got
+        (Match (scrutinee (Var (Anon <opaque>)))
+         (arms
+          (((Literal (value (Int 0)) (loc ((line 3) (column 25)))) (Type Int))
+           ((Literal (value (Int 1)) (loc ((line 3) (column 34)))) (Type Bool))
+           ((Var (id (Anon <opaque>)) (loc ((line 3) (column 46)))) (Type Unit))))))
+       (need
+        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
+         (arms
+          (((Literal (value (Bool true)) (loc ((line 4) (column 7)))) (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 4) (column 7))))
+            (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 1)))))
+             (arms
+              (((Literal (value (Bool true)) (loc ((line 4) (column 31))))
+                (Type Bool))
+               ((Literal (value (Bool false)) (loc ((line 4) (column 31))))
+                (Type Unit)))))))))))))
     |}]
 ;;
