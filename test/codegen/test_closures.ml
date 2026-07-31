@@ -158,8 +158,10 @@ let _ = print_int ((if false then ( + ) else ( - )) (1, 1));;
 let%expect_test "subtyped primitive" =
   go
     {|
-let f = fn (static x : int ^ int) -> match x with | (a,b) -> a - b;;
+let f = fn (static x : int ^ int) -> match x { (a, b) -> a - b };;
+
 let _ = print_int ((if true then (+) else f) (1, 1));;
+
 let _ = print_int ((if false then (+) else f) (1, 1));;
 |};
   [%expect
@@ -189,10 +191,26 @@ let%expect_test "closure erased" =
   go
     {|
 let c = fn (_ : unit) -> let _ = print_unit () in true;;
+
 let f = (fn (x : int) -> 1);;
+
 let g = (fn (erased x : int) -> 2);;
-let _ = (match c () with | true -> f | false -> g) 0;;
-let _ = (match !(c ()) with | true -> f | false -> g) 0;;
+
+let _ =
+  (match c () {
+     true -> f,
+     false -> g,
+   })
+    0
+;;
+
+let _ =
+  (match !(c ()) {
+     true -> f,
+     false -> g,
+   })
+    0
+;;
 |};
   [%expect
     {|
@@ -397,4 +415,48 @@ let g = fn (_ : unit) -> f 10;;
 let _ = g ();;
 |};
   [%expect {| |}]
+;;
+
+(* Environment offsets must agree with [syl_fill_env]'s [alignof]/[sizeof]
+   arithmetic: [Ty.size_in_mem] models C++ [sizeof], including [syl_tuple]'s
+   trailing padding. A padded tuple capture followed by a smaller-aligned
+   capture used to overflow (recursive envs) or misread (lambda envs). *)
+
+let%expect_test "captured tuple is padded in a recursive env" =
+  go
+    {|
+let a = (1, true) @ dynamic;;
+let z = false @ dynamic;;
+fun f (n : int) : dynamic int = if z then n else (match a { (x, _) -> x });;
+let _ = print_int (f 3);;
+|};
+  [%expect {| 1 |}]
+;;
+
+let%expect_test "captured tuple is padded in a lambda env" =
+  go
+    {|
+let a = (2, true) @ dynamic;;
+let z = true @ dynamic;;
+let f = fn (n : int) -> if z then (match a { (x, _) -> x }) + n else 0;;
+let _ = print_int (f 10);;
+|};
+  [%expect {| 12 |}]
+;;
+
+(* [syl_tuple] is a recursive template: interior tails pad independently
+   ([bool ^ bool ^ int] is 24 bytes, not 16) and a trailing zero-size element
+   leaves a one-byte empty tail struct ([int ^ unit] is 16 bytes, not 8). *)
+let%expect_test "captured tuples follow the recursive template layout" =
+  go
+    {|
+let a = (true, false, 3) @ dynamic;;
+let b = (4, ()) @ dynamic;;
+let z = true @ dynamic;;
+fun f (n : int) : dynamic int =
+  if z then (match a { (_, _, x) -> x }) + (match b { (y, _) -> y }) + n else 0
+;;
+let _ = print_int (f 10);;
+|};
+  [%expect {| 17 |}]
 ;;

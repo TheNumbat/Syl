@@ -460,8 +460,8 @@ let _ = id (int -> int) (fn (x : int) -> x);;
 let%expect_test "fuzz: arrow type as value" =
   go
     {|
-let T = int -> int;;
-let f = (fn (x : int) -> x + 1) : T;;
+let ty = int -> int;;
+let f = (fn (x : int) -> x + 1) : ty;;
 let _ = f 5;;
 |};
   [%expect {| |}]

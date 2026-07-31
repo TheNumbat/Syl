@@ -441,25 +441,27 @@ let%expect_test "comment after fun arg" =
 ;;
 
 let%expect_test "comment before match pattern" =
-  fmt "let _ = match x with | (* c *) a -> 1 | b -> 2;;";
+  fmt "let _ = match x { (* c *) a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | (* c *) a -> 1
-      | b -> 2
+      match x {
+        (* c *) a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "comment before second match pattern" =
-  fmt "let _ = match x with | a -> 1 | (* c *) b -> 2;;";
+  fmt "let _ = match x { a -> 1, (* c *) b -> 2 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a -> 1
-      | (* c *) b -> 2
+      match x {
+        a -> 1,
+        (* c *) b -> 2,
+      }
     ;;
     |}]
 ;;
@@ -492,13 +494,14 @@ let%expect_test "comment before local mutual fun" =
 ;;
 
 let%expect_test "comment before match pattern in static match" =
-  fmt "let _ = match static x with | (* c *) a -> 1 | b -> 2;;";
+  fmt "let _ = match static x { (* c *) a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match static x with
-      | (* c *) a -> 1
-      | b -> 2
+      match static x {
+        (* c *) a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
@@ -579,83 +582,78 @@ let%expect_test "fun arg comment after type" =
 ;;
 
 let%expect_test "comment before match cond" =
-  fmt "let _ = match (* c *) x with | a -> 1;;";
-  [%expect
-    {|
-    let _ =
-      match (* c *) x with
-      | a -> 1
-    ;;
-    |}]
+  fmt "let _ = match (* c *) x { a -> 1 };;";
+  [%expect {| let _ = match (* c *) x { a -> 1 };; |}]
 ;;
 
 let%expect_test "comment after match cond" =
-  fmt "let _ = match x (* c *) with | a -> 1;;";
-  [%expect
-    {|
-    let _ =
-      match x (* c *) with
-      | a -> 1
-    ;;
-    |}]
+  fmt "let _ = match x (* c *) { a -> 1 };;";
+  [%expect {| let _ = match x (* c *) { a -> 1 };; |}]
 ;;
 
 let%expect_test "comment in match arm body" =
-  fmt "let _ = match x with | a -> (* c *) 1 | b -> 2;;";
+  fmt "let _ = match x { a -> (* c *) 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a -> (* c *) 1
-      | b -> 2
+      match x {
+        a -> (* c *) 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "comment after match arm body" =
-  fmt "let _ = match x with | a -> 1 (* c *) | b -> 2;;";
+  fmt "let _ = match x { a -> 1 (* c *), b -> 2 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a -> 1 (* c *)
-      | b -> 2
+      match x {
+        a -> 1 (* c *),
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "comment in every match position" =
-  fmt "let _ = match (* a *) x (* b *) with | (* c *) a -> (* d *) 1 | (* e *) b -> (* f *) 2;;";
+  fmt
+    "let _ = match (* a *) x (* b *) { (* c *) a -> (* d *) 1 (* e *), (* f *) b -> (* g *) 2 (* h \
+     *) };;";
   [%expect
     {|
     let _ =
-      match (* a *) x (* b *) with
-      | (* c *) a -> (* d *) 1
-      | (* e *) b -> (* f *) 2
+      match (* a *) x (* b *) {
+        (* c *) a -> (* d *) 1 (* e *),
+        (* f *) b -> (* g *) 2 (* h *),
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "comment before first pipe in match" =
-  fmt "let _ = match x with (* c *) | a -> 1 | b -> 2;;";
+  fmt "let _ = match x { (* c *)  a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | (* c *) a -> 1
-      | b -> 2
+      match x {
+        (* c *) a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match arm: comment after pattern before arrow" =
-  fmt "let _ = match x with | a (* c *) -> 1 | b -> 2;;";
+  fmt "let _ = match x { a (* c *) -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a (* c *) -> 1
-      | b -> 2
+      match x {
+        a (* c *) -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
@@ -711,25 +709,13 @@ let%expect_test "if: comment before erased" =
 ;;
 
 let%expect_test "match: comment before static" =
-  fmt "let _ = match (* c *) static x with | a -> 1;;";
-  [%expect
-    {|
-    let _ =
-      match (* c *) static x with
-      | a -> 1
-    ;;
-    |}]
+  fmt "let _ = match (* c *) static x { a -> 1 };;";
+  [%expect {| let _ = match (* c *) static x { a -> 1 };; |}]
 ;;
 
 let%expect_test "match: comment before erased" =
-  fmt "let _ = match (* c *) erased x with | a -> 1;;";
-  [%expect
-    {|
-    let _ =
-      match (* c *) erased x with
-      | a -> 1
-    ;;
-    |}]
+  fmt "let _ = match (* c *) erased x { a -> 1 };;";
+  [%expect {| let _ = match (* c *) erased x { a -> 1 };; |}]
 ;;
 
 let%expect_test "assert: comment before erased" =
@@ -1160,299 +1146,295 @@ let%expect_test "nested binop all breaks" =
 ;;
 
 let%expect_test "match arm bodies break" =
-  fmt ~width:15 "let _ = match x with | a -> a + 1 + 2 + 3 | b -> b * c * d;;";
+  fmt ~width:15 "let _ = match x { a -> a + 1 + 2 + 3, b -> b * c * d };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a ->
-        a + 1 + 2
-        + 3
-      | b ->
-        b * c * d
+      match x {
+        a ->
+          a + 1 + 2
+          + 3,
+        b ->
+          b * c
+          * d,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match complex cond breaks" =
-  fmt ~width:15 "let _ = match f x y with | a -> 1 | b -> 2;;";
+  fmt ~width:15 "let _ = match f x y { a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match f
-        x
-        y with
-      | a -> 1
-      | b -> 2
+      match f x y {
+        a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match static narrow" =
-  fmt ~width:15 "let _ = match static cond with | a -> 1 | b -> 2;;";
+  fmt ~width:15 "let _ = match static cond { a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match static cond with
-      | a -> 1
-      | b -> 2
+      match static cond {
+        a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match erased narrow" =
-  fmt ~width:15 "let _ = match erased cond with | a -> 1 | b -> 2;;";
+  fmt ~width:15 "let _ = match erased cond { a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match erased cond with
-      | a -> 1
-      | b -> 2
+      match erased cond {
+        a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match nested in if" =
-  fmt ~width:20 "let _ = if true then match x with | a -> 1 | b -> 2 else 0;;";
+  fmt ~width:20 "let _ = if true then match x { a -> 1, b -> 2 } else 0;;";
   [%expect
     {|
     let _ =
       if true
       then
-        match x with
-        | a -> 1
-        | b -> 2
+        match x {
+          a -> 1,
+          b -> 2,
+        }
       else 0
     ;;
     |}]
 ;;
 
+let%expect_test "nested matches need no parens" =
+  fmt "let _ = match x { a -> match y { b -> 1 } };;";
+  [%expect {| let _ = match x { a -> match y { b -> 1 } };; |}];
+  fmt "let _ = match x { a -> match y { 0 -> 1, _ -> 2 }, b -> 3 };;";
+  [%expect
+    {|
+    let _ =
+      match x {
+        a ->
+          match y {
+            0 -> 1,
+            _ -> 2,
+          },
+        b -> 3,
+      }
+    ;;
+    |}]
+;;
+
 let%expect_test "match in parens narrow" =
-  fmt ~width:15 "let _ = f (match x with | a -> 1 | b -> 2);;";
+  fmt ~width:15 "let _ = f (match x { a -> 1, b -> 2 });;";
   [%expect
     {|
     let _ =
       f
-        (match x with
-         | a -> 1
-         | b -> 2)
+        (match x {
+           a -> 1,
+           b -> 2,
+         })
     ;;
     |}]
 ;;
 
 let%expect_test "match arm with lambda" =
-  fmt ~width:20 "let _ = match x with | a -> fn (y : int) -> y + a;;";
+  fmt ~width:20 "let _ = match x { a -> fn (y : int) -> y + a };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a ->
-        fn (y : int) ->
-          y + a
+      match x {
+        a ->
+          fn
+            (y : int) ->
+            y + a,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match arm with let" =
-  fmt ~width:20 "let _ = match x with | a -> let r = a + 1 in r | b -> b;;";
+  fmt ~width:20 "let _ = match x { a -> let r = a + 1 in r, b -> b };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a ->
-        let r = a + 1 in
-        r
-      | b -> b
+      match x {
+        a ->
+          let r =
+            a + 1
+          in
+          r,
+        b -> b,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match literal int patterns" =
-  fmt "let _ = match x with | 0 -> 1 | 1 -> 2 | n -> n;;";
+  fmt "let _ = match x { 0 -> 1, 1 -> 2, n -> n };;";
   [%expect
     {|
     let _ =
-      match x with
-      | 0 -> 1
-      | 1 -> 2
-      | n -> n
+      match x {
+        0 -> 1,
+        1 -> 2,
+        n -> n,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match literal bool patterns" =
-  fmt "let _ = match x with | true -> 1 | false -> 0;;";
+  fmt "let _ = match x { true -> 1, false -> 0 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | true -> 1
-      | false -> 0
+      match x {
+        true -> 1,
+        false -> 0,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match literal unit pattern" =
-  fmt "let _ = match x with | () -> 0;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | () -> 0
-    ;;
-    |}]
+  fmt "let _ = match x { () -> 0 };;";
+  [%expect {| let _ = match x { () -> 0 };; |}]
 ;;
 
 let%expect_test "match tuple pattern unparenthesized" =
-  fmt "let _ = match x with | a, b -> a;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | a, b -> a
-    ;;
-    |}]
+  fmt "let _ = match x { ( a, b) -> a };;";
+  [%expect {| let _ = match x { (a, b) -> a };; |}]
 ;;
 
 let%expect_test "match tuple pattern with parens drops them" =
-  fmt "let _ = match x with | (a, b) -> a;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | a, b -> a
-    ;;
-    |}]
+  fmt "let _ = match x { (a, b) -> a };;";
+  [%expect {| let _ = match x { (a, b) -> a };; |}]
 ;;
 
 let%expect_test "match nested tuple pattern keeps inner parens" =
-  fmt "let _ = match x with | a, (b, c) -> b;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | a, (b, c) -> b
-    ;;
-    |}]
+  fmt "let _ = match x { ( a, (b, c)) -> b };;";
+  [%expect {| let _ = match x { (a, (b, c)) -> b };; |}]
 ;;
 
 let%expect_test "match tuple pattern with literals" =
-  fmt "let _ = match x with | 0, true -> 1 | n, b -> n;;";
+  fmt "let _ = match x { ( 0, true) -> 1, (n, b) -> n };;";
   [%expect
     {|
     let _ =
-      match x with
-      | 0, true -> 1
-      | n, b -> n
+      match x {
+        (0, true) -> 1,
+        (n, b) -> n,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match tuple pattern wide breaks" =
-  fmt ~width:20 "let _ = match x with | aaa, bbb, ccc, ddd -> 1;;";
+  fmt ~width:20 "let _ = match x { ( aaa, bbb, ccc, ddd) -> 1 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | aaa,
-        bbb,
-        ccc,
-        ddd ->
-        1
+      match x {
+        (aaa,
+         bbb,
+         ccc,
+         ddd) ->
+          1,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "comment before literal pattern" =
-  fmt "let _ = match x with | (* c *) 0 -> 1 | n -> n;;";
+  fmt "let _ = match x { (* c *) 0 -> 1, n -> n };;";
   [%expect
     {|
     let _ =
-      match x with
-      | (* c *) 0 -> 1
-      | n -> n
+      match x {
+        (* c *) 0 -> 1,
+        n -> n,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "comment after tuple pattern" =
-  fmt "let _ = match x with | a, b (* c *) -> a;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | a, b (* c *) -> a
-    ;;
-    |}]
+  fmt "let _ = match x { ( a, b (* c *)) -> a };;";
+  [%expect {| let _ = match x { (a, b) (* c *) -> a };; |}]
 ;;
 
 let%expect_test "match or pattern simple" =
-  fmt "let _ = match x with | 0 | 1 -> true | n -> false;;";
+  fmt "let _ = match x { 0 | 1 -> true, n -> false };;";
   [%expect
     {|
     let _ =
-      match x with
-      | 0 | 1 -> true
-      | n -> false
+      match x {
+        0 | 1 -> true,
+        n -> false,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match or pattern with three branches" =
-  fmt "let _ = match x with | 0 | 1 | 2 -> true | n -> false;;";
+  fmt "let _ = match x { 0 | 1 | 2 -> true, n -> false };;";
   [%expect
     {|
     let _ =
-      match x with
-      | 0 | 1 | 2 -> true
-      | n -> false
+      match x {
+        0 | 1 | 2 -> true,
+        n -> false,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match or pattern with tuple branches" =
-  fmt "let _ = match x with | 0, 1 | 1, 0 -> true | a, b -> false;;";
+  fmt "let _ = match x { ( 0, 1 | 1, 0) -> true, (a, b) -> false };;";
   [%expect
     {|
     let _ =
-      match x with
-      | 0, 1 | 1, 0 -> true
-      | a, b -> false
+      match x {
+        (0, 1) | (1, 0) -> true,
+        (a, b) -> false,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "tuple with or pattern element parenthesizes" =
-  fmt "let _ = match x with | (0 | 1), b -> b;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | (0 | 1), b -> b
-    ;;
-    |}]
+  fmt "let _ = match x { ( (0 | 1), b) -> b };;";
+  [%expect {| let _ = match x { ((0 | 1), b) -> b };; |}]
 ;;
 
 let%expect_test "or pattern wide breaks" =
-  fmt ~width:20 "let _ = match x with | aaa | bbb | ccc | ddd -> 1;;";
+  fmt ~width:20 "let _ = match x { aaa | bbb | ccc | ddd -> 1 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | aaa | bbb | ccc
-      | ddd ->
-        1
+      match x {
+        aaa | bbb | ccc
+        | ddd ->
+          1,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "nested or pattern in parens" =
-  fmt "let _ = match x with | a, (b | c) -> a;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | a, (b | c) -> a
-    ;;
-    |}]
+  fmt "let _ = match x { ( a, (b | c)) -> a };;";
+  [%expect {| let _ = match x { (a, (b | c)) -> a };; |}]
 ;;

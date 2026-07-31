@@ -35,6 +35,7 @@ module Ty = struct
     | Int
     | Type
     | Tuple of t Nonempty_list.t
+    | Variant of t option Ident.Label.Map.t
     | Env
     | Closure of
         { arg_ty : t
@@ -47,6 +48,10 @@ module Ty = struct
     (x + align - 1) land lnot (align - 1)
   ;;
 
+  (* TODO smaller tags, only tag when no payloads, zero-size when one constructor *)
+  let tag_size = 8
+  let tag_align = 8
+
   let rec size_in_mem = function
     | Unit | Type -> 0
     | Bool -> 1
@@ -54,12 +59,30 @@ module Ty = struct
     | Env -> 8
     | Closure _ -> 16
     | Tuple elts ->
-      Nonempty_list.fold elts ~init:0 ~f:(fun acc elt ->
-        match size_in_mem elt with
-        | 0 -> acc
-        | size ->
-          let acc = align_to acc ~align:(align_in_mem elt) in
-          acc + size)
+      let elts = Nonempty_list.to_list elts in
+      if List.for_all elts ~f:(fun elt -> size_in_mem elt = 0)
+      then 0
+      else fst (tuple_size_align elts)
+    | Variant constructors ->
+      let payload_align = payload_align_in_mem constructors in
+      let payload_offset = align_to tag_size ~align:payload_align in
+      align_to
+        (payload_offset + payload_size_in_mem constructors)
+        ~align:(Int.max tag_align payload_align)
+
+  (* mirrors the recursive [syl_tuple] *)
+  and tuple_size_align = function
+    | [] -> 1, 1
+    | elt :: rest ->
+      (match size_in_mem elt with
+       | 0 -> tuple_size_align rest
+       | size ->
+         (match rest with
+          | [] -> size, align_in_mem elt
+          | _ :: _ ->
+            let rest_size, rest_align = tuple_size_align rest in
+            let align = Int.max (align_in_mem elt) rest_align in
+            align_to (align_to size ~align:rest_align + rest_size) ~align, align))
 
   and align_in_mem = function
     | Bool -> 1
@@ -71,7 +94,23 @@ module Ty = struct
         match size_in_mem elt with
         | 0 -> acc
         | _ -> Int.max acc (align_in_mem elt))
+    | Variant constructors -> Int.max tag_align (payload_align_in_mem constructors)
     | Unit | Type -> raise_s [%message "Bug: undefined alignment"]
+
+  and payload_size_in_mem constructors =
+    Map.fold constructors ~init:0 ~f:(fun ~key:_ ~data acc ->
+      match data with
+      | None -> acc
+      | Some ty -> Int.max acc (size_in_mem ty))
+
+  and payload_align_in_mem constructors =
+    Map.fold constructors ~init:1 ~f:(fun ~key:_ ~data acc ->
+      match data with
+      | None -> acc
+      | Some ty ->
+        (match size_in_mem ty with
+         | 0 -> acc
+         | _ -> Int.max acc (align_in_mem ty)))
   ;;
 
   let is_zero_size t = size_in_mem t = 0
@@ -128,6 +167,12 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Make_variant of
+        { label : Ident.Label.t
+        ; payload : (Path.t * Ty.t) option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
     | Apply_closure of
         { fn : Path.t
         ; arg : Path.t
@@ -167,6 +212,19 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Payload_get of
+        { variant : Path.t
+        ; label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Tag_test of
+        { variant : Path.t
+        ; variant_ty : Ty.t
+        ; label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
   [@@deriving sexp]
 
   let ty = function
@@ -179,8 +237,11 @@ module Expr = struct
     | Apply_proc { ty; _ }
     | Scalar { ty; _ }
     | Make_tuple { ty; _ }
+    | Make_variant { ty; _ }
     | Ident { ty; _ }
-    | Tuple_get { ty; _ } -> ty
+    | Tuple_get { ty; _ }
+    | Payload_get { ty; _ }
+    | Tag_test { ty; _ } -> ty
     | Extcall { ty; _ } -> ty
   ;;
 
@@ -194,8 +255,11 @@ module Expr = struct
     | Apply_proc { loc; _ }
     | Scalar { loc; _ }
     | Make_tuple { loc; _ }
+    | Make_variant { loc; _ }
     | Ident { loc; _ }
-    | Tuple_get { loc; _ } -> loc
+    | Tuple_get { loc; _ }
+    | Payload_get { loc; _ }
+    | Tag_test { loc; _ } -> loc
     | Extcall { loc; _ } -> loc
   ;;
 
@@ -210,8 +274,11 @@ module Expr = struct
     | Apply_proc expr -> Apply_proc { expr with ty }
     | Scalar expr -> Scalar { expr with ty }
     | Make_tuple expr -> Make_tuple { expr with ty }
+    | Make_variant expr -> Make_variant { expr with ty }
     | Ident expr -> Ident { expr with ty }
     | Tuple_get expr -> Tuple_get { expr with ty }
+    | Payload_get expr -> Payload_get { expr with ty }
+    | Tag_test expr -> Tag_test { expr with ty }
     | Extcall expr -> Extcall { expr with ty }
   ;;
 end

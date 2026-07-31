@@ -79,6 +79,19 @@ module Raw = struct
   ;;
 end
 
+module Label = struct
+  module T = struct
+    type t = string [@@deriving sexp, compare, equal, hash]
+  end
+
+  include T
+  include Hashable.Make (T)
+  include Comparable.Make (T)
+
+  let of_string t = t
+  let print () t = t
+end
+
 module T = struct
   type t = Raw.t * (int[@sexp.opaque]) [@@deriving sexp, compare, equal, hash]
 end

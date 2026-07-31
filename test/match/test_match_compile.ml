@@ -12,6 +12,19 @@ let var_pat name stamp = Syl.Match.Pattern.Var { id = id name stamp; loc }
 let tuple_pat elts = Syl.Match.Pattern.Tuple { elts = Nonempty_list.of_list_exn elts; loc }
 let or_pat left right = Syl.Match.Pattern.Or { left; right; loc }
 
+let ctor_pat name payload =
+  Syl.Match.Pattern.Constructor { label = Ident.Label.of_string name; payload; loc }
+;;
+
+let variant_ty constructors =
+  Tst.Value.type_
+    (Tst.Ty.Variant
+       (List.map constructors ~f:(fun (name, payload) -> Ident.Label.of_string name, payload)
+        |> Ident.Label.Map.of_alist_exn))
+;;
+
+let option_int_ty = variant_ty [ "none", None; "some", Some (Tst.Value.type_ Tst.Ty.Int) ]
+
 let compile patterns ~scrutinee_ty =
   let patterns =
     Nonempty_list.of_list_exn (List.map patterns ~f:(fun (pattern, _bindings) -> pattern))
@@ -117,14 +130,16 @@ let%expect_test "tuple paths" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
               (Leaf (case 0)
-               (bindings ((((Id x) <opaque>) ((path (1)) (ty (Type Bool))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))
              ((Literal (Bool false))
               (Leaf (case 1)
-               (bindings ((((Id y) <opaque>) ((path (1)) (ty (Type Bool))))))))))
+               (bindings
+                ((((Id y) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))))
            (default ())))))
        (default ())))
      (redundant ()) (missing ()))
@@ -147,14 +162,16 @@ let%expect_test "nested or" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
               (Leaf (case 0)
-               (bindings ((((Id x) <opaque>) ((path (1)) (ty (Type Bool))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))
              ((Literal (Bool false))
               (Leaf (case 0)
-               (bindings ((((Id x) <opaque>) ((path (1)) (ty (Type Bool))))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))))
            (default ())))))
        (default ())))
      (redundant ()) (missing ()))
@@ -305,10 +322,10 @@ let%expect_test "tuple (bool, bool) one case - three missing" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases (((Literal (Bool true)) (Leaf (case 0) (bindings ())))))
                (default (Fail))))))
            (default (Fail))))))
@@ -340,16 +357,16 @@ let%expect_test "tuple (bool, bool) full coverage" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 0) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 1) (bindings ())))))
                (default ())))
              ((Literal (Bool false))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 2) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 3) (bindings ())))))
@@ -378,14 +395,16 @@ let%expect_test "tuple (bool, bool) wildcard second - exhaustive" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
               (Leaf (case 0)
-               (bindings ((((Id x) <opaque>) ((path (1)) (ty (Type Bool))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))
              ((Literal (Bool false))
               (Leaf (case 1)
-               (bindings ((((Id x) <opaque>) ((path (1)) (ty (Type Bool))))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))))
            (default ())))))
        (default ())))
      (redundant ()) (missing ()))
@@ -408,10 +427,10 @@ let%expect_test "tuple (int, bool) - int column needs default" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Int) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Int))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Int))))
            (cases
             (((Literal (Int 0))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 0) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 1) (bindings ())))))
@@ -479,16 +498,18 @@ let%expect_test "deeply nested tuple ((bool, bool), bool)" =
         (((Tuple 2)
           (Switch
            (occurrence
-            ((path (0)) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
+            ((path ((Index 0))) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
            (cases
             (((Tuple 2)
-              (Switch (occurrence ((path (0 0)) (ty (Type Bool))))
+              (Switch
+               (occurrence ((path ((Index 0) (Index 0))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true))
-                  (Switch (occurrence ((path (0 1)) (ty (Type Bool))))
+                  (Switch
+                   (occurrence ((path ((Index 0) (Index 1))) (ty (Type Bool))))
                    (cases
                     (((Literal (Bool true))
-                      (Switch (occurrence ((path (1)) (ty (Type Bool))))
+                      (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                        (cases
                         (((Literal (Bool true)) (Leaf (case 0) (bindings ())))))
                        (default (Fail))))))
@@ -529,16 +550,16 @@ let%expect_test "or pattern tuple cross product" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 0) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 0) (bindings ())))))
                (default ())))
              ((Literal (Bool false))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 0) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 0) (bindings ())))))
@@ -621,14 +642,14 @@ let%expect_test "tuple (bool, bool) diagonal - two missing" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases (((Literal (Bool false)) (Leaf (case 0) (bindings ())))))
                (default (Fail))))
              ((Literal (Bool false))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases (((Literal (Bool true)) (Leaf (case 1) (bindings ())))))
                (default (Fail))))))
            (default ())))))
@@ -657,16 +678,16 @@ let%expect_test "tuple (bool, bool) three of four" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 0) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 1) (bindings ())))))
                (default ())))
              ((Literal (Bool false))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases (((Literal (Bool true)) (Leaf (case 2) (bindings ())))))
                (default (Fail))))))
            (default ())))))
@@ -694,7 +715,7 @@ let%expect_test "tuple with all wildcards - exhaustive" =
        (cases
         (((Tuple 2)
           (Leaf (case 0)
-           (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Bool))))))))))
+           (bindings ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
        (default ())))
      (redundant ()) (missing ()))
     |}]
@@ -719,7 +740,7 @@ let%expect_test "tuple wildcard then specific - specific redundant" =
        (cases
         (((Tuple 2)
           (Leaf (case 0)
-           (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Bool))))))))))
+           (bindings ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
        (default ())))
      (redundant
       ((Tuple
@@ -784,8 +805,8 @@ let%expect_test "tuple (int, int) both wildcards - exhaustive" =
         (((Tuple 2)
           (Leaf (case 0)
            (bindings
-            ((((Id x) <opaque>) ((path (0)) (ty (Type Int))))
-             (((Id y) <opaque>) ((path (1)) (ty (Type Int))))))))))
+            ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Int))))
+             (((Id y) <opaque>) ((path ((Index 1))) (ty (Type Int))))))))))
        (default ())))
      (redundant ()) (missing ()))
     |}]
@@ -810,17 +831,19 @@ let%expect_test "tuple (int, bool) partial with wildcard fallback" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Int) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (1)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (0)) (ty (Type Int))))
+              (Switch (occurrence ((path ((Index 0))) (ty (Type Int))))
                (cases (((Literal (Int 0)) (Leaf (case 0) (bindings ())))))
                (default
                 ((Leaf (case 2)
-                  (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Int)))))))))))
+                  (bindings
+                   ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Int)))))))))))
              ((Literal (Bool false))
               (Leaf (case 1)
-               (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Int))))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Int))))))))))
            (default ())))))
        (default ())))
      (redundant ()) (missing ()))
@@ -904,13 +927,13 @@ let%expect_test "triple tuple (bool, bool, bool) one case" =
         ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 3)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true))
-                  (Switch (occurrence ((path (2)) (ty (Type Bool))))
+                  (Switch (occurrence ((path ((Index 2))) (ty (Type Bool))))
                    (cases
                     (((Literal (Bool true)) (Leaf (case 0) (bindings ())))))
                    (default (Fail))))))
@@ -947,14 +970,14 @@ let%expect_test "tuple (bool, int) - column selection prefers bool" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Int)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Int))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Int))))
                (cases (((Literal (Int 0)) (Leaf (case 0) (bindings ())))))
                (default (Fail))))
              ((Literal (Bool false))
-              (Switch (occurrence ((path (1)) (ty (Type Int))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Int))))
                (cases (((Literal (Int 1)) (Leaf (case 1) (bindings ())))))
                (default (Fail))))))
            (default ())))))
@@ -984,17 +1007,18 @@ let%expect_test "or pattern in tuple with wildcard fallback" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (1)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (0)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 0) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 0) (bindings ())))))
                (default ())))
              ((Literal (Bool false))
               (Leaf (case 1)
-               (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Bool))))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
            (default ())))))
        (default ())))
      (redundant ()) (missing ()))
@@ -1037,16 +1061,16 @@ let%expect_test "redundant tuple after full tuple coverage" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 0) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 1) (bindings ())))))
                (default ())))
              ((Literal (Bool false))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 2) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 3) (bindings ())))))
@@ -1083,13 +1107,14 @@ let%expect_test "partial tuple redundancy - (true, _) then (true, false)" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (0)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 0))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
               (Leaf (case 0)
-               (bindings ((((Id x) <opaque>) ((path (1)) (ty (Type Bool))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))
              ((Literal (Bool false))
-              (Switch (occurrence ((path (1)) (ty (Type Bool))))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true)) (Leaf (case 2) (bindings ())))
                  ((Literal (Bool false)) (Leaf (case 3) (bindings ())))))
@@ -1161,18 +1186,20 @@ let%expect_test "nested tuple with wildcard - missing inner cases" =
         (((Tuple 2)
           (Switch
            (occurrence
-            ((path (0)) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
+            ((path ((Index 0))) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
            (cases
             (((Tuple 2)
-              (Switch (occurrence ((path (0 0)) (ty (Type Bool))))
+              (Switch
+               (occurrence ((path ((Index 0) (Index 0))) (ty (Type Bool))))
                (cases
                 (((Literal (Bool true))
-                  (Switch (occurrence ((path (1)) (ty (Type Bool))))
+                  (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
                    (cases
                     (((Literal (Bool true))
                       (Leaf (case 0)
                        (bindings
-                        ((((Id x) <opaque>) ((path (0 1)) (ty (Type Bool))))))))))
+                        ((((Id x) <opaque>)
+                          ((path ((Index 0) (Index 1))) (ty (Type Bool))))))))))
                    (default (Fail))))))
                (default (Fail))))))
            (default ())))))
@@ -1210,14 +1237,16 @@ let%expect_test "tuple (int, bool) wildcard int exhaustive" =
        (occurrence ((path ()) (ty (Type (Tuple ((Type Int) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (1)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
               (Leaf (case 0)
-               (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Int))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Int))))))))
              ((Literal (Bool false))
               (Leaf (case 1)
-               (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Int))))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Int))))))))))
            (default ())))))
        (default ())))
      (redundant ()) (missing ()))
@@ -1260,11 +1289,12 @@ let%expect_test "tuple (bool, bool) wildcard first, constructor second - partial
        (occurrence ((path ()) (ty (Type (Tuple ((Type Bool) (Type Bool)))))))
        (cases
         (((Tuple 2)
-          (Switch (occurrence ((path (1)) (ty (Type Bool))))
+          (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
            (cases
             (((Literal (Bool true))
               (Leaf (case 0)
-               (bindings ((((Id x) <opaque>) ((path (0)) (ty (Type Bool))))))))))
+               (bindings
+                ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
            (default (Fail))))))
        (default ())))
      (redundant ())
@@ -1297,5 +1327,315 @@ let%expect_test "int three literals then wildcard - wildcard needed" =
           (bindings ((((Id x) <opaque>) ((path ()) (ty (Type Int)))))))))))
      (redundant ((Literal (value (Int 0)) (loc ((line 1) (column 0))))))
      (missing ()))
+    |}]
+;;
+
+let%expect_test "variant option exhaustive" =
+  let x = id "x" 0 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  compile
+    [ ctor_pat "none" None, Ident.Map.empty
+    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ]
+    ~scrutinee_ty:option_int_ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ()) (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+       (cases
+        (((Constructor (label none) (payload false))
+          (Leaf (case 0) (bindings ())))
+         ((Constructor (label some) (payload true))
+          (Leaf (case 1)
+           (bindings
+            ((((Id x) <opaque>) ((path ((Payload some))) (ty (Type Int))))))))))
+       (default ())))
+     (redundant ()) (missing ()))
+    |}]
+;;
+
+let%expect_test "variant missing constructor" =
+  let x = id "x" 0 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  compile
+    [ ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty) ]
+    ~scrutinee_ty:option_int_ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ()) (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+       (cases
+        (((Constructor (label some) (payload true))
+          (Leaf (case 0)
+           (bindings
+            ((((Id x) <opaque>) ((path ((Payload some))) (ty (Type Int))))))))))
+       (default (Fail))))
+     (redundant ()) (missing ((Constructor (label none) (payload ())))))
+    |}]
+;;
+
+let%expect_test "variant payload literal - payload non-exhaustive" =
+  compile
+    [ ctor_pat "some" (Some (int_pat 0)), Ident.Map.empty; ctor_pat "none" None, Ident.Map.empty ]
+    ~scrutinee_ty:option_int_ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ()) (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+       (cases
+        (((Constructor (label some) (payload true))
+          (Switch (occurrence ((path ((Payload some))) (ty (Type Int))))
+           (cases (((Literal (Int 0)) (Leaf (case 0) (bindings ())))))
+           (default (Fail))))
+         ((Constructor (label none) (payload false))
+          (Leaf (case 1) (bindings ())))))
+       (default ())))
+     (redundant ()) (missing ((Constructor (label some) (payload (Wildcard))))))
+    |}]
+;;
+
+let%expect_test "variant payload switch with wildcard fallback" =
+  let x = id "x" 0 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  compile
+    [ ctor_pat "some" (Some (int_pat 0)), Ident.Map.empty
+    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "none" None, Ident.Map.empty
+    ]
+    ~scrutinee_ty:option_int_ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ()) (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+       (cases
+        (((Constructor (label some) (payload true))
+          (Switch (occurrence ((path ((Payload some))) (ty (Type Int))))
+           (cases (((Literal (Int 0)) (Leaf (case 0) (bindings ())))))
+           (default
+            ((Leaf (case 1)
+              (bindings
+               ((((Id x) <opaque>) ((path ((Payload some))) (ty (Type Int)))))))))))
+         ((Constructor (label none) (payload false))
+          (Leaf (case 2) (bindings ())))))
+       (default ())))
+     (redundant ()) (missing ()))
+    |}]
+;;
+
+let%expect_test "variant redundant constructor" =
+  let x = id "x" 0 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  compile
+    [ ctor_pat "none" None, Ident.Map.empty
+    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "none" None, Ident.Map.empty
+    ]
+    ~scrutinee_ty:option_int_ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ()) (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+       (cases
+        (((Constructor (label none) (payload false))
+          (Leaf (case 0) (bindings ())))
+         ((Constructor (label some) (payload true))
+          (Leaf (case 1)
+           (bindings
+            ((((Id x) <opaque>) ((path ((Payload some))) (ty (Type Int))))))))))
+       (default ())))
+     (redundant
+      ((Constructor (label none) (payload ()) (loc ((line 1) (column 0))))))
+     (missing ()))
+    |}]
+;;
+
+let%expect_test "variant or across constructors" =
+  let x = id "x" 0 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  compile
+    [ or_pat (ctor_pat "none" None) (ctor_pat "some" (Some (int_pat 0))), Ident.Map.empty
+    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ]
+    ~scrutinee_ty:option_int_ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ()) (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+       (cases
+        (((Constructor (label none) (payload false))
+          (Leaf (case 0) (bindings ())))
+         ((Constructor (label some) (payload true))
+          (Switch (occurrence ((path ((Payload some))) (ty (Type Int))))
+           (cases (((Literal (Int 0)) (Leaf (case 0) (bindings ())))))
+           (default
+            ((Leaf (case 1)
+              (bindings
+               ((((Id x) <opaque>) ((path ((Payload some))) (ty (Type Int)))))))))))))
+       (default ())))
+     (redundant ()) (missing ()))
+    |}]
+;;
+
+let%expect_test "variant in tuple - payload paths" =
+  let x = id "x" 0 in
+  let y = id "y" 1 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
+  let tuple_ty = Tst.Value.type_ (Tst.Ty.Tuple [ option_int_ty; bool_ty ]) in
+  compile
+    [ ( tuple_pat [ ctor_pat "some" (Some (var_pat "x" 0)); bool_pat true ]
+      , Ident.Map.singleton x (binding_desc int_ty) )
+    ; ( tuple_pat [ ctor_pat "none" None; var_pat "y" 1 ]
+      , Ident.Map.singleton y (binding_desc bool_ty) )
+    ; ( tuple_pat [ ctor_pat "some" (Some (var_pat "x" 0)); bool_pat false ]
+      , Ident.Map.singleton x (binding_desc int_ty) )
+    ]
+    ~scrutinee_ty:tuple_ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ())
+         (ty
+          (Type
+           (Tuple ((Type (Variant ((none ()) (some ((Type Int)))))) (Type Bool)))))))
+       (cases
+        (((Tuple 2)
+          (Switch
+           (occurrence
+            ((path ((Index 0)))
+             (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+           (cases
+            (((Constructor (label some) (payload true))
+              (Switch (occurrence ((path ((Index 1))) (ty (Type Bool))))
+               (cases
+                (((Literal (Bool true))
+                  (Leaf (case 0)
+                   (bindings
+                    ((((Id x) <opaque>)
+                      ((path ((Index 0) (Payload some))) (ty (Type Int))))))))
+                 ((Literal (Bool false))
+                  (Leaf (case 2)
+                   (bindings
+                    ((((Id x) <opaque>)
+                      ((path ((Index 0) (Payload some))) (ty (Type Int))))))))))
+               (default ())))
+             ((Constructor (label none) (payload false))
+              (Leaf (case 1)
+               (bindings
+                ((((Id y) <opaque>) ((path ((Index 1))) (ty (Type Bool))))))))))
+           (default ())))))
+       (default ())))
+     (redundant ()) (missing ()))
+    |}]
+;;
+
+let%expect_test "variant tag order is label order" =
+  let x = id "x" 0 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
+  let ty = variant_ty [ "b", Some int_ty; "a", None; "c", Some bool_ty ] in
+  compile
+    [ ctor_pat "c" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc bool_ty)
+    ; ctor_pat "a" None, Ident.Map.empty
+    ; ctor_pat "b" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ]
+    ~scrutinee_ty:ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ())
+         (ty (Type (Variant ((a ()) (b ((Type Int))) (c ((Type Bool)))))))))
+       (cases
+        (((Constructor (label c) (payload true))
+          (Leaf (case 0)
+           (bindings
+            ((((Id x) <opaque>) ((path ((Payload c))) (ty (Type Bool))))))))
+         ((Constructor (label a) (payload false)) (Leaf (case 1) (bindings ())))
+         ((Constructor (label b) (payload true))
+          (Leaf (case 2)
+           (bindings
+            ((((Id x) <opaque>) ((path ((Payload b))) (ty (Type Int))))))))))
+       (default ())))
+     (redundant ()) (missing ()))
+    |}]
+;;
+
+let%expect_test "variant missing several constructors" =
+  let x = id "x" 0 in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
+  let ty = variant_ty [ "b", Some int_ty; "a", None; "c", Some bool_ty ] in
+  compile
+    [ ctor_pat "b" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty) ]
+    ~scrutinee_ty:ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ())
+         (ty (Type (Variant ((a ()) (b ((Type Int))) (c ((Type Bool)))))))))
+       (cases
+        (((Constructor (label b) (payload true))
+          (Leaf (case 0)
+           (bindings
+            ((((Id x) <opaque>) ((path ((Payload b))) (ty (Type Int))))))))))
+       (default (Fail))))
+     (redundant ())
+     (missing
+      ((Constructor (label a) (payload ()))
+       (Constructor (label c)
+        (payload ((Or ((Literal (Bool true)) (Literal (Bool false))))))))))
+    |}]
+;;
+
+let%expect_test "variant nested payload" =
+  let x = id "x" 0 in
+  let inner_ty = option_int_ty in
+  let ty = variant_ty [ "wrap", Some inner_ty; "empty", None ] in
+  let int_ty = Tst.Value.type_ Tst.Ty.Int in
+  compile
+    [ ctor_pat "wrap" (Some (ctor_pat "some" (Some (var_pat "x" 0))))
+      , Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "wrap" (Some (ctor_pat "none" None)), Ident.Map.empty
+    ; ctor_pat "empty" None, Ident.Map.empty
+    ]
+    ~scrutinee_ty:ty;
+  [%expect {|
+    ((tree
+      (Switch
+       (occurrence
+        ((path ())
+         (ty
+          (Type
+           (Variant
+            ((empty ())
+             (wrap ((Type (Variant ((none ()) (some ((Type Int))))))))))))))
+       (cases
+        (((Constructor (label wrap) (payload true))
+          (Switch
+           (occurrence
+            ((path ((Payload wrap)))
+             (ty (Type (Variant ((none ()) (some ((Type Int)))))))))
+           (cases
+            (((Constructor (label some) (payload true))
+              (Leaf (case 0)
+               (bindings
+                ((((Id x) <opaque>)
+                  ((path ((Payload wrap) (Payload some))) (ty (Type Int))))))))
+             ((Constructor (label none) (payload false))
+              (Leaf (case 1) (bindings ())))))
+           (default ())))
+         ((Constructor (label empty) (payload false))
+          (Leaf (case 2) (bindings ())))))
+       (default ())))
+     (redundant ()) (missing ()))
     |}]
 ;;

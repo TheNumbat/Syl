@@ -25,6 +25,17 @@ let tuple_elt_tys ~loc ty elts =
           (loc : Lex.Location.t)]
 ;;
 
+let payload_ty ~loc (desc : Tst.Desc.t) label =
+  match desc.ty with
+  | Type (Variant constructors) ->
+    (match Map.find constructors label with
+     | Some (Some payload_ty) -> payload_ty
+     | Some None | None ->
+       raise_s
+         [%message "Bug: expected label with payload" (desc.ty : Value.t) (loc : Lex.Location.t)])
+  | _ -> raise_s [%message "Bug: expected varaint" (desc.ty : Value.t) (loc : Lex.Location.t)]
+;;
+
 (* TODO should we force captured statics during typechecking so this is always val? *)
 let force_static desc = Lazy.force desc.Desc.static
 
@@ -63,10 +74,12 @@ let rec value_needs_reify (value : Value.t) =
   | Tuple elts -> Nonempty_list.exists elts ~f:value_needs_reify
   | Apply { fn; arg } -> value_needs_reify fn || value_needs_reify arg
   | Proj { tuple; _ } -> value_needs_reify tuple
+  | Payload { variant; _ } -> value_needs_reify variant
+  | Constructor { payload; _ } -> Option.exists payload ~f:value_needs_reify
   | Match { scrutinee; arms } ->
     value_needs_reify scrutinee
     || Nonempty_list.exists arms ~f:(fun (_, leaf) -> value_needs_reify leaf)
-  | Bottom | Unit | Bool _ | Int _ | Type _ | Var _ | External _ | Prim _ -> false
+  | Bottom | Unit | Bool _ | Int _ | Type _ | Var _ | External _ | Prim _ | Inject _ -> false
 ;;
 
 let rec reify_expr t bound (expr : Expr.t) : Expr.t =
@@ -82,6 +95,8 @@ let rec reify_expr t bound (expr : Expr.t) : Expr.t =
   | Specialize x ->
     Specialize { x with fn = reify_expr t bound x.fn; arg = reify_expr t bound x.arg }
   | Tuple_get x -> Tuple_get { x with tuple = reify_expr t bound x.tuple }
+  | Payload_get x -> Payload_get { x with variant = reify_expr t bound x.variant }
+  | Tag_test x -> Tag_test { x with variant = reify_expr t bound x.variant }
   | Tuple x -> Tuple { x with elts = Nonempty_list.map x.elts ~f:(reify_expr t bound) }
   | If x ->
     If
@@ -125,12 +140,48 @@ and reify_monos t bound monos = Map.map monos ~f:(reify_expr t bound)
 
 and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
   match value with
-  | Bottom | Unit | Bool _ | Int _ | Type _ | External _ | Prim _ | Var _ | Proj _ ->
-    Literal { value; ty = desc.ty; mode = desc.mode; loc }
+  | Bottom
+  | Unit
+  | Bool _
+  | Int _
+  | Type _
+  | External _
+  | Prim _
+  | Var _
+  | Proj _
+  | Payload _
+  | Inject _ -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
   | (Apply _ | Match _) as value ->
     if value_needs_reify value
     then raise_s [%message "Bug: stuck value cannot be reified" (value : Value.t)]
     else Literal { value; ty = desc.ty; mode = desc.mode; loc }
+  | Constructor { payload = None; _ } -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
+  | Constructor { payload = Some payload; _ } when not (value_needs_reify payload) ->
+    Literal { value; ty = desc.ty; mode = desc.mode; loc }
+  | Constructor { label; payload = Some payload } ->
+    (* Rebuild the constructor as an injection, since we do not have a constructor value node. *)
+    let payload_ty = payload_ty ~loc desc label in
+    let payload =
+      quote_value
+        t
+        bound
+        ~loc
+        { ty = payload_ty; mode = desc.mode; static = Lazy.from_val payload }
+        payload
+    in
+    let fn_ty =
+      Value.type_
+        (Arrow
+           { arg_ty = payload_ty
+           ; arg_mode = Modes.default ()
+           ; ret_ty = desc.ty
+           ; ret_mode = Modes.create ~staticity:Static ~erasure:Unerased
+           })
+    in
+    let fn =
+      Expr.Literal { value = Value.inject ~ty:desc.ty ~label; ty = fn_ty; mode = desc.mode; loc }
+    in
+    Apply { fn; arg = payload; ty = desc.ty; mode = desc.mode; loc }
   | Tuple elts ->
     let elt_tys = tuple_elt_tys ~loc desc.ty elts in
     let elts =
@@ -287,6 +338,7 @@ let rec find_targets acc (expr : Expr.t) =
   | Erased _ | Literal _ | Builtin _ | Var _ -> acc
   | Extcall { arg; _ } -> find_targets acc arg
   | Tuple_get { tuple; _ } -> find_targets acc tuple
+  | Payload_get { variant; _ } | Tag_test { variant; _ } -> find_targets acc variant
   | Tuple { elts; _ } -> Nonempty_list.fold elts ~init:acc ~f:find_targets
   | Apply { fn; arg; _ } -> find_targets (find_targets acc fn) arg
   | Specialize { fn; arg; target; key; _ } ->

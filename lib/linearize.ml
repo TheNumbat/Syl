@@ -53,6 +53,7 @@ module State = struct
     ;;
 
     let refresh t id = fresh t (Ident.name () id)
+    let inject t label = fresh t (Ident.Label.print () label)
     let if_ t = fresh t "if"
     let match_ t = fresh t "match"
     let temp t = fresh t "$"
@@ -114,6 +115,7 @@ let rec linearize_ty (ty : Sst.Ty.t) : Ty.t =
   | Arrow { arg_ty; ret_ty } ->
     Closure { arg_ty = linearize_ty arg_ty; ret_ty = linearize_ty ret_ty }
   | Tuple elts -> Tuple (Nonempty_list.map elts ~f:linearize_ty)
+  | Variant constructors -> Variant (Map.map constructors ~f:(Option.map ~f:linearize_ty))
 ;;
 
 let linearize_arrow (ty : Sst.Ty.t) : Ty.t * Ty.t =
@@ -128,6 +130,19 @@ let linearize_external state symbol ty loc : Expr.t =
   let arg_ty, ret_ty = linearize_arrow ty in
   State.proc state (External { path; arg_ty; ret_ty; symbol; loc });
   Make_closure { body = path; env = None; ty = Closure { arg_ty; ret_ty }; loc }
+;;
+
+let linearize_inject state label ty loc : Expr.t =
+  let arg_ty, ret_ty = linearize_arrow ty in
+  let arg_path = Path.id (State.Id.temp state) in
+  let body_path, body =
+    State.scope state ~id:(State.Id.inject state label) (fun () ->
+      Expr.Make_variant { label; payload = Some (arg_path, arg_ty); ty = ret_ty; loc })
+  in
+  State.proc
+    state
+    (Closure { path = body_path; arg = arg_path; arg_ty; env = Lst.Env.empty; body; loc });
+  Make_closure { body = body_path; env = None; ty = Closure { arg_ty; ret_ty }; loc }
 ;;
 
 let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
@@ -154,6 +169,21 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
   | Tuple_get { tuple; index; ty; loc } ->
     let tuple = linearize_path state env tuple in
     Tuple_get { tuple; index; ty = linearize_ty ty; loc }
+  | Constructor { label; payload; ty; loc } ->
+    let payload =
+      Option.map payload ~f:(fun payload ->
+        let payload_ty = linearize_ty (Sst.Expr.ty payload) in
+        linearize_path state env payload, payload_ty)
+    in
+    Make_variant { label; payload; ty = linearize_ty ty; loc }
+  | Inject { label; ty; loc } -> linearize_inject state label ty loc
+  | Payload_get { variant; label; ty; loc } ->
+    let variant = linearize_path state env variant in
+    Payload_get { variant; label; ty = linearize_ty ty; loc }
+  | Tag_test { variant; label; ty; loc } ->
+    let variant_ty = linearize_ty (Sst.Expr.ty variant) in
+    let variant = linearize_path state env variant in
+    Tag_test { variant; variant_ty; label; ty = linearize_ty ty; loc }
   | If { cond; then_; else_; ty; loc } ->
     let ty = linearize_ty ty in
     let id = State.Id.if_ state in

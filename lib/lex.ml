@@ -74,15 +74,18 @@ module Kind = struct
     | External : unit t
     | Builtin : unit t
     | Match : unit t
-    | With : unit t
     | Pipe : unit t
     | Assert : unit t
     | Unreachable : unit t
+    | Variant : unit t
+    | Lbrace : unit t
+    | Rbrace : unit t
     | Op : Op.t t
     | Unit : unit t
     | Bool : bool t
     | Int : int64 t
     | Ident : string t
+    | Label : string t
     | Unknown : string t
 end
 
@@ -111,15 +114,18 @@ module Token = struct
     | External
     | Builtin
     | Match
-    | With
     | Pipe
     | Assert
     | Unreachable
+    | Variant
+    | Lbrace
+    | Rbrace
     | Op of Op.t
     | Unit
     | Bool of bool
     | Int of int64
     | Ident of string
+    | Label of string
     | Unknown of string
   [@@deriving sexp]
 
@@ -147,15 +153,18 @@ module Token = struct
     | External, External -> Some ()
     | Builtin, Builtin -> Some ()
     | Match, Match -> Some ()
-    | With, With -> Some ()
     | Pipe, Pipe -> Some ()
     | Assert, Assert -> Some ()
     | Unreachable, Unreachable -> Some ()
+    | Variant, Variant -> Some ()
+    | Lbrace, Lbrace -> Some ()
+    | Rbrace, Rbrace -> Some ()
     | Op op, Op -> Some op
     | Unit, Unit -> Some ()
     | Bool const, Bool -> Some const
     | Int const, Int -> Some const
     | Ident id, Ident -> Some id
+    | Label id, Label -> Some id
     | Unknown slice, Unknown -> Some slice
     | ( ( Eof
         | If
@@ -180,15 +189,18 @@ module Token = struct
         | External
         | Builtin
         | Match
-        | With
         | Pipe
         | Assert
         | Unreachable
+        | Variant
+        | Lbrace
+        | Rbrace
         | Op _
         | Unit
         | Bool _
         | Int _
         | Ident _
+        | Label _
         | Unknown _ )
       , _ ) -> None
   ;;
@@ -217,10 +229,12 @@ module Token = struct
     | External -> "external"
     | Builtin -> "builtin"
     | Match -> "match"
-    | With -> "with"
     | Pipe -> "|"
     | Assert -> "assert"
     | Unreachable -> "unreachable"
+    | Variant -> "variant"
+    | Lbrace -> "{"
+    | Rbrace -> "}"
     | Op Arrow -> "->"
     | Op Minus -> "-"
     | Op Tilde -> "~"
@@ -246,6 +260,7 @@ module Token = struct
     | Bool false -> "false"
     | Int const -> Int64.to_string const
     | Ident slice -> slice
+    | Label slice -> "." ^ slice
     | Unknown slice -> slice
   ;;
 
@@ -271,15 +286,18 @@ module Token = struct
     | External, _
     | Builtin, _
     | Match, _
-    | With, _
     | Pipe, _
     | Assert, _
     | Unreachable, _
+    | Variant, _
+    | Lbrace, _
+    | Rbrace, _
     | Op _, _
     | Unit, _
     | Bool _, _
     | Int _, _
     | Ident _, _
+    | Label _, _
     | Unknown _, _
     | Asn, _
     | At, _ -> true
@@ -382,9 +400,9 @@ module Tokenizer = struct
     | "external" -> External
     | "builtin" -> Builtin
     | "match" -> Match
-    | "with" -> With
     | "assert" -> Assert
     | "unreachable" -> Unreachable
+    | "variant" -> Variant
     | "true" -> Bool true
     | "false" -> Bool false
     | _ -> Ident tok
@@ -514,6 +532,13 @@ module Tokenizer = struct
       advance t;
       op_lparen t
     | Some ')' -> single t Rparen
+    | Some '.' ->
+      advance t;
+      (match current t with
+       | Some c when Char.starts_identifier c -> Label (take_while t ~f:Char.in_identifier)
+       | _ -> Unknown ".")
+    | Some '{' -> single t Lbrace
+    | Some '}' -> single t Rbrace
     | Some '=' ->
       advance t;
       op_eq t

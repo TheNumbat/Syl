@@ -150,14 +150,22 @@ let _ = r true;;
 let%expect_test "lambda used inside match arms in receiver body" =
   go
     {|
-let dispatch = fn (static f : int -> dynamic unit) ->
-  fn (x : int) -> match x with
-    | 0 -> f 100
-    | 1 -> f 200
-    | _ -> f 300;;
+let dispatch =
+  fn (static f : int -> dynamic unit) ->
+    fn (x : int) ->
+      match x {
+        0 -> f 100,
+        1 -> f 200,
+        _ -> f 300,
+      }
+;;
+
 let go = dispatch (fn (k : int) -> print_int k);;
+
 let _ = go 0;;
+
 let _ = go 1;;
+
 let _ = go 5;;
 |};
   [%expect
@@ -227,8 +235,12 @@ let%expect_test "receiver builds tuple of applications, drains in match" =
   go
     {|
 let mk_pair = fn (static f : int -> int) -> (f 1, f 2);;
-let _ = match mk_pair (fn (x : int) -> let _ = print_int x in x * 10) with
-  | (a, b) -> let _ = print_int a in print_int b;;
+
+let _ =
+  match mk_pair (fn (x : int) -> let _ = print_int x in x * 10) {
+    (a, b) -> let _ = print_int a in print_int b,
+  }
+;;
 |};
   [%expect
     {|
@@ -511,10 +523,15 @@ let%expect_test "recursive reify through tuple containing captured closure" =
   go
     {|
 let make_apply = fn (static f : int -> int) -> fn (x : int) -> f x;;
+
 let n = 100;;
+
 let add_n = fn (x : int) -> x + n;;
+
 let pair = (add_n, 0);;
-let f = fn (x : int) -> match pair with | (g, _) -> g x;;
+
+let f = fn (x : int) -> match pair { (g, _) -> g x };;
+
 let _ = print_int (make_apply f 1);;
 |};
   [%expect {| 101 |}]
@@ -524,10 +541,15 @@ let%expect_test "recursive reify through tuple containing captured binder" =
   go
     {|
 let make_apply = fn (static f : int -> int) -> fn (x : int) -> f x;;
+
 let n = 100;;
+
 let mk = fn (static erased t : type) -> fn (x : int) -> x + n;;
+
 let pair = (mk, 0);;
-let f = fn (x : int) -> match pair with | (p, _) -> p int x;;
+
+let f = fn (x : int) -> match pair { (p, _) -> p int x };;
+
 let _ = print_int (make_apply f 1);;
 |};
   [%expect {| 101 |}]
@@ -575,10 +597,17 @@ let%expect_test "recursive reify through tuple containing recursive captured fun
   go
     {|
 let make_apply = fn (static f : int -> int) -> fn (x : int) -> f x;;
+
 let n = 100;;
-fun down (x : int) : int = if x == 0 then n else down (x - 1);;
+
+fun down (x : int) : int =
+  if x == 0 then n else down (x - 1)
+;;
+
 let pair = (down, 0);;
-let f = fn (x : int) -> match pair with | (g, _) -> g x;;
+
+let f = fn (x : int) -> match pair { (g, _) -> g x };;
+
 let _ = print_int (make_apply f 2);;
 |};
   [%expect {| 100 |}]
@@ -680,8 +709,8 @@ let _ =
 let%expect_test "tuple of closures as a specialization key" =
   go
     {|
-let use = fn (static p : (int -> int) ^ (int -> int)) ->
-  match p with | (f, g) -> f 1 + g 10;;
+let use = fn (static p : (int -> int) ^ (int -> int)) -> match p { (f, g) -> f 1 + g 10 };;
+
 let _ = print_int (use ((fn (x : int) -> x + 1), (fn (y : int) -> y * 2)));;
 |};
   [%expect {| 22 |}]
@@ -700,7 +729,9 @@ let%expect_test "static tuple of closures quoted as a key" =
   go
     {|
 let p = ((fn (x : int) -> x + 1), (fn (x : int) -> x * 2)) @ static;;
-let use = fn (static q : (int -> int) ^ (int -> int)) -> match q with | (f, g) -> f (g 5);;
+
+let use = fn (static q : (int -> int) ^ (int -> int)) -> match q { (f, g) -> f (g 5) };;
+
 let _ = print_int (use p);;
 |};
   [%expect {| 11 |}]
@@ -710,8 +741,10 @@ let%expect_test "match-bound static closure keys a specialization" =
   go
     {|
 let use = fn (static h : int -> int) -> h 2;;
+
 let p = ((fn (x : int) -> x + 1), 5) @ static;;
-let _ = match p with | (f, k) -> print_int (use f + k);;
+
+let _ = match p { (f, k) -> print_int (use f + k) };;
 |};
   [%expect {| 8 |}]
 ;;

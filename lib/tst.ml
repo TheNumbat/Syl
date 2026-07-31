@@ -18,12 +18,28 @@ module Concrete = struct
           ; ret_mode : Modes.t
           }
       | Tuple_t of t Nonempty_list.t
+      | Variant_t of t option Map.M(Ident.Label).t
+      | Inject of
+          { label : Ident.Label.t
+          ; ty : t
+          }
+      | Constructor of
+          { label : Ident.Label.t
+          ; payload : t option
+          }
     [@@deriving sexp, hash, compare]
   end
 
   include T
   include Comparable.Make (T)
   include Hashable.Make (T)
+end
+
+module Step = struct
+  type t =
+    | Index of int
+    | Payload of Ident.Label.t
+  [@@deriving sexp]
 end
 
 type ty =
@@ -44,6 +60,7 @@ type ty =
       ; ret_mode : Modes.t
       }
   | Tuple of value Nonempty_list.t
+  | Variant of value option Map.M(Ident.Label).t
 [@@deriving sexp]
 
 and dependent =
@@ -104,6 +121,14 @@ and value =
   | Binder of binder
   | Var of Ident.t
   | Tuple of value Nonempty_list.t
+  | Inject of
+      { label : Ident.Label.t
+      ; ty : value
+      }
+  | Constructor of
+      { label : Ident.Label.t
+      ; payload : value option
+      }
   | Apply of
       { fn : value
       ; arg : value
@@ -111,6 +136,10 @@ and value =
   | Proj of
       { tuple : value
       ; index : int
+      }
+  | Payload of
+      { variant : value
+      ; label : Ident.Label.t
       }
   | Match of
       { scrutinee : value
@@ -271,6 +300,20 @@ and expr =
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
+  | Payload_get of
+      { variant : expr
+      ; label : Ident.Label.t
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
+      }
+  | Tag_test of
+      { variant : expr
+      ; label : Ident.Label.t
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
+      }
   | If of
       { cond : expr
       ; then_ : expr
@@ -344,9 +387,17 @@ let rec patterns_unify (a : Dst.Expr.pattern) (b : Dst.Expr.pattern) =
     (match Nonempty_list.zip a b with
      | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> patterns_unify a b)
      | Unequal_lengths -> false)
+  | ( Constructor { label = a; payload = a_payload; _ }
+    , Constructor { label = b; payload = b_payload; _ } ) ->
+    Ident.Label.equal a b
+    &&
+      (match a_payload, b_payload with
+      | None, None -> true
+      | Some a, Some b -> patterns_unify a b
+      | None, Some _ | Some _, None -> false)
   | Or { left = a_left; right = a_right; _ }, Or { left = b_left; right = b_right; _ } ->
     patterns_unify a_left b_left && patterns_unify a_right b_right
-  | (Var _ | Literal _ | Tuple _ | Or _), _ -> false
+  | (Var _ | Literal _ | Constructor _ | Tuple _ | Or _), _ -> false
 ;;
 
 let arms_unify a_arms b_arms =
@@ -377,7 +428,9 @@ let rec is_concrete_value : value -> _ = function
   | Int i -> is_concrete_int i
   | Type ty -> is_concrete_ty ty
   | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
-  | Bottom | Var _ | Apply _ | Proj _ | Match _ -> false
+  | Inject { ty; _ } -> is_concrete_value ty
+  | Constructor { payload; _ } -> Option.for_all payload ~f:is_concrete_value
+  | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ -> false
 
 and is_concrete_bool : vbool -> _ = function
   | T _ -> true
@@ -392,10 +445,26 @@ and is_concrete_ty : ty -> _ = function
   | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
   | Arrow { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_value ret_ty
   | Pi { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_dependent ret_ty
+  | Variant constructors ->
+    Map.for_all constructors ~f:(fun payload -> Option.for_all payload ~f:is_concrete_value)
 
 and is_concrete_dependent : dependent -> _ = function
   | T { ty; _ } -> is_concrete_value ty
   | Meet _ | Join _ | Reduce _ | Typecheck _ -> false
+;;
+
+let unify_constructors ~f a_ctors b_ctors : ty option =
+  with_return (fun { return } ->
+    let constructors =
+      Map.merge a_ctors b_ctors ~f:(fun ~key:_ -> function
+        | `Both (None, None) -> Some None
+        | `Both (Some a, Some b) ->
+          (match f a b with
+           | Some payload -> Some (Some payload)
+           | None -> return None)
+        | `Both (None, Some _) | `Both (Some _, None) | `Left _ | `Right _ -> return None)
+    in
+    Some (Variant constructors))
 ;;
 
 let rec join_concrete_ty (a : ty) (b : ty) : ty option =
@@ -441,7 +510,8 @@ let rec join_concrete_ty (a : ty) (b : ty) : ty option =
     let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
     let%map ret_ty = join_concrete_dependent a_ret_ty b_ret_ty in
     Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
+  | Variant a_ctors, Variant b_ctors -> unify_constructors ~f:join_concrete_value a_ctors b_ctors
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> None
 
 and meet_concrete_ty (a : ty) (b : ty) : ty option =
   match a, b with
@@ -486,7 +556,8 @@ and meet_concrete_ty (a : ty) (b : ty) : ty option =
     let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
     let%map ret_ty = meet_concrete_dependent a_ret_ty b_ret_ty in
     Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ -> None
+  | Variant a_ctors, Variant b_ctors -> unify_constructors ~f:meet_concrete_value a_ctors b_ctors
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> None
 
 and join_concrete_bool (a : vbool) (b : vbool) : vbool option =
   match a, b with
@@ -527,6 +598,9 @@ and join_concrete_value (a : value) (b : value) : value option =
   | Proj a, Proj b when a.index = b.index ->
     let%map tuple = join_concrete_value a.tuple b.tuple in
     (Proj { tuple; index = a.index } : value)
+  | Payload a, Payload b when Ident.Label.equal a.label b.label ->
+    let%map variant = join_concrete_value a.variant b.variant in
+    (Payload { variant; label = a.label } : value)
   | Var a, Var b when Ident.equal a b -> Some (Var a)
   | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
@@ -537,15 +611,28 @@ and join_concrete_value (a : value) (b : value) : value option =
        |> Option.all
        |> Option.map ~f:(fun elts : value -> Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
+  | Inject a, Inject b when Ident.Label.equal a.label b.label ->
+    let%map ty = join_concrete_value a.ty b.ty in
+    Inject { ty; label = a.label }
+  | Constructor a, Constructor b when Ident.Label.equal a.label b.label ->
+    (match a.payload, b.payload with
+     | None, None -> Some (Constructor { label = a.label; payload = None })
+     | Some a_payload, Some b_payload ->
+       let%map payload = join_concrete_value a_payload b_payload in
+       Constructor { label = a.label; payload = Some payload }
+     | None, Some _ | Some _, None -> None)
   | ( ( Unit
       | Bool _
       | Int _
       | Type _
       | Apply _
       | Proj _
+      | Payload _
       | Match _
       | Var _
       | Tuple _
+      | Inject _
+      | Constructor _
       | Closure _
       | Binder _
       | External _
@@ -578,6 +665,9 @@ and meet_concrete_value (a : value) (b : value) : value option =
   | Proj a, Proj b when a.index = b.index ->
     let%map tuple = meet_concrete_value a.tuple b.tuple in
     (Proj { tuple; index = a.index } : value)
+  | Payload a, Payload b when Ident.Label.equal a.label b.label ->
+    let%map variant = meet_concrete_value a.variant b.variant in
+    (Payload { variant; label = a.label } : value)
   | Var a, Var b when Ident.equal a b -> Some (Var a)
   | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
   | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
@@ -588,15 +678,28 @@ and meet_concrete_value (a : value) (b : value) : value option =
        |> Option.all
        |> Option.map ~f:(fun elts : value -> Tuple (Nonempty_list.of_list_exn elts))
      | Unequal_lengths -> None)
+  | Inject a, Inject b when Ident.Label.equal a.label b.label ->
+    let%map ty = meet_concrete_value a.ty b.ty in
+    Inject { ty; label = a.label }
+  | Constructor a, Constructor b when Ident.Label.equal a.label b.label ->
+    (match a.payload, b.payload with
+     | None, None -> Some (Constructor { label = a.label; payload = None })
+     | Some a_payload, Some b_payload ->
+       let%map payload = meet_concrete_value a_payload b_payload in
+       Constructor { label = a.label; payload = Some payload }
+     | None, Some _ | Some _, None -> None)
   | ( ( Unit
       | Bool _
       | Int _
       | Type _
       | Apply _
       | Proj _
+      | Payload _
       | Match _
       | Var _
       | Tuple _
+      | Inject _
+      | Constructor _
       | Closure _
       | Binder _
       | External _
@@ -841,6 +944,7 @@ module Ty = struct
         ; ret_mode : Modes.t
         }
     | Tuple of value Nonempty_list.t
+    | Variant of value option Map.M(Ident.Label).t
   [@@deriving sexp]
 
   let arg : value -> value = function
@@ -868,6 +972,8 @@ module Ty = struct
     | Bool _ -> Bool
     | Int _ -> Int
   ;;
+
+  let unify_constructors = unify_constructors
 end
 
 module Value = struct
@@ -883,6 +989,14 @@ module Value = struct
     | Binder of binder
     | Var of Ident.t
     | Tuple of t Nonempty_list.t
+    | Inject of
+        { label : Ident.Label.t
+        ; ty : t
+        }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : t option
+        }
     | Apply of
         { fn : t
         ; arg : t
@@ -890,6 +1004,10 @@ module Value = struct
     | Proj of
         { tuple : t
         ; index : int
+        }
+    | Payload of
+        { variant : t
+        ; label : Ident.Label.t
         }
     | Match of
         { scrutinee : t
@@ -909,7 +1027,7 @@ module Value = struct
 
   module Matched = struct
     type t =
-      | Match of (Ident.t * int list) list
+      | Match of (Ident.t * Step.t list) list
       | No_match
       | Unknown
   end
@@ -942,9 +1060,30 @@ module Value = struct
     | tuple -> Proj { tuple; index }
   ;;
 
+  let payload value ~label =
+    match value with
+    | Constructor { label = got; payload = got_payload } ->
+      (match got_payload with
+       | Some payload when Ident.Label.equal got label -> payload
+       | Some _ | None ->
+         raise_s [%message "Bug: expected constructor" (label : Ident.Label.t) (value : t)])
+    | Bottom -> Bottom
+    | value -> Payload { variant = value; label }
+  ;;
+
+  let inject ~ty ~label = Inject { ty; label }
+
+  let constructor ~label ~payload =
+    (* A constructor with an unreachable payload is unreachable. *)
+    match payload with
+    | Some Bottom -> Bottom
+    | payload -> Constructor { label; payload }
+  ;;
+
   let apply ~fn ~arg =
     match fn, arg with
     | Bottom, _ | _, Bottom -> Bottom
+    | Inject { label; _ }, arg -> constructor ~label ~payload:(Some arg)
     | fn, arg -> Apply { fn; arg }
   ;;
 
@@ -962,11 +1101,24 @@ module Value = struct
     | Tuple { elts; _ } ->
       Nonempty_list.to_list elts
       |> List.foldi ~init:(Matched.Match []) ~f:(fun index acc elt ->
-        let matched = match_at (index :: path) (proj value index) elt in
+        let matched = match_at (Step.Index index :: path) (proj value index) elt in
         match acc, matched with
         | No_match, _ | _, No_match -> Matched.No_match
         | Unknown, _ | _, Unknown -> Unknown
         | Match bindings, Match elt_bindings -> Match (bindings @ elt_bindings))
+    | Constructor { label; payload; _ } ->
+      (match value with
+       | Constructor { label = got; payload = got_payload } ->
+         if not (Ident.Label.equal got label)
+         then No_match
+         else (
+           match payload, got_payload with
+           | None, None -> Match []
+           | Some payload, Some got_payload ->
+             match_at (Step.Payload label :: path) got_payload payload
+           | Some _, None | None, Some _ ->
+             raise_s [%message "Bug: constructor payload mismatch" (label : Ident.Label.t)])
+       | _ -> Unknown)
     | Or { left; right; _ } ->
       (match match_at path value left with
        | (Match _ | Unknown) as matched -> matched
@@ -1187,6 +1339,20 @@ module Expr = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
+    | Payload_get of
+        { variant : t
+        ; label : Ident.Label.t
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Tag_test of
+        { variant : t
+        ; label : Ident.Label.t
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
     | If of
         { cond : t
         ; then_ : t
@@ -1232,6 +1398,7 @@ module Expr = struct
     | Erased _ | Literal _ | Builtin _ -> Ident.Set.empty
     | Extcall { arg; _ } -> free_vars ?monos arg
     | Tuple_get { tuple; _ } -> free_vars ?monos tuple
+    | Payload_get { variant; _ } | Tag_test { variant; _ } -> free_vars ?monos variant
     | Var { id; _ } -> Ident.Set.singleton id
     | Tuple { elts; _ } ->
       Nonempty_list.map elts ~f:(free_vars ?monos) |> Nonempty_list.to_list |> Ident.Set.union_list
@@ -1304,6 +1471,8 @@ module Expr = struct
     | Specialize { ty; _ }
     | Builtin { ty; _ }
     | Tuple_get { ty; _ }
+    | Payload_get { ty; _ }
+    | Tag_test { ty; _ }
     | Extcall { ty; _ } -> ty
   ;;
 
@@ -1322,6 +1491,8 @@ module Expr = struct
     | Specialize { mode; _ }
     | Builtin { mode; _ }
     | Tuple_get { mode; _ }
+    | Payload_get { mode; _ }
+    | Tag_test { mode; _ }
     | Extcall { mode; _ } -> mode
   ;;
 
@@ -1340,6 +1511,8 @@ module Expr = struct
     | Specialize { loc; _ }
     | Builtin { loc; _ }
     | Tuple_get { loc; _ }
+    | Payload_get { loc; _ }
+    | Tag_test { loc; _ }
     | Extcall { loc; _ } -> loc
   ;;
 
@@ -1361,6 +1534,8 @@ module Expr = struct
     | Specialize t -> Specialize { t with ty; mode }
     | Builtin t -> Builtin { t with ty; mode }
     | Tuple_get t -> Tuple_get { t with ty; mode }
+    | Payload_get t -> Payload_get { t with ty; mode }
+    | Tag_test t -> Tag_test { t with ty; mode }
     | Extcall t -> Extcall { t with ty; mode }
   ;;
 
@@ -1380,6 +1555,8 @@ module Expr = struct
     | Specialize t -> Specialize { t with ty }
     | Builtin t -> Builtin { t with ty }
     | Tuple_get t -> Tuple_get { t with ty }
+    | Payload_get t -> Payload_get { t with ty }
+    | Tag_test t -> Tag_test { t with ty }
     | Extcall t -> Extcall { t with ty }
   ;;
 
@@ -1399,6 +1576,8 @@ module Expr = struct
     | Specialize t -> Specialize { t with mode }
     | Builtin t -> Builtin { t with mode }
     | Tuple_get t -> Tuple_get { t with mode }
+    | Payload_get t -> Payload_get { t with mode }
+    | Tag_test t -> Tag_test { t with mode }
     | Extcall t -> Extcall { t with mode }
   ;;
 
@@ -1436,9 +1615,9 @@ module Expr = struct
      static value. *)
   let project ~loc scrutinee (scrutinee_desc : desc) path =
     let rec aux path expr (desc : desc) =
-      match path with
+      match (path : Step.t list) with
       | [] -> expr, desc
-      | index :: rest ->
+      | Index index :: rest ->
         (match desc.ty with
          | Type (Tuple elt_tys) ->
            let ty = Nonempty_list.nth_exn elt_tys index in
@@ -1446,6 +1625,19 @@ module Expr = struct
            let static = Lazy.map desc.static ~f:(fun tuple -> Value.proj tuple index) in
            aux rest get { ty; mode = desc.mode; static }
          | ty -> raise_s [%message "Bug: expected tuple" (ty : value) (loc : Lex.Location.t)])
+      | Payload label :: rest ->
+        (match desc.ty with
+         | Type (Variant constructors) ->
+           (match Map.find constructors label with
+            | Some (Some ty) ->
+              let get = Payload_get { variant = expr; label; ty; mode = desc.mode; loc } in
+              let static = Lazy.map desc.static ~f:(Value.payload ~label) in
+              aux rest get { ty; mode = desc.mode; static }
+            | Some None | None ->
+              raise_s
+                [%message
+                  "Bug: expected constructor" (label : Ident.Label.t) (loc : Lex.Location.t)])
+         | ty -> raise_s [%message "Bug: expected variant" (ty : value) (loc : Lex.Location.t)])
     in
     aux path scrutinee scrutinee_desc
   ;;

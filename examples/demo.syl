@@ -124,7 +124,6 @@ let _ = assert erased true;;
 (* Dynamic asserts fail at runtime if the condition is false. *)
 let _ = assert true;;
 
-
 (* Let erased desugars to an erased annotation *)
 let erased square = fn (x : int) -> x * x;;
 

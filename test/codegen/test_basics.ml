@@ -161,9 +161,10 @@ let%expect_test "var" =
     {|
 let x = true @ dynamic;;
 let _ =
-  match !x with
-  | x -> assert !x
-;;
+  match !x {
+   x -> assert !x
+
+};;
 |};
   [%expect {| |}]
 ;;
@@ -183,20 +184,28 @@ let%expect_test "worst-case-style tree with N columns" =
   go
     {|
 fun classify (t : bool ^ bool ^ bool ^ bool ^ bool) : int =
-  match t with
-  | (true, _, _, _, _) -> 1
-  | (_, true, _, _, _) -> 2
-  | (_, _, true, _, _) -> 3
-  | (_, _, _, true, _) -> 4
-  | (_, _, _, _, true) -> 5
-  | _ -> 0
+  match t {
+    (true, _, _, _, _) -> 1,
+    (_, true, _, _, _) -> 2,
+    (_, _, true, _, _) -> 3,
+    (_, _, _, true, _) -> 4,
+    (_, _, _, _, true) -> 5,
+    _ -> 0,
+  }
 ;;
+
 let _ = assert (classify (true, false, false, false, false) == 1);;
+
 let _ = assert (classify (false, true, false, false, false) == 2);;
+
 let _ = assert (classify (false, false, true, false, false) == 3);;
+
 let _ = assert (classify (false, false, false, true, false) == 4);;
+
 let _ = assert (classify (false, false, false, false, true) == 5);;
+
 let _ = assert (classify (false, false, false, false, false) == 0);;
+
 let _ = assert (classify (true, true, true, true, true) == 1);;
 |};
   [%expect {| |}]

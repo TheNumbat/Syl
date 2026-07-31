@@ -16,6 +16,7 @@ module Ty = struct
         { arg_ty : t
         ; ret_ty : t Key.Map.t
         }
+    | Variant of t option Ident.Label.Map.t
   [@@deriving sexp]
 end
 
@@ -134,6 +135,29 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : t option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Inject of
+        { label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Payload_get of
+        { variant : t
+        ; label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Tag_test of
+        { variant : t
+        ; label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
     | If of
         { cond : t
         ; then_ : t
@@ -174,6 +198,10 @@ module Expr = struct
     | Specialize { ty; _ }
     | External { ty; _ }
     | Tuple_get { ty; _ }
+    | Constructor { ty; _ }
+    | Inject { ty; _ }
+    | Payload_get { ty; _ }
+    | Tag_test { ty; _ }
     | Extcall { ty; _ } -> ty
   ;;
 
@@ -191,6 +219,10 @@ module Expr = struct
     | Specialize { loc; _ }
     | External { loc; _ }
     | Tuple_get { loc; _ }
+    | Constructor { loc; _ }
+    | Inject { loc; _ }
+    | Payload_get { loc; _ }
+    | Tag_test { loc; _ }
     | Extcall { loc; _ } -> loc
   ;;
 
@@ -209,18 +241,24 @@ module Expr = struct
     | Specialize expr -> Specialize { expr with ty }
     | External expr -> External { expr with ty }
     | Tuple_get expr -> Tuple_get { expr with ty }
+    | Constructor expr -> Constructor { expr with ty }
+    | Inject expr -> Inject { expr with ty }
+    | Payload_get expr -> Payload_get { expr with ty }
+    | Tag_test expr -> Tag_test { expr with ty }
     | Extcall expr -> Extcall { expr with ty }
   ;;
 
   let rec free_vars = function
-    | Scalar _ | External _ -> Ident.Set.empty
+    | Scalar _ | External _ | Inject _ -> Ident.Set.empty
     | Extcall { arg; _ } -> free_vars arg
+    | Constructor { payload; _ } -> Option.value_map payload ~default:Ident.Set.empty ~f:free_vars
     | Var { id; _ } -> Ident.Set.singleton id
     | Tuple { elts; _ } ->
       Nonempty_list.fold elts ~init:Ident.Set.empty ~f:(fun acc elt ->
         Set.union acc (free_vars elt))
     | Apply { fn; arg; _ } | Specialize { fn; arg; _ } -> Set.union (free_vars fn) (free_vars arg)
     | Tuple_get { tuple; _ } -> free_vars tuple
+    | Payload_get { variant; _ } | Tag_test { variant; _ } -> free_vars variant
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
     | Match { cases; tree; _ } ->

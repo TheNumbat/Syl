@@ -158,15 +158,15 @@ let%expect_test "case body with local let" =
   go
     {|
 builtin add = syl_int_add;;
+
 builtin mul = syl_int_mul;;
+
 fun compute (p : int ^ int) : int =
-  match p with
-  | (a, b) ->
-    let sum = add (a, b) in
-    let product = mul (a, b) in
-    add (sum, product)
+  match p { (a, b) -> let sum = add (a, b) in let product = mul (a, b) in add (sum, product) }
 ;;
+
 let _ = assert (compute (3, 4) == 19);;
+
 let _ = assert (compute (10, 10) == 120);;
 |};
   [%expect {| |}]
@@ -278,8 +278,8 @@ let _ =
 let%expect_test "fuzz: erased let in non-erased scope" =
   go
     {|
-let T = int;;
-let x = (42 : T);;
+let ty = int;;
+let x = (42 : ty);;
 |};
   [%expect {| |}]
 ;;

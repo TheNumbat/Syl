@@ -45,11 +45,21 @@ module Expr = struct
   and pattern_node =
     | Var of { id : Ident.Raw.t }
     | Literal of { value : Literal.t }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : pattern option
+        }
     | Tuple of { elts : pattern Nonempty_list.t }
     | Or of
         { left : pattern
         ; right : pattern
         }
+
+  and constructor_node =
+    { label : Ident.Label.t
+    ; payload : t option
+    ; after_label : Lex.Comment.t list
+    }
 
   and fun_node =
     { var : Ident.Raw.t
@@ -103,6 +113,12 @@ module Expr = struct
     | Paren of { expr : t }
     | Var of { id : Ident.Raw.t }
     | Literal of { value : Literal.t }
+    | Constructor of { label : Ident.Label.t }
+    | Select of
+        { expr : t
+        ; label : Ident.Label.t
+        }
+    | Variant of { constructors : constructor Nonempty_list.t }
     | Unop of
         { op : Ident.Unop.t
         ; arg : t
@@ -139,17 +155,21 @@ module Expr = struct
   and t = node With_loc.t [@@deriving sexp]
   and arg = arg_node With_loc.t [@@deriving sexp]
   and pattern = pattern_node With_loc.t [@@deriving sexp]
+  and constructor = constructor_node With_loc.t [@@deriving sexp]
   and fun_ = fun_node With_loc.t [@@deriving sexp]
 
   let loc (t : t) = t.loc
   let strip_comments = List.map ~f:(fun (c : Lex.Comment.t) -> { c with loc = Lex.Location.empty })
 
-  let rec strip (t : t) : t =
-    { node = strip_node t.node
+  let strip_with_loc (w : _ With_loc.t) ~f : _ With_loc.t =
+    { node = f w.node
     ; loc = Lex.Location.empty
-    ; before = strip_comments t.before
-    ; after = strip_comments t.after
+    ; before = strip_comments w.before
+    ; after = strip_comments w.after
     }
+  ;;
+
+  let rec strip (t : t) : t = strip_with_loc t ~f:strip_node
 
   and strip_node = function
     | If { cond; then_; else_; erased; before_erased } ->
@@ -188,7 +208,10 @@ module Expr = struct
         }
     | Apply { fn; arg } -> Apply { fn = strip fn; arg = strip arg }
     | Paren { expr } -> Paren { expr = strip expr }
-    | (Var _ | Literal _ | Unreachable) as n -> n
+    | (Var _ | Literal _ | Constructor _ | Unreachable) as n -> n
+    | Select { expr; label } -> Select { expr = strip expr; label }
+    | Variant { constructors } ->
+      Variant { constructors = Nonempty_list.map constructors ~f:strip_constructor }
     | Unop { op; arg } -> Unop { op; arg = strip arg }
     | Binop { op; lhs; rhs } -> Binop { op; lhs = strip lhs; rhs = strip rhs }
     | Make_tuple { elts } -> Make_tuple { elts = Nonempty_list.map elts ~f:strip }
@@ -200,45 +223,38 @@ module Expr = struct
     | Type_annotation { expr; ty } -> Type_annotation { expr = strip expr; ty = strip ty }
     | Mode_annotation { expr; mode } -> Mode_annotation { expr = strip expr; mode }
 
-  and strip_pattern (p : pattern) : pattern =
-    { node = strip_pattern_node p.node
-    ; loc = Lex.Location.empty
-    ; before = strip_comments p.before
-    ; after = strip_comments p.after
-    }
+  and strip_pattern (p : pattern) : pattern = strip_with_loc p ~f:strip_pattern_node
 
   and strip_pattern_node (n : pattern_node) : pattern_node =
     match n with
     | Var _ | Literal _ -> n
+    | Constructor { label; payload } ->
+      Constructor { label; payload = Option.map payload ~f:strip_pattern }
     | Tuple { elts } -> Tuple { elts = Nonempty_list.map elts ~f:strip_pattern }
     | Or { left; right } -> Or { left = strip_pattern left; right = strip_pattern right }
 
+  and strip_constructor (c : constructor) : constructor =
+    strip_with_loc c ~f:(fun n ->
+      { n with payload = Option.map n.payload ~f:strip; after_label = strip_comments n.after_label })
+
   and strip_arg (a : arg) : arg =
-    { node =
-        { a.node with
-          ty = strip a.node.ty
-        ; after_open = strip_comments a.node.after_open
-        ; after_mode = strip_comments a.node.after_mode
-        ; after_var = strip_comments a.node.after_var
-        }
-    ; loc = Lex.Location.empty
-    ; before = strip_comments a.before
-    ; after = strip_comments a.after
-    }
+    strip_with_loc a ~f:(fun n ->
+      { n with
+        ty = strip n.ty
+      ; after_open = strip_comments n.after_open
+      ; after_mode = strip_comments n.after_mode
+      ; after_var = strip_comments n.after_var
+      })
 
   and strip_fun (f : fun_) : fun_ =
-    { node =
-        { f.node with
-          arg = strip_arg f.node.arg
-        ; ret_ty = strip f.node.ret_ty
-        ; body = strip f.node.body
-        ; after_erased = strip_comments f.node.after_erased
-        ; after_arg = strip_comments f.node.after_arg
-        }
-    ; loc = Lex.Location.empty
-    ; before = strip_comments f.before
-    ; after = strip_comments f.after
-    }
+    strip_with_loc f ~f:(fun n ->
+      { n with
+        arg = strip_arg n.arg
+      ; ret_ty = strip n.ret_ty
+      ; body = strip n.body
+      ; after_erased = strip_comments n.after_erased
+      ; after_arg = strip_comments n.after_arg
+      })
   ;;
 end
 

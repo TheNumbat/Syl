@@ -328,10 +328,14 @@ module Prim = struct
 end
 
 let desc : t -> Desc.t = function
-  | Type Unit -> { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Unit) }
-  | Type Bool -> { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Bool) }
-  | Type Int -> { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Int) }
-  | Type Type -> { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Type) }
+  | Type Unit ->
+    { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Unit) }
+  | Type Bool ->
+    { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Bool) }
+  | Type Int ->
+    { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Int) }
+  | Type Type ->
+    { ty = Value.type_ Type; mode = static_erased; static = Lazy.from_val (Value.type_ Type) }
   | Prim prim -> Prim.desc prim
 ;;
 
@@ -344,12 +348,16 @@ let eval_assert (value : Value.t) : Value.t =
 ;;
 
 let eval (prim : Prim.t) (value : Value.t) : Value.t =
-  match prim with
-  | Assert | Assert_erased -> eval_assert value
-  | Int i -> Prim.Int.eval i value
-  | Bool b -> Prim.Bool.eval b value
-  | Type t -> Prim.Type.eval t value
-  | Unerase u -> Prim.Unerase.eval u value
+  match value with
+  (* A primitive applied to an unreachable argument is unreachable. *)
+  | Bottom -> Value.bottom
+  | value ->
+    (match prim with
+     | Assert | Assert_erased -> eval_assert value
+     | Int i -> Prim.Int.eval i value
+     | Bool b -> Prim.Bool.eval b value
+     | Type t -> Prim.Type.eval t value
+     | Unerase u -> Prim.Unerase.eval u value)
 ;;
 
 let apply ~loc (prim : Prim.t) (arg : Tst.Expr.t) (_arg_desc (* TODO *) : Desc.t) : Tst.Expr.t =

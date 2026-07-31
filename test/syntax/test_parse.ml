@@ -84,11 +84,24 @@ let%expect_test "static" =
   go "let _ = fn (x : (int @ static)) -> ();;";
   [%expect {| let _ = fn (x : (int @ static)) -> ();; |}];
   go "let _ = fn (x : int @ static -> int @ static) -> ();;";
-  [%expect {| ((loc ((line 1) (column 29))) (reason (Unexpected (Op Arrow)))) |}];
+  [%expect {| let _ = fn (x : int @ static -> int @ static) -> ();; |}];
   go "let _ = fn (x : (int -> int) @ static ) -> ();;";
   [%expect {| let _ = fn (x : (int -> int) @ static) -> ();; |}];
   go "let _ = fn (x : (int @ static -> int @ static) @ static) -> ();;";
-  [%expect {| ((loc ((line 1) (column 30))) (reason (Unexpected (Op Arrow)))) |}]
+  [%expect {| let _ = fn (x : (int @ static -> int @ static) @ static) -> ();; |}]
+;;
+
+let%expect_test "mode annotations bind tighter than commas" =
+  go "let _ = (1 @ dynamic, 2);;";
+  [%expect {| let _ = (1 @ dynamic, 2);; |}];
+  go "let _ = 1, 2 @ static;;";
+  [%expect {| let _ = 1, 2 @ static;; |}];
+  go "let _ = (1, 2) @ static;;";
+  [%expect {| let _ = (1, 2) @ static;; |}];
+  go "let _ = 1 + 2 @ static;;";
+  [%expect {| let _ = 1 + 2 @ static;; |}];
+  go "let _ = 1 ^ 2 @ static;;";
+  [%expect {| let _ = 1 ^ 2 @ static;; |}]
 ;;
 
 let%expect_test _ =
@@ -709,74 +722,73 @@ let%expect_test "let inner" =
 ;;
 
 let%expect_test "match basic" =
-  go "let _ = match x with | y -> y;;";
-  [%expect
-    {|
-    let _ =
-      match x with
-      | y -> y
-    ;;
-    |}]
+  go "let _ = match x { y -> y };;";
+  [%expect {| let _ = match x { y -> y };; |}]
 ;;
 
 let%expect_test "match multi arm" =
-  go "let _ = match x with | a -> 1 | b -> 2 | c -> 3;;";
+  go "let _ = match x { a -> 1, b -> 2, c -> 3 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a -> 1
-      | b -> 2
-      | c -> 3
+      match x {
+        a -> 1,
+        b -> 2,
+        c -> 3,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match static" =
-  go "let _ = match static x with | a -> 1 | b -> 2;;";
+  go "let _ = match static x { a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match static x with
-      | a -> 1
-      | b -> 2
+      match static x {
+        a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match erased" =
-  go "let _ = match erased x with | a -> 1 | b -> 2;;";
+  go "let _ = match erased x { a -> 1, b -> 2 };;";
   [%expect
     {|
     let _ =
-      match erased x with
-      | a -> 1
-      | b -> 2
+      match erased x {
+        a -> 1,
+        b -> 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match complex rhs" =
-  go "let _ = match x with | a -> a + 1 | b -> b * 2;;";
+  go "let _ = match x { a -> a + 1, b -> b * 2 };;";
   [%expect
     {|
     let _ =
-      match x with
-      | a -> a + 1
-      | b -> b * 2
+      match x {
+        a -> a + 1,
+        b -> b * 2,
+      }
     ;;
     |}]
 ;;
 
 let%expect_test "match nested in let" =
-  go "let _ = let r = match x with | a -> 1 | b -> 2 in r;;";
+  go "let _ = let r = match x { a -> 1, b -> 2 } in r;;";
   [%expect
     {|
     let _ =
       let r =
-        match x with
-        | a -> 1
-        | b -> 2
+        match x {
+          a -> 1,
+          b -> 2,
+        }
       in
       r
     ;;
@@ -784,36 +796,56 @@ let%expect_test "match nested in let" =
 ;;
 
 let%expect_test "match no arms" =
-  go "let _ = match x with;;";
-  [%expect {| ((loc ((line 1) (column 20))) (reason (Unexpected Double_semicolon))) |}]
+  go "let _ = match x { };;";
+  [%expect {| ((loc ((line 1) (column 18))) (reason (Unexpected Rbrace))) |}]
 ;;
 
 let%expect_test "match missing with" =
+  (* OCaml-style arms without braces. *)
   go "let _ = match x | a -> 1;;";
-  [%expect {| ((loc ((line 1) (column 16))) (reason (Unexpected Pipe))) |}]
+  [%expect {| ((loc ((line 1) (column 16))) (reason (Unexpected Pipe))) |}];
+  (* `with` is not a keyword: it parses as an identifier, so the scrutinee
+     becomes the application `x with`. *)
+  go "let _ = match x with | a -> 1;;";
+  [%expect {| ((loc ((line 1) (column 21))) (reason (Unexpected Pipe))) |}];
+  go "let _ = match x with { a -> 1 };;";
+  [%expect {| let _ = match x with { a -> 1 };; |}]
+;;
+
+let%expect_test "match scrutinee tuple needs parens" =
+  go "let _ = match (a, b) { (x, y) -> x };;";
+  [%expect {| let _ = match (a, b) { (x, y) -> x };; |}];
+  (* Comma-free at top level too, matching arm bodies, so a match pastes into an
+     arm unchanged. *)
+  go "let _ = match a, b { (x, y) -> x };;";
+  [%expect {| ((loc ((line 1) (column 15))) (reason (Unexpected (Op Comma)))) |}];
+  go "let _ = match p { q -> match a, b { (x, y) -> x } };;";
+  [%expect {| ((loc ((line 1) (column 30))) (reason (Unexpected (Op Comma)))) |}]
 ;;
 
 let%expect_test "match in parens" =
-  go "let _ = (match x with | a -> 1 | b -> 2);;";
+  go "let _ = (match x { a -> 1, b -> 2 });;";
   [%expect
     {|
     let _ =
-      (match x with
-       | a -> 1
-       | b -> 2)
+      (match x {
+         a -> 1,
+         b -> 2,
+       })
     ;;
     |}]
 ;;
 
 let%expect_test "match applied" =
-  go "let _ = f (match x with | a -> 1 | b -> 2);;";
+  go "let _ = f (match x { a -> 1, b -> 2 });;";
   [%expect
     {|
     let _ =
       f
-        (match x with
-         | a -> 1
-         | b -> 2)
+        (match x {
+           a -> 1,
+           b -> 2,
+         })
     ;;
     |}]
 ;;

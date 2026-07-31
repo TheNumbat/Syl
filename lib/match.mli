@@ -11,6 +11,11 @@ module Pattern : sig
         { value : Literal.t
         ; loc : Lex.Location.t
         }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : t option
+        ; loc : Lex.Location.t
+        }
     | Tuple of
         { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
@@ -26,16 +31,20 @@ end
 module Tree : sig
   module Occurrence : sig
     type t =
-      { path : int Vec.t
+      { path : Tst.Step.t Vec.t
       ; ty : Tst.Value.t
       }
     [@@deriving sexp]
   end
 
-  module Constructor : sig
+  module Head : sig
     type t =
       | Literal of Literal.t
       | Tuple of int
+      | Constructor of
+          { label : Ident.Label.t
+          ; payload : bool
+          }
     [@@deriving sexp]
   end
 
@@ -47,7 +56,7 @@ module Tree : sig
         }
     | Switch of
         { occurrence : Occurrence.t
-        ; cases : (Constructor.t * t) array
+        ; cases : (Head.t * t) array
         ; default : t option
         }
   [@@deriving sexp]
@@ -59,6 +68,10 @@ module Result : sig
       | Wildcard
       | Literal of Literal.t
       | Tuple of t list
+      | Constructor of
+          { label : Ident.Label.t
+          ; payload : t option
+          }
       | Or of t list
     [@@deriving sexp]
   end

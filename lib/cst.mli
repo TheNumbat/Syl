@@ -43,11 +43,21 @@ module Expr : sig
   and pattern_node =
     | Var of { id : Ident.Raw.t }
     | Literal of { value : Literal.t }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : pattern option
+        }
     | Tuple of { elts : pattern Nonempty_list.t }
     | Or of
         { left : pattern
         ; right : pattern
         }
+
+  and constructor_node =
+    { label : Ident.Label.t
+    ; payload : t option
+    ; after_label : Lex.Comment.t list
+    }
 
   and fun_node =
     { var : Ident.Raw.t
@@ -101,6 +111,12 @@ module Expr : sig
     | Paren of { expr : t }
     | Var of { id : Ident.Raw.t }
     | Literal of { value : Literal.t }
+    | Constructor of { label : Ident.Label.t }
+    | Select of
+        { expr : t
+        ; label : Ident.Label.t
+        }
+    | Variant of { constructors : constructor Nonempty_list.t }
     | Unop of
         { op : Ident.Unop.t
         ; arg : t
@@ -137,6 +153,7 @@ module Expr : sig
   and t = node With_loc.t [@@deriving sexp]
   and arg = arg_node With_loc.t [@@deriving sexp]
   and pattern = pattern_node With_loc.t [@@deriving sexp]
+  and constructor = constructor_node With_loc.t [@@deriving sexp]
   and fun_ = fun_node With_loc.t [@@deriving sexp]
 
   val strip : t -> t

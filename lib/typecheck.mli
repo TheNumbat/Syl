@@ -9,6 +9,10 @@ module Error : sig
       | Redundant of Dst.Expr.pattern Nonempty_list.t
       | Non_exhaustive of Match.Result.Missing.t Nonempty_list.t
       | Or_unbound of Ident.t Nonempty_list.t
+      | Payload_mismatch of
+          { label : Ident.Label.t
+          ; required : bool
+          }
     [@@deriving sexp]
   end
 
@@ -31,6 +35,15 @@ module Error : sig
         ; rhs : Value.t
         }
     | Match of Match.t
+    | Duplicate_label of Ident.Label.t
+    | Unknown_label of
+        { from : Tst.Value.t
+        ; label : Ident.Label.t
+        }
+    | Expected_variant of
+        { got : Tst.Value.t
+        ; label : Ident.Label.t
+        }
     | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
     | Static_failure of Builtin.Error.t

@@ -61,26 +61,50 @@ let fmt_literal (literal : Cst.Literal.t) =
 ;;
 
 let fmt_ident (id : Ident.Raw.t) = text (Ident.Raw.print () id)
+let fmt_label (label : Ident.Label.t) = text (Ident.Label.print () label)
+let fmt_dot_label (label : Ident.Label.t) = text ("." ^ Ident.Label.print () label)
 
 let rec fmt_pattern ?(prec = `Tuple) cfg (pat : Cst.Expr.pattern) : Doc.t =
   let inner =
     match pat.node with
     | Var { id } -> fmt_ident id
     | Literal { value } -> fmt_literal value
+    | Constructor { label; payload } ->
+      (match payload with
+       | None -> fmt_dot_label label
+       | Some payload ->
+         let doc = fmt_pattern ~prec:`Tuple cfg payload in
+         let doc =
+           match payload.node with
+           | Constructor { payload = Some _; _ } -> text "(" ^^ doc ^^ text ")"
+           | _ -> doc
+         in
+         fmt_dot_label label ^^ text " " ^^ doc)
     | Tuple { elts } ->
       let elts = Nonempty_list.to_list elts in
       let sep = text "," ^^ line in
       let body = align (concat ~sep ~f:(fmt_pattern ~prec:`Tuple cfg) elts) in
       (match prec with
        | `Or -> group body
-       | `Tuple -> group (text "(" ^^ body ^^ text ")"))
+       | `Arm | `Tuple -> group (text "(" ^^ body ^^ text ")"))
     | Or { left; right } ->
-      let body =
-        fmt_pattern ~prec:`Or cfg left ^^ line ^^ text "| " ^^ fmt_pattern ~prec:`Or cfg right
-      in
       (match prec with
-       | `Or -> group body
-       | `Tuple -> group (text "(" ^^ align body ^^ text ")"))
+       | `Or ->
+         group
+           (fmt_pattern ~prec:`Or cfg left ^^ line ^^ text "| " ^^ fmt_pattern ~prec:`Or cfg right)
+       | `Arm ->
+         (* Arm grammar is an or-chain of atoms: keep the chain bare, but tuple or
+            nested-or operands must parenthesize. *)
+         group
+           (fmt_pattern ~prec:`Arm cfg left
+            ^^ line
+            ^^ text "| "
+            ^^ fmt_pattern ~prec:`Tuple cfg right)
+       | `Tuple ->
+         let body =
+           fmt_pattern ~prec:`Or cfg left ^^ line ^^ text "| " ^^ fmt_pattern ~prec:`Or cfg right
+         in
+         group (text "(" ^^ align body ^^ text ")"))
   in
   fmt_with_loc cfg pat inner
 ;;
@@ -94,22 +118,48 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
   match expr.node with
   | Match { cond; arms; eliminator; before_elimination } ->
     let fmt_arm ((pat : Cst.Expr.pattern), rhs) =
-      let pat_doc = fmt_pattern ~prec:`Or cfg pat in
-      group (text "| " ^^ pat_doc ^^ text " ->" ^^ nest ind (line ^^ fmt_expr cfg rhs))
+      let pat_doc = fmt_pattern ~prec:`Arm cfg pat in
+      group (pat_doc ^^ text " ->" ^^ nest ind (line ^^ fmt_expr cfg rhs))
     in
-    let arms_doc =
-      Nonempty_list.to_list arms
-      |> List.map ~f:fmt_arm
-      |> List.reduce_exn ~f:(fun a b -> a ^^ hardline ^^ b)
+    let sep = text "," ^^ line in
+    let arms = Nonempty_list.to_list arms in
+    let arms_doc = concat ~sep ~f:fmt_arm arms in
+    (* Multi-arm matches always break; only a single arm may stay flat. *)
+    let br =
+      match arms with
+      | [ _ ] -> line
+      | _ -> hardline
     in
     group
-      (text "match"
-       |> fmt_after cfg before_elimination
-       |> fun d -> d ^^ fmt_eliminator eliminator ^^ text " " ^^ fmt_expr cfg cond ^^ text " with")
-    ^^ hardline
-    ^^ arms_doc
+      (group
+         (text "match"
+          |> fmt_after cfg before_elimination
+          |> fun d -> d ^^ fmt_eliminator eliminator ^^ text " " ^^ fmt_expr cfg cond ^^ text " {")
+       ^^ nest ind (br ^^ arms_doc ^^ if_flat ~flat:nil ~broken:(text ","))
+       ^^ br
+       ^^ text "}")
   | Literal { value } -> fmt_literal value
   | Var { id } -> fmt_ident id
+  | Constructor { label } -> fmt_dot_label label
+  | Select { expr = e; label } -> fmt_expr cfg e ^^ fmt_dot_label label
+  | Variant { constructors } ->
+    let constructors = Nonempty_list.to_list constructors in
+    let sep = text "," ^^ line in
+    (* Multi-case variants always break; only a single case may stay flat. *)
+    let br =
+      match constructors with
+      | [ _ ] -> line
+      | _ -> hardline
+    in
+    group
+      (text "variant {"
+       ^^ nest
+            ind
+            (br
+             ^^ concat ~sep ~f:(fmt_constructor cfg) constructors
+             ^^ if_flat ~flat:nil ~broken:(text ","))
+       ^^ br
+       ^^ text "}")
   | Unreachable -> text "unreachable"
   | Paren { expr = e } -> group (text "(" ^^ align (fmt_expr cfg e) ^^ text ")")
   | Unop { op; arg } -> text (Ident.Unop.print () op) ^^ fmt_expr cfg arg
@@ -165,6 +215,16 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
     group (fmt_expr cfg e ^^ nest ind (line ^^ text ": " ^^ fmt_expr cfg ty))
   | Mode_annotation { expr = e; mode } ->
     group (fmt_expr cfg e ^^ text " @ " ^^ text (Modes.Maybe.print () mode))
+
+and fmt_constructor cfg (c : Cst.Expr.constructor) =
+  let n = c.node in
+  let label = fmt_label n.label |> fmt_after cfg n.after_label in
+  let inner =
+    match n.payload with
+    | None -> label
+    | Some payload -> group (label ^^ text " : " ^^ fmt_expr cfg payload)
+  in
+  fmt_with_loc cfg c inner
 
 and fmt_apply (cfg : Config.t) (expr : Cst.Expr.t) =
   let ind = cfg.indent in

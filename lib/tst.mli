@@ -1,5 +1,12 @@
 open! Core
 
+module Step : sig
+  type t =
+    | Index of int
+    | Payload of Ident.Label.t
+  [@@deriving sexp]
+end
+
 module rec Ty : sig
   type t =
     | Unit
@@ -19,6 +26,7 @@ module rec Ty : sig
         ; ret_mode : Modes.t
         }
     | Tuple of Value.t Nonempty_list.t
+    | Variant of Value.t option Ident.Label.Map.t
   [@@deriving sexp]
 
   val arg : Value.t -> Value.t
@@ -26,6 +34,12 @@ module rec Ty : sig
   val ret : Value.t -> Value.t
   val ret_mode : Value.t -> Modes.t
   val of_literal : Dst.Literal.t -> t
+
+  val unify_constructors
+    :  f:(Value.t -> Value.t -> Value.t option)
+    -> Value.t option Ident.Label.Map.t
+    -> Value.t option Ident.Label.Map.t
+    -> t option
 end
 
 and Dependent : sig
@@ -168,6 +182,15 @@ and Value : sig
           ; ret_mode : Modes.t
           }
       | Tuple_t of t Nonempty_list.t
+      | Variant_t of t option Ident.Label.Map.t
+      | Inject of
+          { label : Ident.Label.t
+          ; ty : t
+          }
+      | Constructor of
+          { label : Ident.Label.t
+          ; payload : t option
+          }
     [@@deriving sexp, compare, hash]
 
     include Comparable.S with type t := t
@@ -184,6 +207,14 @@ and Value : sig
     | Binder of Binder.t
     | Var of Ident.t
     | Tuple of t Nonempty_list.t
+    | Inject of
+        { label : Ident.Label.t
+        ; ty : t
+        }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : t option
+        }
     | Apply of
         { fn : t
         ; arg : t
@@ -191,6 +222,10 @@ and Value : sig
     | Proj of
         { tuple : t
         ; index : int
+        }
+    | Payload of
+        { variant : t
+        ; label : Ident.Label.t
         }
     | Match of
         { scrutinee : t
@@ -215,6 +250,9 @@ and Value : sig
   val of_literal : Dst.Literal.t -> t
   val tuple : t Nonempty_list.t -> t
   val proj : t -> int -> t
+  val payload : t -> label:Ident.Label.t -> t
+  val inject : ty:t -> label:Ident.Label.t -> t
+  val constructor : label:Ident.Label.t -> payload:t option -> t
   val apply : fn:t -> arg:t -> t
   val match_ : scrutinee:t -> arms:(Dst.Expr.pattern * t) Nonempty_list.t -> t
   val if_ : loc:Lex.Location.t -> cond:t -> then_:t -> else_:t -> t
@@ -237,7 +275,7 @@ and Value : sig
 
   module Matched : sig
     type t =
-      | Match of (Ident.t * int list) list
+      | Match of (Ident.t * Step.t list) list
       | No_match
       | Unknown
   end
@@ -382,6 +420,20 @@ and Expr : sig
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
+    | Payload_get of
+        { variant : t
+        ; label : Ident.Label.t
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Tag_test of
+        { variant : t
+        ; label : Ident.Label.t
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
     | If of
         { cond : t
         ; then_ : t
@@ -424,9 +476,9 @@ and Expr : sig
   val rebind : t -> stamp:int -> f:(t -> t) -> t
   val tuple : loc:Lex.Location.t -> (t * Desc.t) Nonempty_list.t -> t * Desc.t
 
-  (* Project a runtime component out of the scrutinee (a tuple path of
-     indices), tracking its type and static value. *)
-  val project : loc:Lex.Location.t -> t -> Desc.t -> int list -> t * Desc.t
+  (* Project a runtime component out of the scrutinee, tracking its type and
+     static value. *)
+  val project : loc:Lex.Location.t -> t -> Desc.t -> Step.t list -> t * Desc.t
 
   (* Util *)
 

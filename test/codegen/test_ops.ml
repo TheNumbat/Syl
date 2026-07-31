@@ -195,8 +195,7 @@ let%expect_test "runtime division by zero constant aborts" =
 let c = 1 / 0;;
 let _ = print_int c;;
 |};
-  [%expect
-    {| ("Program killed" (signal sigabrt)) |}]
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
 ;;
 
 let%expect_test "runtime division by zero aborts" =
@@ -205,8 +204,7 @@ let%expect_test "runtime division by zero aborts" =
 let zero = 0;;
 let _ = print_int (1 / zero);;
 |};
-  [%expect
-    {| ("Program killed" (signal sigabrt)) |}]
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
 ;;
 
 let%expect_test "runtime modulo by zero aborts" =
@@ -215,8 +213,7 @@ let%expect_test "runtime modulo by zero aborts" =
 let zero = 0;;
 let _ = print_int (7 % zero);;
 |};
-  [%expect
-    {| ("Program killed" (signal sigabrt)) |}]
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
 ;;
 
 let%expect_test "runtime int_min div/mod by -1 wraps" =

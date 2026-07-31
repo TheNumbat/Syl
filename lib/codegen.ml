@@ -8,6 +8,7 @@ let prelude =
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 using syl_unit = void;
 using syl_type = void;
@@ -57,6 +58,39 @@ template<typename... Ts>
 struct syl_tuple<syl_unit, Ts...> {
   syl_tuple<Ts...> rest;
 };
+
+template<size_t Size, size_t Align>
+struct syl_variant {
+  syl_int tag;
+  alignas(Align) char payload[Size];
+};
+
+template<size_t Align>
+struct syl_variant<0, Align> {
+  syl_int tag;
+};
+
+template<typename Variant>
+static Variant syl_inject(syl_int tag) {
+  Variant v{};
+  v.tag = tag;
+  return v;
+}
+
+template<typename Variant, typename Payload>
+static Variant syl_inject(syl_int tag, Payload payload) {
+  Variant v{};
+  v.tag = tag;
+  memcpy(v.payload, &payload, sizeof(Payload));
+  return v;
+}
+
+template<typename Payload, typename Variant>
+static Payload syl_project(Variant v) {
+  Payload payload;
+  memcpy(&payload, v.payload, sizeof(Payload));
+  return payload;
+}
 
 static syl_env syl_env_rec(size_t size) {
   return (syl_env)malloc(size);
@@ -144,6 +178,24 @@ let rec print_key (key : Tst.Value.Concrete.t) =
     let arg_mode = print_mode arg_mode in
     let ret_mode = print_mode ret_mode in
     Printf.sprintf "%s%sᐳ%s%s" arg_mode arg ret_mode ret
+  | Variant_t constructors ->
+    Map.to_alist constructors
+    |> List.map ~f:(fun (label, payload) ->
+      Ident.Label.print () label
+      ^
+      match payload with
+      | None -> ""
+      | Some payload -> "ˑ" ^ print_key payload)
+    |> String.concat ~sep:"ǀ"
+    |> ( ^ ) "Ʃ"
+  | Inject { label; ty } -> print_key ty ^ "ᐧ" ^ Ident.Label.print () label
+  | Constructor { label; payload } ->
+    "ᐧ"
+    ^ Ident.Label.print () label
+    ^
+      (match payload with
+      | None -> ""
+      | Some payload -> "ˑ" ^ print_key payload)
 ;;
 
 let print_path (path : Path.t) =
@@ -170,6 +222,20 @@ let rec print_ty (ty : Ty.t) =
       Nonempty_list.map elts ~f:print_ty |> Nonempty_list.to_list |> String.concat ~sep:", "
     in
     sprintf "syl_tuple<%s>" args
+  | Variant constructors ->
+    sprintf
+      "syl_variant<%d,%d>"
+      (Ty.payload_size_in_mem constructors)
+      (Ty.payload_align_in_mem constructors)
+;;
+
+let variant_tag (ty : Ty.t) label =
+  match ty with
+  | Variant constructors ->
+    (match Map.rank constructors label with
+     | Some rank -> rank
+     | None -> raise_s [%message "Bug: unknown constructor" (label : Ident.Label.t) (ty : Ty.t)])
+  | _ -> raise_s [%message "Bug: expected variant type" (ty : Ty.t)]
 ;;
 
 let print_expr_nonzero (expr : Expr.t) =
@@ -209,6 +275,12 @@ let print_expr_nonzero (expr : Expr.t) =
         if Ty.is_zero_size ty then None else Some (print_path path))
     in
     Printf.sprintf "%s{%s}" (print_ty ty) (String.concat_array ~sep:", " paths)
+  | Make_variant { label; payload; ty; _ } ->
+    let tag = variant_tag ty label in
+    (match payload with
+     | Some (path, payload_ty) when not (Ty.is_zero_size payload_ty) ->
+       sprintf "syl_inject<%s>(%dll, %s)" (print_ty ty) tag (print_path path)
+     | Some _ | None -> sprintf "syl_inject<%s>(%dll)" (print_ty ty) tag)
   | Ident { path; _ } -> print_path path
   | Tuple_get { tuple; index; _ } ->
     let buf = Buffer.create 32 in
@@ -218,11 +290,15 @@ let print_expr_nonzero (expr : Expr.t) =
     done;
     Buffer.add_string buf ".first";
     Buffer.contents buf
+  | Payload_get { variant; ty; _ } ->
+    sprintf "syl_project<%s>(%s)" (print_ty ty) (print_path variant)
+  | Tag_test { variant; variant_ty; label; _ } ->
+    sprintf "%s.tag == %dll" (print_path variant) (variant_tag variant_ty label)
 ;;
 
 let print_expr_zero (expr : Expr.t) =
   match expr with
-  | Scalar { value = Unit | Type; _ } | Ident _ | Make_tuple _ | Tuple_get _ -> ""
+  | Scalar { value = Unit | Type; _ } | Ident _ | Make_tuple _ | Tuple_get _ | Payload_get _ -> ""
   | Fill_env_rec { env = { length; _ }; _ } when length = 0 -> ""
   | Fill_env_rec { path; env = { entries; _ }; _ } ->
     let paths =
@@ -243,7 +319,7 @@ let print_expr_zero (expr : Expr.t) =
     if Ty.is_zero_size arg_ty
     then Printf.sprintf "%s()" symbol
     else Printf.sprintf "%s(%s)" symbol (print_path arg)
-  | Scalar _ | Make_env _ | Make_env_rec _ | Make_closure _ ->
+  | Scalar _ | Make_env _ | Make_env_rec _ | Make_closure _ | Make_variant _ | Tag_test _ ->
     raise_s [%message "Bug: expected zero-size" (expr : Expr.t)]
 ;;
 

@@ -13,6 +13,11 @@ module Pattern = struct
         { value : Literal.t
         ; loc : Lex.Location.t
         }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : t option
+        ; loc : Lex.Location.t
+        }
     | Tuple of
         { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
@@ -28,13 +33,16 @@ module Pattern = struct
 
   let is_wild : t -> bool = function
     | Var _ -> true
-    | Literal _ | Tuple _ -> false
+    | Literal _ | Constructor _ | Tuple _ -> false
     | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]
   ;;
 
   let rec expand pattern =
     match pattern with
-    | Var _ | Literal _ -> [ pattern ]
+    | Var _ | Literal _ | Constructor { payload = None; _ } -> [ pattern ]
+    | Constructor { label; payload = Some payload; loc } ->
+      expand payload
+      |> List.map ~f:(fun payload -> Constructor { label; payload = Some payload; loc })
     | Or { left; right; _ } -> expand left @ expand right
     | Tuple { elts; loc } ->
       let rec product acc = function
@@ -49,11 +57,15 @@ module Pattern = struct
 end
 
 module Tree = struct
-  module Constructor = struct
+  module Head = struct
     module T = struct
       type t =
         | Literal of Literal.t
         | Tuple of int
+        | Constructor of
+            { label : Ident.Label.t
+            ; payload : bool
+            }
       [@@deriving sexp, compare, hash]
     end
 
@@ -64,6 +76,7 @@ module Tree = struct
     let arity = function
       | Literal _ -> 0
       | Tuple arity -> arity
+      | Constructor { payload; _ } -> if payload then 1 else 0
     ;;
 
     let members =
@@ -74,6 +87,12 @@ module Tree = struct
         | Type Unit -> unit
         | Type Bool -> bool
         | Type (Tuple elt_tys) -> Some (Vec.of_array [| Tuple (Nonempty_list.length elt_tys) |])
+        | Type (Variant constructors) ->
+          Some
+            (Map.to_alist constructors
+             |> List.map ~f:(fun (label, payload) ->
+               Constructor { label; payload = Option.is_some payload })
+             |> Vec.of_list)
         | _ -> None
     ;;
 
@@ -88,7 +107,7 @@ module Tree = struct
 
   module Occurrence = struct
     type t =
-      { path : int Vec.t
+      { path : Tst.Step.t Vec.t
       ; ty : Tst.Value.t
       }
     [@@deriving sexp]
@@ -105,18 +124,31 @@ module Tree = struct
       if n <= 0 then None else Some (Array.init n ~f:(fun i -> occurrences.(skip col i)))
     ;;
 
-    let deepen occurrence (constructor : Constructor.t) =
-      match constructor with
-      | Literal _ -> [||]
+    let deepen occurrence (head : Head.t) =
+      match head with
+      | Literal _ | Constructor { payload = false; _ } -> [||]
       | Tuple arity ->
         (match occurrence.ty with
          | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = arity ->
            Array.of_list (Nonempty_list.to_list elt_tys)
            |> Array.mapi ~f:(fun index ty ->
              let path = Vec.copy occurrence.path in
-             Vec.push_back path index;
+             Vec.push_back path (Tst.Step.Index index);
              { path; ty })
          | ty -> raise_s [%message "Bug: expected tuple" (arity : int) (ty : Tst.Value.t)])
+      | Constructor { label; payload = true } ->
+        (match occurrence.ty with
+         | Type (Variant constructors) ->
+           (match Map.find constructors label with
+            | Some (Some ty) ->
+              let path = Vec.copy occurrence.path in
+              Vec.push_back path (Tst.Step.Payload label);
+              [| { path; ty } |]
+            | Some None | None ->
+              raise_s
+                [%message
+                  "Bug: expected payload" (label : Ident.Label.t) (occurrence.ty : Tst.Value.t)])
+         | ty -> raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (ty : Tst.Value.t)])
     ;;
   end
 
@@ -128,7 +160,7 @@ module Tree = struct
         }
     | Switch of
         { occurrence : Occurrence.t
-        ; cases : (Constructor.t * t) array
+        ; cases : (Head.t * t) array
         ; default : t option
         }
   [@@deriving sexp]
@@ -148,6 +180,10 @@ module Result = struct
         | Wildcard
         | Literal of Literal.t
         | Tuple of t list
+        | Constructor of
+            { label : Ident.Label.t
+            ; payload : t option
+            }
         | Or of t list
       [@@deriving sexp, compare, hash]
     end
@@ -156,10 +192,11 @@ module Result = struct
     include Comparator.Make (T)
     include Hashable.Make (T)
 
-    let constructor (constructor : Tree.Constructor.t) args =
-      match constructor with
+    let of_head (head : Tree.Head.t) args =
+      match head with
       | Literal value -> Literal value
       | Tuple _ -> Tuple args
+      | Constructor { label; payload = _ } -> Constructor { label; payload = List.hd args }
     ;;
 
     let dedup missing =
@@ -192,21 +229,23 @@ module Row = struct
   let all_wild t = Array.for_all t.patterns ~f:Pattern.is_wild
 
   let head ts ~col =
-    let seen = Hash_set.create (module Tree.Constructor) in
+    let seen = Hash_set.create (module Tree.Head) in
     let result = Vec.create () in
     Vec.iter ts ~f:(fun row ->
-      let constructor : Tree.Constructor.t option =
+      let head : Tree.Head.t option =
         match row.patterns.(col) with
         | Var _ -> None
         | Literal { value; _ } -> Some (Literal value)
         | Tuple { elts; _ } -> Some (Tuple (Nonempty_list.length elts))
+        | Constructor { label; payload; _ } ->
+          Some (Constructor { label; payload = Option.is_some payload })
         | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]
       in
-      Option.iter constructor ~f:(fun constructor ->
-        if not (Hash_set.mem seen constructor)
+      Option.iter head ~f:(fun head ->
+        if not (Hash_set.mem seen head)
         then (
-          Hash_set.add seen constructor;
-          Vec.push_back result constructor)));
+          Hash_set.add seen head;
+          Vec.push_back result head)));
     result
   ;;
 
@@ -215,14 +254,16 @@ module Row = struct
     let score ~col =
       let needed = not (Pattern.is_wild (Vec.get ts 0).patterns.(col)) in
       let defaults = ref 0 in
-      let constructors = Tree.Constructor.Hash_set.create () in
+      let heads = Tree.Head.Hash_set.create () in
       Vec.iter ts ~f:(fun row ->
         match row.patterns.(col) with
         | Var _ -> incr defaults
-        | Literal { value; _ } -> Hash_set.add constructors (Literal value)
-        | Tuple { elts; _ } -> Hash_set.add constructors (Tuple (Nonempty_list.length elts))
+        | Literal { value; _ } -> Hash_set.add heads (Literal value)
+        | Tuple { elts; _ } -> Hash_set.add heads (Tuple (Nonempty_list.length elts))
+        | Constructor { label; payload; _ } ->
+          Hash_set.add heads (Constructor { label; payload = Option.is_some payload })
         | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]);
-      (if needed then 1 else 0), !defaults, Hash_set.length constructors
+      (if needed then 1 else 0), !defaults, Hash_set.length heads
     in
     let better (n1, d1, b1) (n2, d2, b2) =
       n1 > n2 || (n1 = n2 && (d1 < d2 || (d1 = d2 && b1 < b2)))
@@ -252,11 +293,11 @@ let materialize (row : Row.t) (occurrences : Tree.Occurrence.t array) =
     | _ -> raise_s [%message "Bug: expected wild row"])
 ;;
 
-let specialize constructor occurrence col (rows : Row.t Vec.t) =
-  let arity = Tree.Constructor.arity constructor in
+let specialize head occurrence col (rows : Row.t Vec.t) =
+  let arity = Tree.Head.arity head in
   let result = Vec.create () in
   Vec.iter rows ~f:(fun row ->
-    match row.patterns.(col), constructor with
+    match row.patterns.(col), head with
     | Var { id; _ }, _ ->
       let bound = bind row.bound occurrence id in
       let rest_len = Array.length row.patterns - 1 in
@@ -278,7 +319,22 @@ let specialize constructor occurrence col (rows : Row.t Vec.t) =
           if i < a then elts.(i) else row.patterns.(skip col (i - a)))
       in
       Vec.push_back result { row with patterns }
-    | (Literal _ | Tuple _), _ -> ()
+    | Constructor { label; payload = None; _ }, Constructor { label = target; payload = false }
+      when Ident.Label.equal label target ->
+      let patterns =
+        Array.init (Array.length row.patterns - 1) ~f:(fun i -> row.patterns.(skip col i))
+      in
+      Vec.push_back result { row with patterns }
+    | ( Constructor { label; payload = Some payload; _ }
+      , Constructor { label = target; payload = true } )
+      when Ident.Label.equal label target ->
+      let rest_len = Array.length row.patterns - 1 in
+      let patterns =
+        Array.init (1 + rest_len) ~f:(fun i ->
+          if i = 0 then payload else row.patterns.(skip col (i - 1)))
+      in
+      Vec.push_back result { row with patterns }
+    | (Literal _ | Tuple _ | Constructor _), _ -> ()
     | Or _, _ -> raise_s [%message "Bug: unexpanded or pattern"]);
   result
 ;;
@@ -293,7 +349,7 @@ let default occurrence col (rows : Row.t Vec.t) =
         Array.init (Array.length row.patterns - 1) ~f:(fun i -> row.patterns.(skip col i))
       in
       Vec.push_back result { row with patterns; bound }
-    | Literal _ | Tuple _ -> ()
+    | Literal _ | Tuple _ | Constructor _ -> ()
     | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]);
   result
 ;;
@@ -310,17 +366,17 @@ let rec compile_matrix reached (occurrences : Tree.Occurrence.t array) (rows : R
   else (
     let col = Row.select rows in
     let occurrence = occurrences.(col) in
-    let constructors = Row.head rows ~col in
+    let heads = Row.head rows ~col in
     let cases =
-      Array.init (Vec.length constructors) ~f:(fun i ->
-        let constructor = Vec.get constructors i in
-        let sub = Tree.Occurrence.deepen occurrence constructor in
+      Array.init (Vec.length heads) ~f:(fun i ->
+        let head = Vec.get heads i in
+        let sub = Tree.Occurrence.deepen occurrence head in
         let occ = Tree.Occurrence.append sub occurrences ~exclude:col in
-        let body = compile_matrix reached occ (specialize constructor occurrence col rows) in
-        constructor, body)
+        let body = compile_matrix reached occ (specialize head occurrence col rows) in
+        head, body)
     in
     let default =
-      if Tree.Constructor.covers constructors occurrence.ty
+      if Tree.Head.covers heads occurrence.ty
       then None
       else (
         let rest = Tree.Occurrence.remove occurrences col |> Option.value ~default:[||] in
@@ -330,14 +386,14 @@ let rec compile_matrix reached (occurrences : Tree.Occurrence.t array) (rows : R
 ;;
 
 let rec enumerate_missing (occ : Tree.Occurrence.t) : Result.Missing.t =
-  match Tree.Constructor.members occ.ty with
+  match Tree.Head.members occ.ty with
   | None -> Wildcard
-  | Some constructors ->
+  | Some heads ->
     let items =
-      Vec.to_list constructors
-      |> List.map ~f:(fun constructor ->
-        let sub = Tree.Occurrence.deepen occ constructor in
-        Result.Missing.constructor constructor (Array.to_list sub |> List.map ~f:enumerate_missing))
+      Vec.to_list heads
+      |> List.map ~f:(fun head ->
+        let sub = Tree.Occurrence.deepen occ head in
+        Result.Missing.of_head head (Array.to_list sub |> List.map ~f:enumerate_missing))
     in
     (match items with
      | [ single ] -> single
@@ -351,15 +407,15 @@ and missing_matrix (occurrences : Tree.Occurrence.t array) (rows : Row.t Vec.t) 
   else (
     let col = Row.select rows in
     let occurrence = occurrences.(col) in
-    match Tree.Constructor.members occurrence.ty with
-    | Some constructors ->
-      Vec.fold constructors ~init:[] ~f:(fun acc constructor ->
-        let sub = Tree.Occurrence.deepen occurrence constructor in
+    match Tree.Head.members occurrence.ty with
+    | Some heads ->
+      Vec.fold heads ~init:[] ~f:(fun acc head ->
+        let sub = Tree.Occurrence.deepen occurrence head in
         let occ = Tree.Occurrence.append sub occurrences ~exclude:col in
-        let missing = missing_matrix occ (specialize constructor occurrence col rows) in
+        let missing = missing_matrix occ (specialize head occurrence col rows) in
         List.fold missing ~init:acc ~f:(fun acc missing ->
-          let args, rest = List.split_n missing (Tree.Constructor.arity constructor) in
-          let value = Result.Missing.constructor constructor args in
+          let args, rest = List.split_n missing (Tree.Head.arity head) in
+          let value = Result.Missing.of_head head args in
           let before, after = List.split_n rest col in
           (before @ [ value ] @ after) :: acc))
       |> List.rev

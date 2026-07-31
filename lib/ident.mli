@@ -42,6 +42,16 @@ module Raw : sig
   include Comparable.S with type t := t
 end
 
+module Label : sig
+  type t [@@deriving sexp, compare, equal, hash]
+
+  val of_string : string -> t
+  val print : unit -> t -> string
+
+  include Hashable.S with type t := t
+  include Comparable.S with type t := t
+end
+
 type t [@@deriving sexp, compare, equal, hash]
 
 val create : Raw.t -> stamp:int -> t

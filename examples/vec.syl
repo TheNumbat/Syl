@@ -11,28 +11,25 @@ fun replicate (static n : int) : int -> vec n =
 
 let _ = replicate 4 10 : vec 4;;
 
-let sum4 =
-  fn (v : vec 4) ->
-    match v with
-    | a, (b, (c, d)) -> a + b + c + d
-;;
+let sum4 = fn (v : vec 4) -> match v { (a, (b, (c, d))) -> a + b + c + d };;
 
 let _ = print_int (sum4 (replicate 4 10));;
 
-let safe_div =
-  fn (static d : int) -> if erased d != 0 then (fn (x : int) -> x / d) else unreachable
+(* Length-indexed vectors represented as indexed variants. *)
+fun vec (static n : int) : erased type =
+  match erased n { 0 -> variant { nil }, _ -> variant { cons : int ^ vec (n - 1) } }
 ;;
 
-let _ = print_int (safe_div 2 10);;
-
-let safe_at =
-  fn (static i : int) ->
-    if erased 0 <= i && i < 2
-    then
-      (fn (v : vec 2) ->
-         match v with
-         | a, b -> if erased i == 0 then a else b)
-    else unreachable
+fun replicate (static n : int) : int -> vec n =
+  fn (x : int) ->
+    match erased n {
+      0 -> (vec n).nil,
+      _ -> (variant { cons : int ^ vec (n - 1) }).cons (x, replicate (n - 1) x),
+    }
 ;;
 
-let _ = print_int (safe_at 1 (replicate 2 9));;
+let _ = replicate 4 10 : vec 4;;
+
+let sum4 = fn (v : vec 4) -> match v { .cons (a, .cons (b, .cons (c, .cons (d, .nil)))) -> a + b + c + d };;
+
+let _ = print_int (sum4 (replicate 4 10));;

@@ -18,10 +18,17 @@ let%expect_test "recursive reify through tuple containing recursive captured clo
   go
     {|
 let make_apply = fn (static f : int -> int) -> fn (x : int) -> f x;;
+
 let n = 100;;
-fun down (x : int) : int = if x == 0 then n else down (x - 1);;
+
+fun down (x : int) : int =
+  if x == 0 then n else down (x - 1)
+;;
+
 let pair = (down, 0);;
-let f = fn (x : int) -> match pair with | (g, _) -> g x;;
+
+let f = fn (x : int) -> match pair { (g, _) -> g x };;
+
 let _ = print_int (make_apply f 2);;
 |};
   [%expect {| 100 |}]
@@ -164,13 +171,15 @@ let%expect_test "same-stamp closures rematerialized through static tuple stay di
   go
     {|
 let make = fn (static n : int) -> fn (x : int) -> n + x;;
+
 let f = make 10;;
+
 let g = make 20;;
+
 let use =
-  fn (static p : (int -> int) ^ (int -> int)) ->
-  fn (x : int) ->
-    match p with
-    | (a, b) -> a x + b x;;
+  fn (static p : (int -> int) ^ (int -> int)) -> fn (x : int) -> match p { (a, b) -> a x + b x }
+;;
+
 let _ = print_int (use (f, g) 0);;
 |};
   [%expect {| 30 |}]
@@ -182,13 +191,10 @@ let%expect_test "binder rematerialized through returned factory pair" =
 let make =
   fn (static n : int) ->
     let apply = fn (static f : static int -> int) -> f 0 in
-    let down = fn (static x : int) -> n in
-    (apply, down)
+    let down = fn (static x : int) -> n in (apply, down)
 ;;
-let _ =
-  match make 100 with
-  | (apply, down) -> print_int (apply down)
-;;
+
+let _ = match make 100 { (apply, down) -> print_int (apply down) };;
 |};
   [%expect {| 100 |}]
 ;;
@@ -198,13 +204,17 @@ let%expect_test "rematerialized tuple shares recursive captured closure" =
     {|
 let use_pair =
   fn (static pair : (int -> int) ^ (int -> int)) ->
-  fn (x : int) ->
-    match pair with
-    | (f, g) -> f x + g x
+    fn (x : int) -> match pair { (f, g) -> f x + g x }
 ;;
+
 let n = 10;;
-fun down (x : int) : int = if x == 0 then n else down (x - 1);;
+
+fun down (x : int) : int =
+  if x == 0 then n else down (x - 1)
+;;
+
 let pair = (down, down);;
+
 let _ = print_int (use_pair pair 2);;
 |};
   [%expect {| 20 |}]
@@ -258,10 +268,11 @@ let%expect_test "static tuple of scalars rematerialized into binder body" =
     {|
 let use =
   fn (static t : int ^ bool ^ unit) ->
-  fn (k : int) ->
-    match t with
-    | (i, b, _) -> if b then i + k else k - i;;
+    fn (k : int) -> match t { (i, b, _) -> if b then i + k else k - i }
+;;
+
 let _ = print_int (use (10, true, ()) 5);;
+
 let _ = print_int (use (10, false, ()) 5);;
 |};
   [%expect
@@ -275,15 +286,20 @@ let%expect_test "static three-tuple of distinct closures rematerialized" =
   go
     {|
 let n = 100;;
+
 let m = 200;;
+
 let a = fn (x : int) -> x + n;;
+
 let b = fn (x : int) -> x + m;;
+
 let c = fn (x : int) -> x + 1;;
+
 let use =
   fn (static t : (int -> int) ^ (int -> int) ^ (int -> int)) ->
-  fn (x : int) ->
-    match t with
-    | (p, q, r) -> p x + q x + r x;;
+    fn (x : int) -> match t { (p, q, r) -> p x + q x + r x }
+;;
+
 let _ = print_int (use (a, b, c) 1);;
 |};
   [%expect {| 304 |}]
@@ -293,12 +309,13 @@ let%expect_test "static tuple closure captures another tuple closure" =
   go
     {|
 let inc = fn (x : int) -> x + 1;;
+
 let then_dbl = fn (x : int) -> inc x * 2;;
+
 let use_pair =
-  fn (static p : (int -> int) ^ (int -> int)) ->
-  fn (x : int) ->
-    match p with
-    | (a, b) -> a x + b x;;
+  fn (static p : (int -> int) ^ (int -> int)) -> fn (x : int) -> match p { (a, b) -> a x + b x }
+;;
+
 let _ = print_int (use_pair (inc, then_dbl) 5);;
 |};
   [%expect {| 18 |}]
@@ -307,14 +324,18 @@ let _ = print_int (use_pair (inc, then_dbl) 5);;
 let%expect_test "static tuple of mutually-recursive funs rematerialized" =
   go
     {|
-fun f (x : int) : int = if x == 0 then 1 else g (x - 1)
-and g (x : int) : int = if x == 0 then 2 else f (x - 1);;
+fun f (x : int) : int =
+  if x == 0 then 1 else g (x - 1)
+and g (x : int) : int =
+  if x == 0 then 2 else f (x - 1)
+;;
+
 let use =
-  fn (static p : (int -> int) ^ (int -> int)) ->
-  fn (x : int) ->
-    match p with
-    | (a, b) -> a x + b x;;
+  fn (static p : (int -> int) ^ (int -> int)) -> fn (x : int) -> match p { (a, b) -> a x + b x }
+;;
+
 let _ = print_int (use (f, g) 2);;
+
 let _ = print_int (use (g, f) 2);;
 |};
   [%expect
@@ -327,13 +348,12 @@ let _ = print_int (use (g, f) 2);;
 let%expect_test "static tuple of polymorphic binder specializations rematerialized" =
   go
     {|
-let id =
-  fn (static erased t : type) -> fn (x : t) -> x;;
+let id = fn (static erased t : type) -> fn (x : t) -> x;;
+
 let use =
-  fn (static p : (int -> int) ^ (int -> int)) ->
-  fn (x : int) ->
-    match p with
-    | (a, b) -> a x + b x;;
+  fn (static p : (int -> int) ^ (int -> int)) -> fn (x : int) -> match p { (a, b) -> a x + b x }
+;;
+
 let _ = print_int (use (id int, id int) 5);;
 |};
   [%expect {| 10 |}]
@@ -487,10 +507,9 @@ let%expect_test "reify rematerialized closure projected from static tuple" =
   go
     {|
 let make = fn (static n : int) -> fn (x : int) -> x + n;;
-let use =
-  fn (static p : (int -> int) ^ int) ->
-    match p with
-    | (f, _) -> f 2;;
+
+let use = fn (static p : (int -> int) ^ int) -> match p { (f, _) -> f 2 };;
+
 let _ = print_int (use (make 40, 0));;
 |};
   [%expect {| 42 |}]
@@ -576,8 +595,10 @@ let%expect_test "quoted binder flows through a tuple result and a match pattern"
   go
     {|
 let ret_pair = fn (static p : static erased type \ s -> s -> s) -> (p, 0);;
+
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
-let _ = match ret_pair id_t with | (f, _) -> print_int (f int 5);;
+
+let _ = match ret_pair id_t { (f, _) -> print_int (f int 5) };;
 |};
   [%expect {| 5 |}]
 ;;
@@ -713,8 +734,13 @@ let%expect_test "reify rematerialized binder projected from static tuple" =
   go
     {|
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
+
 let pair = (id_t, 41);;
-let use = fn (static p : (static erased type \ s -> s -> s) ^ int) -> match p with | (f, n) -> f int n;;
+
+let use =
+  fn (static p : (static erased type \ s -> s -> s) ^ int) -> match p { (f, n) -> f int n }
+;;
+
 let _ = print_int (use pair);;
 |};
   [%expect {| 41 |}]
@@ -725,9 +751,11 @@ let%expect_test "two projections of one static tuple component both specialize" 
     {|
 let use =
   fn (static p : (static erased type \ s -> s -> s) ^ int) ->
-    match p with
-    | (f, _) -> (match p with | (g, n) -> f int (g int n));;
+    match p { (f, _) -> (match p { (g, n) -> f int (g int n) }) }
+;;
+
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
+
 let _ = print_int (use (id_t, 23));;
 |};
   [%expect {| 23 |}]
@@ -896,8 +924,11 @@ let%expect_test "quoted capture of a static tuple containing a closure" =
   go
     {|
 let pair = ((fn (x : int) -> x * 3), 4) @ static;;
-let f = fn (y : int) -> (match pair with | (g, k) -> g y + k);;
+
+let f = fn (y : int) -> (match pair { (g, k) -> g y + k });;
+
 let use = fn (static h : int -> int) -> h 2;;
+
 let _ = print_int (use f);;
 |};
   [%expect {| 10 |}]
@@ -932,9 +963,14 @@ let%expect_test "two instances of one lexical fun quoted in one key" =
   go
     {|
 fun outer (static k : int) : static (int -> int) =
-  fun helper (x : int) : int = x + k in (fn (y : int) -> helper y)
+  fun helper (x : int) : int =
+    x + k
+  in
+  (fn (y : int) -> helper y)
 ;;
-let use = fn (static p : (int -> int) ^ (int -> int)) -> match p with | (a, b) -> a 10 + b 10;;
+
+let use = fn (static p : (int -> int) ^ (int -> int)) -> match p { (a, b) -> a 10 + b 10 };;
+
 let _ = print_int (use ((outer 1), (outer 2)));;
 |};
   [%expect {| 23 |}]

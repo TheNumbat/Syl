@@ -16,6 +16,7 @@ module Ty : sig
         { arg_ty : t
         ; ret_ty : t Key.Map.t
         }
+    | Variant of t option Ident.Label.Map.t
   [@@deriving sexp]
 end
 
@@ -131,6 +132,29 @@ module Expr : sig
     | Tuple_get of
         { tuple : t
         ; index : int
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : t option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Inject of
+        { label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Payload_get of
+        { variant : t
+        ; label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Tag_test of
+        { variant : t
+        ; label : Ident.Label.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

@@ -53,6 +53,12 @@ let rec desugar_pattern env seen (pattern : Cst.Expr.pattern)
       let env, id = Env.bind env id in
       env, seen, Var { id; loc })
   | Literal { value } -> env, seen, Literal { value; loc }
+  | Constructor { label; payload } ->
+    (match payload with
+     | None -> env, seen, Constructor { label; payload = None; loc }
+     | Some payload ->
+       let env, seen, payload = desugar_pattern env seen payload in
+       env, seen, Constructor { label; payload = Some payload; loc })
   | Tuple { elts } ->
     let (env, seen), elts =
       Nonempty_list.fold_map elts ~init:(env, seen) ~f:(fun (env, seen) pat ->
@@ -111,6 +117,16 @@ and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
   | Paren { expr } -> desugar_expr env expr
   | Var { id } -> Var { id = Env.find env id; loc }
   | Literal { value } -> Literal { value; loc }
+  | Constructor { label } -> Constructor { label; loc }
+  | Select { expr; label } -> Select { expr = desugar_expr env expr; label; loc }
+  | Variant { constructors } ->
+    let constructors =
+      Nonempty_list.map constructors ~f:(fun (constructor : Cst.Expr.constructor) ->
+        { Dst.Expr.label = constructor.node.label
+        ; payload = Option.map constructor.node.payload ~f:(desugar_expr env)
+        })
+    in
+    Variant { constructors; loc }
   | Unop { op; arg } ->
     Apply
       { fn = Var { id = Env.find env (Ident.Raw.unop op); loc }; arg = desugar_expr env arg; loc }

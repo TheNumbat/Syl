@@ -28,9 +28,11 @@ let _ = if x then
 let%expect_test "match arm returns pack (polymorphic binder)" =
   go
     {|
-let _ = match true with
-  | true -> (fn (static erased t : type) -> ())
-  | false -> (fn (static erased t : type) -> ())
+let _ =
+  match true {
+    true -> (fn (static erased t : type) -> ()),
+    false -> (fn (static erased t : type) -> ()),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -51,9 +53,11 @@ else
 let%expect_test "match arm returns polymorphic identity" =
   go
     {|
-let _ = match true with
-  | true -> (fn (static erased t : type) -> fn (x : t) -> x)
-  | false -> (fn (static erased t : type) -> fn (x : t) -> x)
+let _ =
+  match true {
+    true -> (fn (static erased t : type) -> fn (x : t) -> x),
+    false -> (fn (static erased t : type) -> fn (x : t) -> x),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -62,9 +66,11 @@ let _ = match true with
 let%expect_test "match arm returns polymorphic identity" =
   go
     {|
-let _ = match true with
-  | true -> (fn (static x : int) -> x)
-  | false -> (fn (x : int) -> x)
+let _ =
+  match true {
+    true -> (fn (static x : int) -> x),
+    false -> (fn (x : int) -> x),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -73,9 +79,11 @@ let _ = match true with
 let%expect_test "match arm returns polymorphic identity" =
   go
     {|
-let _ = match true with
-  | false -> (fn (x : int) -> x)
-  | true -> (fn (static x : int) -> x)
+let _ =
+  match true {
+    false -> (fn (x : int) -> x),
+    true -> (fn (static x : int) -> x),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -108,11 +116,15 @@ else
 let%expect_test "nested match with pack-typed inner body" =
   go
     {|
-let _ = match true with
-  | true -> (match false with
-             | true -> (fn (static erased t : type) -> ())
-             | false -> (fn (static erased t : type) -> ()))
-  | false -> (fn (static erased t : type) -> ())
+let _ =
+  match true {
+    true ->
+      (match false {
+         true -> (fn (static erased t : type) -> ()),
+         false -> (fn (static erased t : type) -> ()),
+       }),
+    false -> (fn (static erased t : type) -> ()),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -121,11 +133,15 @@ let _ = match true with
 let%expect_test "match arm body is another match returning pack" =
   go
     {|
-let _ = match true with
-  | true -> (match false with
-             | true -> (fn (static x : int) -> x)
-             | false -> (fn (x : int) -> x))
-  | false -> (fn (x : int) -> x)
+let _ =
+  match true {
+    true ->
+      (match false {
+         true -> (fn (static x : int) -> x),
+         false -> (fn (x : int) -> x),
+       }),
+    false -> (fn (x : int) -> x),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -134,10 +150,14 @@ let _ = match true with
 let%expect_test "three-arm match on int with pack arms" =
   go
     {|
-let _ = (fn (x : int) -> match x with
-  | 0 -> (fn (static erased t : type) -> ())
-  | 1 -> (fn (static erased t : type) -> ())
-  | _ -> (fn (static erased t : type) -> ())) 5
+let _ =
+  (fn (x : int) ->
+     match x {
+       0 -> (fn (static erased t : type) -> ()),
+       1 -> (fn (static erased t : type) -> ()),
+       _ -> (fn (static erased t : type) -> ()),
+     })
+    5
 ;;
 |};
   [%expect {| |}]
@@ -232,9 +252,13 @@ let _ = f bool;;
 let%expect_test "match with dynamic scrutinee and empty-pack arms inside lambda" =
   go
     {|
-let _ = (fn (b : bool) -> match b with
-  | true -> (fn (static erased t : type) -> ())
-  | false -> (fn (static erased t : type) -> ())) true
+let _ =
+  (fn (b : bool) ->
+     match b {
+       true -> (fn (static erased t : type) -> ()),
+       false -> (fn (static erased t : type) -> ()),
+     })
+    true
 ;;
 |};
   [%expect {| |}]
@@ -243,9 +267,7 @@ let _ = (fn (b : bool) -> match b with
 let%expect_test "match with tuple pattern and pack body" =
   go
     {|
-let _ = (fn (t : int ^ int) -> match t with
-  | (a, b) -> (fn (static erased u : type) -> ())) (1, 2)
-;;
+let _ = (fn (t : int ^ int) -> match t { (a, b) -> (fn (static erased u : type) -> ()) }) (1, 2);;
 |};
   [%expect {| |}]
 ;;
@@ -268,13 +290,20 @@ let%expect_test "match with non-empty pack arms (both arms monomorphized)" =
   go
     {|
 let a = fn (static erased t : type) -> ();;
+
 let b = fn (static erased t : type) -> ();;
+
 let _ = a int;;
+
 let _ = b int;;
+
 let cond = true && true;;
-let _ = match cond with
-  | true -> a
-  | false -> b
+
+let _ =
+  match cond {
+    true -> a,
+    false -> b,
+  }
 ;;
 |};
   [%expect {| |}]
@@ -284,10 +313,13 @@ let%expect_test "match leaves pack-typed unreachable case" =
   go
     {|
 let x = 1 + 2;;
-let _ = match x with
-  | 0 -> (fn (static x : int) -> x)
-  | 1 -> (fn (x : int) -> x)
-  | _ -> (fn (x : int) -> x)
+
+let _ =
+  match x {
+    0 -> (fn (static x : int) -> x),
+    1 -> (fn (x : int) -> x),
+    _ -> (fn (x : int) -> x),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -298,10 +330,12 @@ let%expect_test "three-arm match on int with pack arms" =
     {|
 let _ =
   fun f (x : int) : static (static int -> unit) =
-  match x with
-  | 0 -> (fn (static x : int) -> ())
-  | 1 -> (fn (static x : int) -> ())
-  | _ -> (fn (static x : int) -> ()) in
+    match x {
+      0 -> (fn (static x : int) -> ()),
+      1 -> (fn (static x : int) -> ()),
+      _ -> (fn (static x : int) -> ()),
+    }
+  in
   f 5
 ;;
 |};

@@ -23,6 +23,11 @@ module Expr : sig
         { value : Literal.t
         ; loc : Lex.Location.t
         }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : pattern option
+        ; loc : Lex.Location.t
+        }
     | Tuple of
         { elts : pattern Nonempty_list.t
         ; loc : Lex.Location.t
@@ -32,6 +37,11 @@ module Expr : sig
         ; right : pattern
         ; loc : Lex.Location.t
         }
+
+  and constructor =
+    { label : Ident.Label.t
+    ; payload : t option
+    }
 
   and t =
     | If of
@@ -76,6 +86,19 @@ module Expr : sig
         }
     | Literal of
         { value : Literal.t
+        ; loc : Lex.Location.t
+        }
+    | Constructor of
+        { label : Ident.Label.t
+        ; loc : Lex.Location.t
+        }
+    | Select of
+        { expr : t
+        ; label : Ident.Label.t
+        ; loc : Lex.Location.t
+        }
+    | Variant of
+        { constructors : constructor Nonempty_list.t
         ; loc : Lex.Location.t
         }
     | Arrow of

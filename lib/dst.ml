@@ -24,6 +24,11 @@ module Expr = struct
         { value : Literal.t
         ; loc : Lex.Location.t
         }
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : pattern option
+        ; loc : Lex.Location.t
+        }
     | Tuple of
         { elts : pattern Nonempty_list.t
         ; loc : Lex.Location.t
@@ -33,6 +38,11 @@ module Expr = struct
         ; right : pattern
         ; loc : Lex.Location.t
         }
+
+  and constructor =
+    { label : Ident.Label.t
+    ; payload : t option
+    }
 
   and t =
     | If of
@@ -79,6 +89,19 @@ module Expr = struct
         { value : Literal.t
         ; loc : Lex.Location.t
         }
+    | Constructor of
+        { label : Ident.Label.t
+        ; loc : Lex.Location.t
+        }
+    | Select of
+        { expr : t
+        ; label : Ident.Label.t
+        ; loc : Lex.Location.t
+        }
+    | Variant of
+        { constructors : constructor Nonempty_list.t
+        ; loc : Lex.Location.t
+        }
     | Arrow of
         { arg : t
         ; arg_id : Ident.t
@@ -118,9 +141,14 @@ module Expr = struct
     | Tuple { elts; _ } | Make_tuple { elts; _ } ->
       Nonempty_list.map elts ~f:free_vars |> Nonempty_list.to_list |> Ident.Set.union_list
     | Var { id; _ } -> Ident.Set.singleton id
-    | Mode_annotation { expr; _ } -> free_vars expr
+    | Mode_annotation { expr; _ } | Select { expr; _ } -> free_vars expr
     | Type_annotation { expr; ty; _ } -> Set.union (free_vars expr) (free_vars ty)
-    | Unreachable _ | Literal _ | Builtin _ -> Ident.Set.empty
+    | Unreachable _ | Literal _ | Builtin _ | Constructor _ -> Ident.Set.empty
+    | Variant { constructors; _ } ->
+      Nonempty_list.map constructors ~f:(fun { payload; _ } ->
+        Option.value_map payload ~default:Ident.Set.empty ~f:free_vars)
+      |> Nonempty_list.to_list
+      |> Ident.Set.union_list
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
     | Match { cond; arms; _ } ->
@@ -156,6 +184,8 @@ module Expr = struct
   and free_vars_pattern = function
     | Var { id; _ } -> Ident.Set.singleton id
     | Literal _ -> Ident.Set.empty
+    | Constructor { payload; _ } ->
+      Option.value_map payload ~default:Ident.Set.empty ~f:free_vars_pattern
     | Tuple { elts; _ } ->
       Nonempty_list.map elts ~f:free_vars_pattern |> Nonempty_list.to_list |> Ident.Set.union_list
     | Or { left; right; _ } -> Set.union (free_vars_pattern left) (free_vars_pattern right)
@@ -170,6 +200,9 @@ module Expr = struct
     | Apply { loc; _ }
     | Var { loc; _ }
     | Literal { loc; _ }
+    | Constructor { loc; _ }
+    | Select { loc; _ }
+    | Variant { loc; _ }
     | Arrow { loc; _ }
     | Tuple { loc; _ }
     | Unreachable { loc; _ }

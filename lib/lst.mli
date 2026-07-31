@@ -28,6 +28,7 @@ module Ty : sig
     | Int
     | Type
     | Tuple of t Nonempty_list.t
+    | Variant of t option Ident.Label.Map.t
     | Env
     | Closure of
         { arg_ty : t
@@ -35,8 +36,14 @@ module Ty : sig
         }
   [@@deriving sexp]
 
+  (* TODO these will change once we switch to an llvm backend. *)
+
+  (* [size_in_mem] is C++ [sizeof] of the printed type; zero-size types are
+     printed as [void] and never materialized. *)
   val size_in_mem : t -> int
   val align_in_mem : t -> int
+  val payload_size_in_mem : t option Ident.Label.Map.t -> int
+  val payload_align_in_mem : t option Ident.Label.Map.t -> int
   val align_to : int -> align:int -> int
   val is_zero_size : t -> bool
 end
@@ -92,6 +99,12 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Make_variant of
+        { label : Ident.Label.t
+        ; payload : (Path.t * Ty.t) option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
     | Apply_closure of
         { fn : Path.t
         ; arg : Path.t
@@ -128,6 +141,19 @@ module Expr : sig
     | Tuple_get of
         { tuple : Path.t
         ; index : int
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Payload_get of
+        { variant : Path.t
+        ; label : Ident.Label.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Tag_test of
+        { variant : Path.t
+        ; variant_ty : Ty.t
+        ; label : Ident.Label.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

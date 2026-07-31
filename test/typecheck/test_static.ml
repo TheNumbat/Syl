@@ -1489,6 +1489,30 @@ let _ = assert erased (f true == 1);;
   [%expect {| |}]
 ;;
 
+(* The dead branch of a resolved erased if is checked under the branch's
+   assumed condition, exactly like the unresolved case. *)
+let%expect_test "resolved erased if refines its dead branch" =
+  go
+    {|
+let b = true;;
+let _ = if erased b then 1 else (let _ = assert erased (!b) in 0);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "dead branch asserts still evaluate under the refinement" =
+  go
+    {|
+let b = true;;
+let _ = if erased b then 1 else (let _ = assert erased b in 0);;
+|};
+  [%expect
+    {|
+    ((loc ((line 3) (column 41)))
+     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    |}]
+;;
+
 let%expect_test "pi return static parametric" =
   go
     {|

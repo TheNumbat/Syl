@@ -429,11 +429,15 @@ let%expect_test "recursive computed type built generically" =
 fun ivec (static n : int) : erased type =
   if erased n == 1 then int else int ^ ivec (n - 1)
 ;;
+
 fun replicate (static n : int) : int -> ivec n =
   fn (x : int) -> if erased n == 1 then x else (x, replicate (n - 1) x)
 ;;
-let sum4 = fn (v : ivec 4) -> match v with | (a, (b, (c, d))) -> a + b + c + d;;
+
+let sum4 = fn (v : ivec 4) -> match v { (a, (b, (c, d))) -> a + b + c + d };;
+
 let _ = print_int (sum4 (replicate 4 10));;
+
 let _ = print_int (sum4 ((1, (2, (3, 4))) : ivec 4));;
 |};
   [%expect
@@ -477,8 +481,11 @@ let _ = print_bool (choose false);;
 let%expect_test "static tuple result carrying a closure" =
   go
     {|
-fun mk (static n : int) : static ((int -> int) ^ int) = ((fn (x : int) -> x + n), n);;
-let _ = match mk 4 with | (f, k) -> print_int (f 10 + k);;
+fun mk (static n : int) : static ((int -> int) ^ int) =
+  ((fn (x : int) -> x + n), n)
+;;
+
+let _ = match mk 4 { (f, k) -> print_int (f 10 + k) };;
 |};
   [%expect {| 18 |}]
 ;;

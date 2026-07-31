@@ -50,15 +50,18 @@ module Kind : sig
     | External : unit t
     | Builtin : unit t
     | Match : unit t
-    | With : unit t
     | Pipe : unit t
     | Assert : unit t
     | Unreachable : unit t
+    | Variant : unit t
+    | Lbrace : unit t
+    | Rbrace : unit t
     | Op : Op.t t
     | Unit : unit t
     | Bool : bool t
     | Int : int64 t
     | Ident : string t
+    | Label : string t
     | Unknown : string t
 end
 
@@ -87,15 +90,18 @@ module Token : sig
     | External
     | Builtin
     | Match
-    | With
     | Pipe
     | Assert
     | Unreachable
+    | Variant
+    | Lbrace
+    | Rbrace
     | Op of Op.t
     | Unit
     | Bool of bool
     | Int of int64
     | Ident of string
+    | Label of string
     | Unknown of string
   [@@deriving sexp]
 

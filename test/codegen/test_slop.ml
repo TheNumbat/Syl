@@ -6,9 +6,7 @@ let go ?print ?(check = `Run) input = Common.codegen ?print ~check input
 let%expect_test "match materializes zero-size tuple binding" =
   go
     {|
-let _ = match ((), 1) with
-  | (u, n) -> n
-;;
+let _ = match ((), 1) { (u, n) -> n };;
 |};
   [%expect {| |}]
 ;;
@@ -17,10 +15,11 @@ let%expect_test "match wildcard zero-size tuple slots still compile" =
   go
     {|
 fun project (t : unit ^ int ^ unit ^ bool) : int =
-  match t with
-  | (_, n, _, b) -> if b then n else 0
+  match t { (_, n, _, b) -> if b then n else 0 }
 ;;
+
 let _ = assert (project ((), 42, (), true) == 42);;
+
 let _ = assert (project ((), 42, (), false) == 0);;
 |};
   [%expect {| |}]
@@ -29,11 +28,13 @@ let _ = assert (project ((), 42, (), false) == 0);;
 let%expect_test "static tuple specialization with unit key compiles" =
   go
     {|
-let use_static_tuple = fn (static p : unit ^ int ^ bool) ->
-  match p with
-  | (_, n, flag) -> if flag then print_int n else print_int 0
+let use_static_tuple =
+  fn (static p : unit ^ int ^ bool) ->
+    match p { (_, n, flag) -> if flag then print_int n else print_int 0 }
 ;;
+
 let _ = use_static_tuple ((), 9, true);;
+
 let _ = use_static_tuple ((), 9, false);;
 |};
   [%expect
@@ -46,9 +47,7 @@ let _ = use_static_tuple ((), 9, false);;
 let%expect_test "nested match materializes zero-size tuple binding" =
   go
     {|
-let _ = match (((), true), 7) with
-  | ((u, flag), n) -> if flag then n else 0
-;;
+let _ = match (((), true), 7) { ((u, flag), n) -> if flag then n else 0 };;
 |};
   [%expect {| |}]
 ;;
@@ -56,9 +55,7 @@ let _ = match (((), true), 7) with
 let%expect_test "all-unit tuple pattern binding is zero-size" =
   go
     {|
-let _ = match ((), ()) with
-  | (left, right) -> ()
-;;
+let _ = match ((), ()) { (left, right) -> () };;
 |};
   [%expect {| |}]
 ;;
@@ -75,10 +72,8 @@ let _ = print_static (0 - 1);;
 let%expect_test "negative int inside static tuple specialization key reaches clang" =
   go
     {|
-let sum_static_pair = fn (static p : int ^ int) ->
-  match p with
-  | (a, b) -> print_int (a + b)
-;;
+let sum_static_pair = fn (static p : int ^ int) -> match p { (a, b) -> print_int (a + b) };;
+
 let _ = sum_static_pair (0 - 1, 2);;
 |};
   [%expect {| 1 |}]
@@ -103,11 +98,11 @@ let%expect_test "closure stored after zero-size tuple slot" =
 fun make (tag : int) : unit ^ (int -> int) =
   ((), fn (x : int) -> x + tag)
 ;;
-let apply = fn (p : unit ^ (int -> int)) ->
-  match p with
-  | (_, f) -> f 10
-;;
+
+let apply = fn (p : unit ^ (int -> int)) -> match p { (_, f) -> f 10 };;
+
 let _ = assert (apply (make 5) == 15);;
+
 let _ = assert (apply (make 0) == 10);;
 |};
   [%expect {| |}]
@@ -117,10 +112,11 @@ let%expect_test "match arm closure captures pattern bindings" =
   go
     {|
 fun make_adder (p : int ^ int) : int -> int =
-  match p with
-  | (a, b) -> fn (x : int) -> x + a + b
+  match p { (a, b) -> fn (x : int) -> x + a + b }
 ;;
+
 let add_pair = make_adder (3, 4);;
+
 let _ = assert (add_pair 10 == 17);;
 |};
   [%expect {| |}]
@@ -130,11 +126,14 @@ let%expect_test "recursive function captures only zero-size outer value" =
   go
     {|
 let marker = ();;
+
 fun loop (n : int) : int =
-  match (marker, n) with
-  | (_, 0) -> 0
-  | (_, k) -> loop (k - 1)
+  match (marker, n) {
+    (_, 0) -> 0,
+    (_, k) -> loop (k - 1),
+  }
 ;;
+
 let _ = assert (loop 3 == 0);;
 |};
   [%expect {| |}]
@@ -144,11 +143,14 @@ let%expect_test "nested tuple match skips zero-size fields" =
   go
     {|
 fun classify (t : (unit ^ int) ^ (unit ^ bool)) : int =
-  match t with
-  | ((_, n), (_, true)) -> n
-  | ((_, n), (_, false)) -> 0 - n
+  match t {
+    ((_, n), (_, true)) -> n,
+    ((_, n), (_, false)) -> 0 - n,
+  }
 ;;
+
 let _ = assert (classify (((), 8), ((), true)) == 8);;
+
 let _ = assert (classify (((), 8), ((), false)) == 0 - 8);;
 |};
   [%expect {| |}]
@@ -257,7 +259,7 @@ let _ = print_int (-7 % (2 @ dynamic));;
 let%expect_test "fuzz: BUG match tuple binds named unit element" =
   go
     {|
-let _ = match (1, ()) with | (a, b) -> a;;
+let _ = match (1, ()) { (a, b) -> a };;
 |};
   [%expect {| |}]
 ;;
@@ -265,7 +267,7 @@ let _ = match (1, ()) with | (a, b) -> a;;
 let%expect_test "fuzz: BUG match tuple binds named unit element (reverse)" =
   go
     {|
-let _ = match ((), 1) with | (a, b) -> b;;
+let _ = match ((), 1) { (a, b) -> b };;
 |};
   [%expect {| |}]
 ;;
@@ -273,7 +275,7 @@ let _ = match ((), 1) with | (a, b) -> b;;
 let%expect_test "fuzz: BUG match tuple of all units with named bindings" =
   go
     {|
-let _ = match ((), ()) with | (a, b) -> ();;
+let _ = match ((), ()) { (a, b) -> () };;
 |};
   [%expect {| |}]
 ;;
@@ -281,7 +283,8 @@ let _ = match ((), ()) with | (a, b) -> ();;
 let%expect_test "fuzz: BUG dependent tuple with unit element bound" =
   go
     {|
-let f = fn (static x : unit ^ int) -> match x with | (a, b) -> b;;
+let f = fn (static x : unit ^ int) -> match x { (a, b) -> b };;
+
 let _ = print_int (f ((), 4));;
 |};
   [%expect {| 4 |}]
@@ -292,7 +295,8 @@ let _ = print_int (f ((), 4));;
 let%expect_test "fuzz: BUG arrow with tuple containing unit binds unit element" =
   go
     {|
-let f = fn (x : int ^ unit) -> match x with | (a, b) -> b;;
+let f = fn (x : int ^ unit) -> match x { (a, b) -> b };;
+
 let _ = f (1, ());;
 |};
   [%expect {| |}]
@@ -303,7 +307,7 @@ let _ = f (1, ());;
 let%expect_test "fuzz: match tuple ignores unit element with _" =
   go
     {|
-let _ = match (1, ()) with | (a, _) -> print_int a;;
+let _ = match (1, ()) { (a, _) -> print_int a };;
 |};
   [%expect {| 1 |}]
 ;;
@@ -311,7 +315,7 @@ let _ = match (1, ()) with | (a, _) -> print_int a;;
 let%expect_test "fuzz: match tuple matches unit literal" =
   go
     {|
-let _ = match (1, ()) with | (a, ()) -> print_int a;;
+let _ = match (1, ()) { (a, ()) -> print_int a };;
 |};
   [%expect {| 1 |}]
 ;;
@@ -354,7 +358,8 @@ let _ = f x;;
 let%expect_test "fuzz: BUG static tuple containing negative int" =
   go
     {|
-let f = fn (static x : int ^ int) -> match x with | (a, b) -> a + b;;
+let f = fn (static x : int ^ int) -> match x { (a, b) -> a + b };;
+
 let _ = f (-1, 2);;
 |};
   [%expect {| |}]
@@ -396,8 +401,10 @@ let _ = print_int (id int (-5));;
 let%expect_test "fuzz: nested tuple match" =
   go
     {|
-let _ = match ((1, 2), (3, (4, (5, 6)))) with
-  | ((a, b), (c, (d, (e, f)))) -> assert (a + b + c + d + e + f == 21)
+let _ =
+  match ((1, 2), (3, (4, (5, 6)))) {
+    ((a, b), (c, (d, (e, f)))) -> assert (a + b + c + d + e + f == 21),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -406,9 +413,10 @@ let _ = match ((1, 2), (3, (4, (5, 6)))) with
 let%expect_test "fuzz: large tuple" =
   go
     {|
-let _ = match (1, 2, 3, 4, 5, 6, 7, 8, 9, 10) with
-  | (a, b, c, d, e, f, g, h, i, j) ->
-    assert (a + b + c + d + e + f + g + h + i + j == 55)
+let _ =
+  match (1, 2, 3, 4, 5, 6, 7, 8, 9, 10) {
+    (a, b, c, d, e, f, g, h, i, j) -> assert (a + b + c + d + e + f + g + h + i + j == 55),
+  }
 ;;
 |};
   [%expect {| |}]
@@ -417,9 +425,7 @@ let _ = match (1, 2, 3, 4, 5, 6, 7, 8, 9, 10) with
 let%expect_test "fuzz: alternating bool/int tuple" =
   go
     {|
-let _ = match (true, 1, false, 2, true, 3) with
-  | (a, b, c, d, e, f) -> assert (b + d + f == 6)
-;;
+let _ = match (true, 1, false, 2, true, 3) { (a, b, c, d, e, f) -> assert (b + d + f == 6) };;
 |};
   [%expect {| |}]
 ;;
@@ -428,7 +434,8 @@ let%expect_test "fuzz: tuple of closures" =
   go
     {|
 let pair = ((fn (x : int) -> x + 1), (fn (x : int) -> x + 2));;
-let _ = match pair with | (f, g) -> print_int (f (g 10));;
+
+let _ = match pair { (f, g) -> print_int (f (g 10)) };;
 |};
   [%expect {| 13 |}]
 ;;
@@ -437,8 +444,10 @@ let%expect_test "fuzz: tuple of partial applications" =
   go
     {|
 let f = fn (x : int) -> fn (y : int) -> x + y;;
+
 let g = (f 1, f 2);;
-let _ = match g with | (h, i) -> print_int (h 10 + i 20);;
+
+let _ = match g { (h, i) -> print_int (h 10 + i 20) };;
 |};
   [%expect {| 33 |}]
 ;;
@@ -451,13 +460,17 @@ let%expect_test "fuzz: deep or-pattern alternatives" =
   go
     {|
 fun f (x : int) : int =
-  match x with
-  | (1 | 2 | 3 | 4 | 5) -> 1
-  | (6 | 7 | 8 | 9 | 10) -> 2
-  | _ -> 3
+  match x {
+    1 | 2 | 3 | 4 | 5 -> 1,
+    6 | 7 | 8 | 9 | 10 -> 2,
+    _ -> 3,
+  }
 ;;
+
 let _ = assert (f 3 == 1);;
+
 let _ = assert (f 8 == 2);;
+
 let _ = assert (f 100 == 3);;
 |};
   [%expect {| |}]
@@ -467,11 +480,13 @@ let%expect_test "fuzz: nested or-pattern with var binding" =
   go
     {|
 fun f (p : int ^ int ^ int) : int =
-  match p with
-  | ((0, x, _) | (x, 0, _) | (_, _, x)) -> x
+  match p { (0, x, _) | (x, 0, _) | (_, _, x) -> x }
 ;;
+
 let _ = assert (f (0, 5, 9) == 5);;
+
 let _ = assert (f (7, 0, 9) == 7);;
+
 let _ = assert (f (1, 2, 3) == 3);;
 |};
   [%expect {| |}]
@@ -481,8 +496,8 @@ let%expect_test "fuzz: match with var arm shadows scrutinee" =
   go
     {|
 let x = 5;;
-let _ = match x with
-  | x -> assert (x == 5);;
+
+let _ = match x { x -> assert (x == 5) };;
 |};
   [%expect {| |}]
 ;;
@@ -490,9 +505,12 @@ let _ = match x with
 let%expect_test "fuzz: match wide or-pattern" =
   go
     {|
-let _ = match 5 with
-  | (1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10) -> assert true
-  | _ -> assert false;;
+let _ =
+  match 5 {
+    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 -> assert true,
+    _ -> assert false,
+  }
+;;
 |};
   [%expect {| |}]
 ;;
@@ -547,9 +565,9 @@ let%expect_test "fuzz: closure capturing tuple" =
   go
     {|
 let t = (1, 2, 3) @ dynamic;;
-let cl = fn (_ : unit) ->
-  match t with
-  | (a, b, c) -> a + b + c;;
+
+let cl = fn (_ : unit) -> match t { (a, b, c) -> a + b + c };;
+
 let _ = print_int (cl ());;
 |};
   [%expect {| 6 |}]
@@ -619,11 +637,10 @@ let%expect_test "fuzz: recursion returning tuple" =
   go
     {|
 fun pair (n : int) : int ^ int =
-  if n <= 0 then (0, 0)
-  else match pair (n - 1) with
-    | (a, b) -> (a + n, b + 2 * n);;
-let _ = match pair 5 with
-  | (x, _) -> assert (x == 15);;
+  if n <= 0 then (0, 0) else match pair (n - 1) { (a, b) -> (a + n, b + 2 * n) }
+;;
+
+let _ = match pair 5 { (x, _) -> assert (x == 15) };;
 |};
   [%expect {| |}]
 ;;
@@ -771,9 +788,7 @@ let _ = print_int y;;
 let%expect_test "fuzz: match unit" =
   go
     {|
-let _ = match () with
-  | () -> assert true
-;;
+let _ = match () { () -> assert true };;
 |};
   [%expect {| |}]
 ;;
@@ -781,9 +796,7 @@ let _ = match () with
 let%expect_test "fuzz: match deeply nested unit tuple" =
   go
     {|
-let _ = match ((), ((), ())) with
-  | (_, (_, _)) -> ()
-;;
+let _ = match ((), ((), ())) { (_, (_, _)) -> () };;
 |};
   [%expect {| |}]
 ;;
@@ -792,13 +805,16 @@ let%expect_test "fuzz: match all bool x bool combos" =
   go
     {|
 fun classify (p : bool ^ bool) : int =
-  match p with
-  | (true,  true)  -> 0
-  | (true,  false) -> 1
-  | (false, true)  -> 2
-  | (false, false) -> 3
+  match p {
+    (true, true) -> 0,
+    (true, false) -> 1,
+    (false, true) -> 2,
+    (false, false) -> 3,
+  }
 ;;
+
 let _ = assert (classify (true, true) == 0);;
+
 let _ = assert (classify (false, false) == 3);;
 |};
   [%expect {| |}]
@@ -808,7 +824,13 @@ let%expect_test "fuzz: match returning unit from arms" =
   go
     {|
 let x = true @ dynamic;;
-let _ = match x with | true -> () | false -> ();;
+
+let _ =
+  match x {
+    true -> (),
+    false -> (),
+  }
+;;
 |};
   [%expect {| |}]
 ;;
@@ -858,7 +880,8 @@ let%expect_test "fuzz: pattern bindings shadow scrutinee element" =
   go
     {|
 let x = (1, 2);;
-let _ = match x with | (x, y) -> print_int (x + y);;
+
+let _ = match x { (x, y) -> print_int (x + y) };;
 |};
   [%expect {| 3 |}]
 ;;
@@ -925,7 +948,8 @@ let%expect_test "fuzz: poly id on tuple" =
   go
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
-let _ = match id (int ^ int) (1, 2) with | (a, b) -> print_int (a + b);;
+
+let _ = match id (int ^ int) (1, 2) { (a, b) -> print_int (a + b) };;
 |};
   [%expect {| 3 |}]
 ;;
@@ -1044,8 +1068,7 @@ let _ = print_int (f 1 10);;
 let%expect_test "fuzz: dynamic if with both arms tuples" =
   go
     {|
-let _ = match (if true then (1, 2) else (3, 4)) with
-  | (x, y) -> print_int (x + y);;
+let _ = match (if true then (1, 2) else (3, 4)) { (x, y) -> print_int (x + y) };;
 |};
   [%expect {| 3 |}]
 ;;
@@ -1213,12 +1236,16 @@ let%expect_test "fuzz: match arm contains if" =
   go
     {|
 fun classify (n : int) : int =
-  match n with
-  | 0 -> if true then 100 else 200
-  | _ -> if n > 0 then 1 else -1
+  match n {
+    0 -> if true then 100 else 200,
+    _ -> if n > 0 then 1 else -1,
+  }
 ;;
+
 let _ = print_int (classify 0);;
+
 let _ = print_int (classify 5);;
+
 let _ = print_int (classify (-3));;
 |};
   [%expect
@@ -1233,10 +1260,17 @@ let%expect_test "fuzz: nested match in arm body" =
   go
     {|
 fun f (p : int ^ int) : int =
-  match p with
-  | (a, b) -> match a with | 0 -> b | _ -> a
+  match p {
+    (a, b) ->
+      match a {
+        0 -> b,
+        _ -> a,
+      },
+  }
 ;;
+
 let _ = print_int (f (0, 7));;
+
 let _ = print_int (f (5, 7));;
 |};
   [%expect
@@ -1286,9 +1320,12 @@ let%expect_test "fuzz: gcd via recursion" =
   go
     {|
 fun gcd (p : int ^ int) : int =
-  match p with
-  | (a, 0) -> a
-  | (a, b) -> gcd (b, a % b);;
+  match p {
+    (a, 0) -> a,
+    (a, b) -> gcd (b, a % b),
+  }
+;;
+
 let _ = print_int (gcd (48, 18));;
 |};
   [%expect {| 6 |}]
@@ -1311,9 +1348,12 @@ let _ = print_int (sum 100);;
 let%expect_test "fuzz: effect in match scrutinee runs first" =
   go
     {|
-let _ = match (let _ = print_int 1 in 5) with
-  | 5 -> print_int 2
-  | _ -> ();;
+let _ =
+  match (let _ = print_int 1 in 5) {
+    5 -> print_int 2,
+    _ -> (),
+  }
+;;
 |};
   [%expect
     {|
@@ -1325,8 +1365,7 @@ let _ = match (let _ = print_int 1 in 5) with
 let%expect_test "fuzz: effects across tuple elements" =
   go
     {|
-let _ = match (let _ = print_int 1 in 1, let _ = print_int 2 in 2) with
-  | (a, b) -> print_int (a + b);;
+let _ = match (let _ = print_int 1 in 1, let _ = print_int 2 in 2) { (a, b) -> print_int (a + b) };;
 |};
   [%expect
     {|
@@ -1450,9 +1489,12 @@ let%expect_test "fuzz: match runtime negative int" =
   go
     {|
 fun classify (n : int) : int =
-  match n with
-  | 0 -> 0
-  | _ -> n;;
+  match n {
+    0 -> 0,
+    _ -> n,
+  }
+;;
+
 let _ = print_int (classify (-5));;
 |};
   [%expect {| -5 |}]
@@ -1704,7 +1746,7 @@ let _ = print_int (apply f);;
   [%expect {| 5 |}]
 ;;
 
-let%expect_test "fuzz: arrow used where pi-with-static-arg expected" =
+let%expect_test "fuzz: arrow used where pi- with -static-arg expected" =
   go
     {|
 let f = fn (x : int) -> x;;
@@ -1936,11 +1978,16 @@ let _ = apply_two id;;
 let%expect_test "fuzz: match arm closures capturing scrutinee" =
   go
     {|
-let make = fn (n : int) ->
-  match n with
-  | 0 -> (fn (x : int) -> x)
-  | _ -> (fn (x : int) -> x + n);;
+let make =
+  fn (n : int) ->
+    match n {
+      0 -> (fn (x : int) -> x),
+      _ -> (fn (x : int) -> x + n),
+    }
+;;
+
 let _ = print_int (make 0 10);;
+
 let _ = print_int (make 5 10);;
 |};
   [%expect
@@ -1953,11 +2000,16 @@ let _ = print_int (make 5 10);;
 let%expect_test "fuzz: match arm closures capturing pattern bindings" =
   go
     {|
-let make = fn (p : int ^ int) ->
-  match p with
-  | (a, 0) -> (fn (x : int) -> a + x)
-  | (a, b) -> (fn (x : int) -> a * b + x);;
+let make =
+  fn (p : int ^ int) ->
+    match p {
+      (a, 0) -> (fn (x : int) -> a + x),
+      (a, b) -> (fn (x : int) -> a * b + x),
+    }
+;;
+
 let _ = print_int (make (5, 0) 10);;
+
 let _ = print_int (make (3, 4) 10);;
 |};
   [%expect
@@ -1970,10 +2022,14 @@ let _ = print_int (make (3, 4) 10);;
 let%expect_test "fuzz: match returns tuple of closures" =
   go
     {|
-let f = match true with
-  | true -> ((fn (x : int) -> x + 1), (fn (x : int) -> x + 2))
-  | false -> ((fn (x : int) -> x), (fn (x : int) -> x));;
-let _ = match f with | (g, h) -> print_int (g (h 10));;
+let f =
+  match true {
+    true -> ((fn (x : int) -> x + 1), (fn (x : int) -> x + 2)),
+    false -> ((fn (x : int) -> x), (fn (x : int) -> x)),
+  }
+;;
+
+let _ = match f { (g, h) -> print_int (g (h 10)) };;
 |};
   [%expect {| 13 |}]
 ;;
@@ -2043,8 +2099,9 @@ let _ = print_int (f 1 2 3 4 5 6 7 8);;
 let%expect_test "fuzz: tuple element evaluation order" =
   go
     {|
-let _ = match (let _ = print_int 1 in 100, let _ = print_int 2 in 200) with
-  | (a, b) -> print_int (a + b);;
+let _ =
+  match (let _ = print_int 1 in 100, let _ = print_int 2 in 200) { (a, b) -> print_int (a + b) }
+;;
 |};
   [%expect
     {|
@@ -2094,17 +2151,22 @@ let%expect_test "fuzz: 8-arm match on bool^bool^bool tuple" =
   go
     {|
 fun f (p : bool ^ bool ^ bool) : int =
-  match p with
-  | (true,  true,  true)  -> 7
-  | (true,  true,  false) -> 6
-  | (true,  false, true)  -> 5
-  | (true,  false, false) -> 4
-  | (false, true,  true)  -> 3
-  | (false, true,  false) -> 2
-  | (false, false, true)  -> 1
-  | (false, false, false) -> 0;;
+  match p {
+    (true, true, true) -> 7,
+    (true, true, false) -> 6,
+    (true, false, true) -> 5,
+    (true, false, false) -> 4,
+    (false, true, true) -> 3,
+    (false, true, false) -> 2,
+    (false, false, true) -> 1,
+    (false, false, false) -> 0,
+  }
+;;
+
 let _ = assert (f (true, true, true) == 7);;
+
 let _ = assert (f (false, false, false) == 0);;
+
 let _ = assert (f (true, false, true) == 5);;
 |};
   [%expect {| |}]
@@ -2114,18 +2176,23 @@ let%expect_test "fuzz: 9-pattern match with overlapping wildcards" =
   go
     {|
 fun f (p : int ^ int ^ int) : int =
-  match p with
-  | (0, 0, 0) -> 1
-  | (0, 0, _) -> 2
-  | (0, _, 0) -> 3
-  | (_, 0, 0) -> 4
-  | (0, _, _) -> 5
-  | (_, 0, _) -> 6
-  | (_, _, 0) -> 7
-  | _ -> 8;;
-let _ = print_int (f (0,0,0));;
-let _ = print_int (f (1,1,1));;
-let _ = print_int (f (1,1,0));;
+  match p {
+    (0, 0, 0) -> 1,
+    (0, 0, _) -> 2,
+    (0, _, 0) -> 3,
+    (_, 0, 0) -> 4,
+    (0, _, _) -> 5,
+    (_, 0, _) -> 6,
+    (_, _, 0) -> 7,
+    _ -> 8,
+  }
+;;
+
+let _ = print_int (f (0, 0, 0));;
+
+let _ = print_int (f (1, 1, 1));;
+
+let _ = print_int (f (1, 1, 0));;
 |};
   [%expect
     {|
@@ -2208,10 +2275,14 @@ let%expect_test "fuzz: gcd" =
   go
     {|
 fun gcd (p : int ^ int) : int =
-  match p with
-  | (a, 0) -> a
-  | (a, b) -> gcd (b, a % b);;
+  match p {
+    (a, 0) -> a,
+    (a, b) -> gcd (b, a % b),
+  }
+;;
+
 let _ = print_int (gcd (48, 18));;
+
 let _ = print_int (gcd (100, 35));;
 |};
   [%expect

@@ -144,8 +144,20 @@ let run =
        | Error (`Signal signal) -> print_s [%message "Program killed" (signal : Signal.t)])
 ;;
 
+let json_escape =
+  String.concat_map ~f:(fun c ->
+    match c with
+    | '"' -> "\\\""
+    | '\\' -> "\\\\"
+    | '\n' -> "\\n"
+    | '\r' -> "\\r"
+    | '\t' -> "\\t"
+    | c when Char.to_int c < 0x20 -> sprintf "\\u%04x" (Char.to_int c)
+    | c -> String.of_char c)
+;;
+
 let error_json ~(loc : Syl.Lex.Location.t) reason =
-  eprintf "{\"line\":%d,\"column\":%d,\"reason\":\"%s\"}\n" loc.line loc.column reason;
+  eprintf "{\"line\":%d,\"column\":%d,\"reason\":\"%s\"}\n" loc.line loc.column (json_escape reason);
   exit 1
 ;;
 

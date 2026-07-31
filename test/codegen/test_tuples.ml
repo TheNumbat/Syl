@@ -50,8 +50,8 @@ let f = (fn (x : int) -> (x, x)) : int -> int ^ int;;
 let%expect_test "tuple type computed statically" =
   go
     {|
-let T = int ^ bool;;
-let t = (1, true) : T;;
+let ty = int ^ bool;;
+let t = (1, true) : ty;;
 |};
   [%expect {| |}]
 ;;
@@ -317,8 +317,8 @@ let _ = f ();;
 let%expect_test "fuzz: tuple type as value" =
   go
     {|
-let T = int ^ bool;;
-let t = (42, true) : T;;
+let ty = int ^ bool;;
+let t = (42, true) : ty;;
 |};
   [%expect {| |}]
 ;;

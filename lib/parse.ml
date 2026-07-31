@@ -1,9 +1,30 @@
 open! Core
 open Lex
 open Cst
+module Label = Ident.Label
 module Ident = Ident.Raw
 
-type t = { tokens : Tokenizer.t }
+type t =
+  { tokens : Tokenizer.t
+  ; no_commas : bool
+  }
+
+let without_commas t = { t with no_commas = true }
+let with_commas t = { t with no_commas = false }
+
+(* Comma-separated items before a closing brace, with an optional trailing comma. *)
+let braced_items t ~f =
+  let rec rest acc =
+    match Tokenizer.peek t.tokens with
+    | Op Comma ->
+      Tokenizer.skip t.tokens;
+      (match Tokenizer.peek t.tokens with
+       | Rbrace -> Nonempty_list.reverse acc
+       | _ -> rest (Nonempty_list.cons (f t) acc))
+    | _ -> Nonempty_list.reverse acc
+  in
+  rest (Nonempty_list.singleton (f t))
+;;
 
 module Error = struct
   type t =
@@ -132,17 +153,7 @@ let trailing t (expr : Expr.t) : Expr.t =
   if List.is_empty comments then expr else { expr with after = expr.after @ comments }
 ;;
 
-let rec expr t : Expr.t = expr_mode_annot t
-
-and expr_mode_annot t : Expr.t =
-  let expr = trailing t (expr_ty_annot t) in
-  match Tokenizer.peek t.tokens with
-  | At ->
-    let loc = Tokenizer.loc t.tokens in
-    expect t ~kind:At;
-    let mode = maybe_modes ~required:true t in
-    with_loc ~loc (Mode_annotation { expr; mode })
-  | _ -> expr
+let rec expr t : Expr.t = expr_ty_annot t
 
 and expr_ty_annot t : Expr.t =
   let expr = trailing t (expr_arrow t) in
@@ -181,20 +192,32 @@ and expr_arrow t : Expr.t =
 
 and expr_comma t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
-  let first = expr_caret t in
+  let first = expr_mode_annot t in
   let first = trailing t first in
   match Tokenizer.peek t.tokens with
-  | Op Comma ->
+  | Op Comma when not t.no_commas ->
     let rec aux acc =
       match Tokenizer.peek t.tokens with
       | Op Comma ->
         Tokenizer.skip t.tokens;
-        let e = expr_caret t in
+        let e = expr_mode_annot t in
         aux (Nonempty_list.cons (trailing t e) acc)
       | _ -> Nonempty_list.reverse acc
     in
     with_loc ~loc (Make_tuple { elts = aux (Nonempty_list.singleton first) })
   | _ -> first
+
+(* Mode annotations bind looser than operators but tighter than commas, so
+   tuple elements can be annotated individually. *)
+and expr_mode_annot t : Expr.t =
+  let expr = trailing t (expr_caret t) in
+  match Tokenizer.peek t.tokens with
+  | At ->
+    let loc = Tokenizer.loc t.tokens in
+    expect t ~kind:At;
+    let mode = maybe_modes ~required:true t in
+    with_loc ~loc (Mode_annotation { expr; mode })
+  | _ -> expr
 
 and expr_caret t : Expr.t =
   let loc = Tokenizer.loc t.tokens in
@@ -355,11 +378,23 @@ and expr_lnot t : Expr.t =
   match Tokenizer.peek t.tokens with
   | Op Not ->
     Tokenizer.skip t.tokens;
-    let arg = expr_primary t in
+    let arg = expr_select t in
     with_loc ~loc ~before:comments (Unop { op = Not; arg })
   | _ ->
-    let expr = expr_primary t in
+    let expr = expr_select t in
     if List.is_empty comments then expr else { expr with before = comments @ expr.before }
+
+and expr_select t : Expr.t =
+  let first = expr_primary t in
+  let rec aux expr =
+    match Tokenizer.peek t.tokens with
+    | Label label ->
+      Tokenizer.skip t.tokens;
+      let label = Label.of_string label in
+      aux (with_loc ~loc:(Cst.Expr.loc expr) (Expr.Select { expr; label }))
+    | _ -> expr
+  in
+  aux first
 
 and expr_primary t : Expr.t =
   let loc, comments = leading t in
@@ -374,9 +409,10 @@ and expr_primary t : Expr.t =
     | Match ->
       let _, before_elimination = leading t in
       let eliminator = maybe_eliminator t in
-      let cond = expr t in
-      expect t ~kind:With;
+      let cond = expr (without_commas t) in
+      expect t ~kind:Lbrace;
       let arms = match_arms t in
+      expect t ~kind:Rbrace;
       Match { cond; arms; eliminator; before_elimination }
     | If ->
       let _, before_erased = leading t in
@@ -419,20 +455,42 @@ and expr_primary t : Expr.t =
             Tokenizer.skip t.tokens;
             Var { id }
           | None ->
-            let exp = expr t in
+            let exp = expr (with_commas t) in
             expect t ~kind:Rparen;
             Paren { expr = exp })
        | _ ->
-         let exp = expr t in
+         let exp = expr (with_commas t) in
          expect t ~kind:Rparen;
          Paren { expr = exp })
     | Unit -> Literal { value = Unit }
     | Bool value -> Literal { value = Bool value }
     | Int value -> Literal { value = Int value }
     | Ident id -> Var { id = Ident.id id }
+    | Label name -> Constructor { label = Label.of_string name }
+    | Variant ->
+      expect t ~kind:Lbrace;
+      let constructors = variant_constructors t in
+      expect t ~kind:Rbrace;
+      Variant { constructors }
     | tok -> Fail.unexpected [%here] ~loc tok
   in
   with_loc ~loc ~before:comments node
+
+and variant_constructor t : Expr.constructor =
+  let loc, before = leading t in
+  let label = Label.of_string (expect t ~kind:Ident) in
+  let _, after_label = leading t in
+  let payload =
+    match Tokenizer.peek t.tokens with
+    | Colon ->
+      Tokenizer.skip t.tokens;
+      Some (trailing t (expr (without_commas t)))
+    | _ -> None
+  in
+  With_loc.create ~before ~loc { Expr.label; payload; after_label }
+
+and variant_constructors t : Expr.constructor Nonempty_list.t =
+  braced_items t ~f:variant_constructor
 
 and expr_fun t : Expr.fun_ =
   let loc, before = leading t in
@@ -470,9 +528,14 @@ and parse_arg t : Expr.arg =
   let var = expect_ident t in
   let _, after_var = leading t in
   expect t ~kind:Colon;
-  let ty = expr t in
+  let ty = expr (with_commas t) in
   expect t ~kind:Rparen;
   With_loc.create ~before ~loc Expr.{ var; mode; ty; after_open; after_mode; after_var }
+
+and can_start_pattern_atom t =
+  match Tokenizer.peek t.tokens with
+  | Unit | Bool _ | Int _ | Ident _ | Label _ | Lparen -> true
+  | _ -> false
 
 and pattern_atom t : Expr.pattern =
   let loc, before = leading t in
@@ -482,6 +545,9 @@ and pattern_atom t : Expr.pattern =
     | Bool value -> Literal { value = Bool value }
     | Int value -> Literal { value = Int value }
     | Ident id -> Var { id = Ident.id id }
+    | Label name ->
+      let payload = if can_start_pattern_atom t then Some (pattern_atom t) else None in
+      Constructor { label = Label.of_string name; payload }
     | Lparen ->
       let inner = parse_pattern t in
       expect t ~kind:Rparen;
@@ -519,25 +585,27 @@ and parse_pattern t : Expr.pattern =
   in
   aux first
 
-and match_arm t : Expr.pattern * Expr.t =
-  let pat = parse_pattern t in
-  let _, after = leading t in
-  expect_op t ~op:Arrow;
-  let rhs = expr t in
-  { pat with after = pat.after @ after }, rhs
-
-and match_arms t : (Expr.pattern * Expr.t) Nonempty_list.t =
-  expect t ~kind:Pipe;
-  let first = match_arm t in
-  let rec aux acc =
+and arm_pattern t : Expr.pattern =
+  let first = pattern_atom t in
+  let rec aux left =
     match Tokenizer.peek t.tokens with
     | Pipe ->
       Tokenizer.skip t.tokens;
-      aux (match_arm t :: acc)
-    | _ -> Nonempty_list.of_list_exn (List.rev acc)
+      let right = pattern_atom t in
+      let node : Expr.pattern_node = Or { left; right } in
+      aux (With_loc.create ~loc:first.loc node)
+    | _ -> left
   in
-  aux [ first ]
-;;
+  aux first
+
+and match_arm t : Expr.pattern * Expr.t =
+  let pat = arm_pattern t in
+  let _, after = leading t in
+  expect_op t ~op:Arrow;
+  let rhs = expr (without_commas t) in
+  { pat with after = pat.after @ after }, rhs
+
+and match_arms t : (Expr.pattern * Expr.t) Nonempty_list.t = braced_items t ~f:match_arm
 
 let rec top_level_funs ~loc t fs : Top_level.t =
   let f = expr_fun t in
@@ -596,7 +664,7 @@ let top_level_list t : Program.t =
 ;;
 
 let parse_exn input : Program.t =
-  let t = { tokens = Tokenizer.create input } in
+  let t = { tokens = Tokenizer.create input; no_commas = false } in
   top_level_list t
 ;;
 

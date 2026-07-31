@@ -1212,7 +1212,7 @@ let _ = f true;;
 ;;
 
 let%expect_test
-    "unreachable in fun return type annotation with non-erased if — fires during definition"
+    "unreachable in fun return type annotation { non-erased if — fires during definition }"
   =
   go
     {|
@@ -1482,8 +1482,21 @@ fun erased unerase (erased t : type) : erased (erased t -> t) =
 let%expect_test "match static with literal scrutinee selects branch type" =
   go
     {|
-let _ = (match static 0 with | 0 -> 1 | _ -> true) : int;;
-let _ = (match static 3 with | 0 -> 1 | _ -> true) : bool;;
+let _ =
+  (match static 0 {
+     0 -> 1,
+     _ -> true,
+   })
+    : int
+;;
+
+let _ =
+  (match static 3 {
+     0 -> 1,
+     _ -> true,
+   })
+    : bool
+;;
 |};
   [%expect {| |}]
 ;;
@@ -1491,8 +1504,16 @@ let _ = (match static 3 with | 0 -> 1 | _ -> true) : bool;;
 let%expect_test "match static with static variable scrutinee" =
   go
     {|
-let f = fn (static x : int) -> match static x with | 0 -> 1 | _ -> true;;
+let f =
+  fn (static x : int) ->
+    match static x {
+      0 -> 1,
+      _ -> true,
+    }
+;;
+
 let a = f 0;;
+
 let b = f 1;;
 |};
   [%expect {| |}]
@@ -1501,23 +1522,30 @@ let b = f 1;;
 let%expect_test "no cross-shape equality with the equivalent if" =
   go
     {|
-let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : (if x == 0 then int else bool);;
+let f =
+  fn (static x : int) ->
+    (match static x {
+       0 -> 1,
+       _ -> true,
+     })
+      : (if x == 0 then int else bool)
+;;
 |};
-  [%expect {|
-    ((loc ((line 2) (column 74)))
+  [%expect
+    {|
+    ((loc ((line 8) (column 6)))
      (reason
       (Type_mismatch
        (got
         (Match (scrutinee (Var (Anon <opaque>)))
          (arms
-          (((Literal (value (Int 0)) (loc ((line 2) (column 54)))) (Type Int))
-           ((Var (id (Anon <opaque>)) (loc ((line 2) (column 63)))) (Type Bool))))))
+          (((Literal (value (Int 0)) (loc ((line 5) (column 7)))) (Type Int))
+           ((Var (id (Anon <opaque>)) (loc ((line 6) (column 7)))) (Type Bool))))))
        (need
         (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 2) (column 77))))
-            (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 2) (column 77))))
+          (((Literal (value (Bool true)) (loc ((line 8) (column 9)))) (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 8) (column 9))))
             (Type Bool)))))))))
     |}]
 ;;
@@ -1525,7 +1553,17 @@ let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : (if 
 let%expect_test "match static annotated with the equivalent match" =
   go
     {|
-let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : (match static x with | 0 -> int | _ -> bool);;
+let f =
+  fn (static x : int) ->
+    (match static x {
+       0 -> 1,
+       _ -> true,
+     })
+      : (match static x {
+           0 -> int,
+           _ -> bool,
+         })
+;;
 |};
   [%expect {| |}]
 ;;
@@ -1533,18 +1571,25 @@ let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : (mat
 let%expect_test "match static wrong annotation shows the stuck case" =
   go
     {|
-let f = fn (static x : int) -> (match static x with | 0 -> 1 | _ -> true) : int;;
+let f =
+  fn (static x : int) ->
+    (match static x {
+       0 -> 1,
+       _ -> true,
+     })
+      : int
+;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 74)))
+    ((loc ((line 8) (column 6)))
      (reason
       (Type_mismatch
        (got
         (Match (scrutinee (Var (Anon <opaque>)))
          (arms
-          (((Literal (value (Int 0)) (loc ((line 2) (column 54)))) (Type Int))
-           ((Var (id (Anon <opaque>)) (loc ((line 2) (column 63)))) (Type Bool))))))
+          (((Literal (value (Int 0)) (loc ((line 5) (column 7)))) (Type Int))
+           ((Var (id (Anon <opaque>)) (loc ((line 6) (column 7)))) (Type Bool))))))
        (need (Type Int)))))
     |}]
 ;;
@@ -1553,9 +1598,20 @@ let%expect_test "match static refines the scrutinee value inside arms" =
   go
     {|
 let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
-let h = fn (static n : int) -> match static n with | 0 -> g n 5 | 1 -> g n true | _ -> 0;;
+
+let h =
+  fn (static n : int) ->
+    match static n {
+      0 -> g n 5,
+      1 -> g n true,
+      _ -> 0,
+    }
+;;
+
 let _ = h 0;;
+
 let _ = h 1;;
+
 let _ = h 2;;
 |};
   [%expect {| |}]
@@ -1565,11 +1621,18 @@ let%expect_test "wildcard arms get no negative refinement" =
   go
     {|
 let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
-let h = fn (static n : int) -> match static n with | 0 -> g n 5 | _ -> g n true;;
+
+let h =
+  fn (static n : int) ->
+    match static n {
+      0 -> g n 5,
+      _ -> g n true,
+    }
+;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 71)))
+    ((loc ((line 8) (column 11)))
      (reason
       (Type_mismatch (got (Type Bool))
        (need
@@ -1586,8 +1649,17 @@ let%expect_test "match static refines tuple components" =
   go
     {|
 let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
-let h = fn (static p : int ^ int) -> match static p with | (0, y) -> g 0 y | _ -> 0;;
+
+let h =
+  fn (static p : int ^ int) ->
+    match static p {
+      (0, y) -> g 0 y,
+      _ -> 0,
+    }
+;;
+
 let _ = h ((0, 5) @ static);;
+
 let _ = h ((1, 5) @ static);;
 |};
   [%expect {| |}]
@@ -1597,7 +1669,16 @@ let%expect_test "tuple scrutinees refine their components inside arms" =
   go
     {|
 let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
-let h = fn (static a : int) -> fn (static b : int) -> match static (a, b) with | (0, y) -> g a 5 | _ -> 0;;
+
+let h =
+  fn (static a : int) ->
+    fn (static b : int) ->
+      match static (a, b) {
+        (0, y) -> g a 5,
+        _ -> 0,
+      }
+;;
+
 let _ = h 0 1;;
 |};
   [%expect {| |}]
@@ -1607,10 +1688,18 @@ let%expect_test "or-pattern arms get no scrutinee refinement" =
   go
     {|
 let g = fn (static m : int) -> fn (x : if m < 2 then int else bool) -> x;;
-let h = fn (static n : int) -> match static n with | 0 | 1 -> g n 5 | _ -> 0;;
+
+let h =
+  fn (static n : int) ->
+    match static n {
+      0 | 1 -> g n 5,
+      _ -> 0,
+    }
+;;
 |};
-  [%expect {|
-    ((loc ((line 3) (column 62)))
+  [%expect
+    {|
+    ((loc ((line 7) (column 15)))
      (reason
       (Type_mismatch (got (Type Int))
        (need
@@ -1626,10 +1715,21 @@ let h = fn (static n : int) -> match static n with | 0 | 1 -> g n 5 | _ -> 0;;
 let%expect_test "prims do not reduce over stuck matches" =
   go
     {|
-let f = fn (static x : int) -> (0 : if ((match static x with | 0 -> 1 | _ -> 2) < 3) then int else unit);;
+let f =
+  fn (static x : int) ->
+    (0
+       : if ((match static x {
+                0 -> 1,
+                _ -> 2,
+              })
+             < 3)
+       then int
+       else unit)
+;;
 |};
-  [%expect {|
-    ((loc ((line 2) (column 34)))
+  [%expect
+    {|
+    ((loc ((line 5) (column 7)))
      (reason
       (Type_mismatch (got (Type Int))
        (need
@@ -1639,15 +1739,14 @@ let f = fn (static x : int) -> (0 : if ((match static x with | 0 -> 1 | _ -> 2) 
            (Lt
             (Match (scrutinee (Var (Anon <opaque>)))
              (arms
-              (((Literal (value (Int 0)) (loc ((line 2) (column 63))))
+              (((Literal (value (Int 0)) (loc ((line 6) (column 16))))
                 (Int (T 1)))
-               ((Var (id (Anon <opaque>)) (loc ((line 2) (column 72))))
+               ((Var (id (Anon <opaque>)) (loc ((line 7) (column 16))))
                 (Int (T 2))))))
             (Int (T 3)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 2) (column 36))))
-            (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 2) (column 36))))
+          (((Literal (value (Bool true)) (loc ((line 5) (column 9)))) (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 5) (column 9))))
             (Type Unit)))))))))
     |}]
 ;;
@@ -1655,33 +1754,47 @@ let f = fn (static x : int) -> (0 : if ((match static x with | 0 -> 1 | _ -> 2) 
 let%expect_test "no cross-shape equality across an if chain" =
   go
     {|
-let f = fn (static x : int) ->
-  (match static x with | 0 -> 1 | 1 -> true | _ -> ())
-    : (if x == 0 then int else if x == 1 then bool else unit);;
+let f =
+  fn (static x : int) ->
+    (match static x {
+       0 -> 1,
+       1 -> true,
+       _ -> (),
+     })
+      : (if x == 0
+         then int
+         else if x == 1
+              then bool
+              else unit)
+;;
+
 let _ = f 0;;
+
 let _ = f 1;;
+
 let _ = f 2;;
 |};
-  [%expect {|
-    ((loc ((line 4) (column 4)))
+  [%expect
+    {|
+    ((loc ((line 9) (column 6)))
      (reason
       (Type_mismatch
        (got
         (Match (scrutinee (Var (Anon <opaque>)))
          (arms
-          (((Literal (value (Int 0)) (loc ((line 3) (column 25)))) (Type Int))
-           ((Literal (value (Int 1)) (loc ((line 3) (column 34)))) (Type Bool))
-           ((Var (id (Anon <opaque>)) (loc ((line 3) (column 46)))) (Type Unit))))))
+          (((Literal (value (Int 0)) (loc ((line 5) (column 7)))) (Type Int))
+           ((Literal (value (Int 1)) (loc ((line 6) (column 7)))) (Type Bool))
+           ((Var (id (Anon <opaque>)) (loc ((line 7) (column 7)))) (Type Unit))))))
        (need
         (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 4) (column 7)))) (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 4) (column 7))))
+          (((Literal (value (Bool true)) (loc ((line 9) (column 9)))) (Type Int))
+           ((Literal (value (Bool false)) (loc ((line 9) (column 9))))
             (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 1)))))
              (arms
-              (((Literal (value (Bool true)) (loc ((line 4) (column 31))))
+              (((Literal (value (Bool true)) (loc ((line 11) (column 14))))
                 (Type Bool))
-               ((Literal (value (Bool false)) (loc ((line 4) (column 31))))
+               ((Literal (value (Bool false)) (loc ((line 11) (column 14))))
                 (Type Unit)))))))))))))
     |}]
 ;;

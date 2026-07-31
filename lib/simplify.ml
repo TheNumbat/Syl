@@ -24,7 +24,14 @@ let rec merge_ty (ty1 : Ty.t) (ty2 : Ty.t) : Ty.t =
       ; ret_ty = Map.map a.ret_ty ~f:(fun ty -> merge_ty b.ret_ty ty)
       }
   | Tuple a, Tuple b -> Tuple (Nonempty_list.map2_exn a b ~f:merge_ty)
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _), _ ->
+  | Variant a_ctors, Variant b_ctors ->
+    Variant
+      (Map.merge a_ctors b_ctors ~f:(fun ~key:_ -> function
+         | `Both (None, None) -> Some None
+         | `Both (Some a, Some b) -> Some (Some (merge_ty a b))
+         | `Both (Some _, None) | `Both (None, Some _) | `Left _ | `Right _ ->
+           raise_s [%message "Bug: cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]))
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ ->
     raise_s [%message "Bug: cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]
 
 and merge_map = Map.merge_skewed ~combine:(fun ~key:_ -> merge_ty)
@@ -40,6 +47,7 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Type (Pi { arg_ty; ret_ty; _ }) ->
     Pi { arg_ty = simplify_ty arg_ty; ret_ty = simplify_dependent ret_ty }
   | Type (Tuple elts) -> Tuple (Nonempty_list.map elts ~f:simplify_ty)
+  | Type (Variant constructors) -> Variant (Map.map constructors ~f:(Option.map ~f:simplify_ty))
   | Unit
   | Bool _
   | Int _
@@ -48,10 +56,13 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Var _
   | Apply _
   | Proj _
+  | Payload _
   | Match _
   | External _
   | Prim _
   | Tuple _
+  | Inject _
+  | Constructor _
   | Bottom -> raise_s [%message "Bug: expected resolved type" (ty : Tst.Value.t)]
 
 and simplify_dependent (ty : Tst.Dependent.t) =
@@ -88,7 +99,7 @@ let simplify_int ~loc (int : Tst.Int.t) : int64 =
   | _ -> raise_s [%message "Bug: expected concrete int" (int : Tst.Int.t) (loc : Lex.Location.t)]
 ;;
 
-let rec simplify_value ~loc (value : Tst.Value.t) : Expr.t =
+let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
   match value with
   | Unit -> Scalar { value = Unit; ty = Unit; loc }
   | Bool b -> Scalar { value = Bool (simplify_bool ~loc b); ty = Bool; loc }
@@ -101,15 +112,39 @@ let rec simplify_value ~loc (value : Tst.Value.t) : Expr.t =
     External { symbol = Builtin.Prim.symbol prim; ty = simplify_ty desc.ty; loc }
   | External { symbol; ty; _ } -> External { symbol; ty = simplify_ty ty; loc }
   | Tuple elts ->
-    let elts = Nonempty_list.map elts ~f:(simplify_value ~loc) in
-    Tuple { elts; ty = Tuple (Nonempty_list.map elts ~f:Expr.ty); loc }
-  | Bottom | Var _ | Apply _ | Proj _ | Match _ ->
+    (match ty with
+     | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = Nonempty_list.length elts ->
+       let elts =
+         Nonempty_list.map2_exn elts elt_tys ~f:(fun elt ty -> simplify_value ~loc ~ty elt)
+       in
+       Tuple { elts; ty = simplify_ty ty; loc }
+     | _ -> raise_s [%message "Bug: expected tuple type" (ty : Tst.Value.t) (loc : Lex.Location.t)])
+  | Inject { label; ty = _ } -> Inject { label; ty = simplify_ty ty; loc }
+  | Constructor { label; payload } ->
+    (match ty with
+     | Type (Variant constructors) ->
+       let payload =
+         match payload, Map.find constructors label with
+         | None, Some None -> None
+         | Some payload, Some (Some payload_ty) -> Some (simplify_value ~loc ~ty:payload_ty payload)
+         | _ ->
+           raise_s
+             [%message
+               "Bug: constructor does not match its variant type"
+                 (value : Tst.Value.t)
+                 (ty : Tst.Value.t)
+                 (loc : Lex.Location.t)]
+       in
+       Constructor { label; payload; ty = simplify_ty ty; loc }
+     | _ ->
+       raise_s [%message "Bug: expected variant type" (ty : Tst.Value.t) (loc : Lex.Location.t)])
+  | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ ->
     raise_s [%message "Bug: expected runtime value" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
 and simplify_expr (expr : Tst.Expr.t) : Expr.t =
   match expr with
   | Erased { loc; _ } -> Scalar { value = Unit; ty = Unit; loc }
-  | Literal { value; loc; _ } -> simplify_value ~loc value
+  | Literal { value; ty; loc; _ } -> simplify_value ~loc ~ty value
   | Var { id; ty; loc; _ } -> Var { id; ty = simplify_ty ty; loc }
   | Let { var; bind; rest; loc; _ } ->
     if Modes.is_erased (Tst.Expr.mode bind)
@@ -123,6 +158,10 @@ and simplify_expr (expr : Tst.Expr.t) : Expr.t =
     Tuple { elts; ty = simplify_ty ty; loc }
   | Tuple_get { tuple; index; ty; loc; _ } ->
     Tuple_get { tuple = simplify_expr tuple; index; ty = simplify_ty ty; loc }
+  | Payload_get { variant; label; ty; loc; _ } ->
+    Payload_get { variant = simplify_expr variant; label; ty = simplify_ty ty; loc }
+  | Tag_test { variant; label; ty; loc; _ } ->
+    Tag_test { variant = simplify_expr variant; label; ty = simplify_ty ty; loc }
   | Builtin { builtin; loc; ty; _ } ->
     (match builtin with
      | Prim prim -> External { symbol = Builtin.Prim.symbol prim; ty = simplify_ty ty; loc }
@@ -133,7 +172,9 @@ and simplify_expr (expr : Tst.Expr.t) : Expr.t =
     (* TODO inline if value *)
     let fn = simplify_expr fn in
     let arg = simplify_expr arg in
-    Apply { fn; arg; ty = simplify_ty ty; loc }
+    (match fn with
+     | Inject { label; _ } -> Constructor { label; payload = Some arg; ty = simplify_ty ty; loc }
+     | _ -> Apply { fn; arg; ty = simplify_ty ty; loc })
   | Lambda { arg; body; ty; family; loc; _ } ->
     let arg_ty, ret_ty = simplify_arrow ty in
     let body = simplify_expr body in
