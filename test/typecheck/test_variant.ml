@@ -428,7 +428,11 @@ let _ = match x { .left v -> 0, .right v -> let _ = assert erased v in 1 };;
 |};
   [%expect {|
     ((loc ((line 4) (column 52)))
-     (reason (Static_failure (Assert_failed (Var (Anon <opaque>))))))
+     (reason
+      (Static_failure
+       (Assert_failed
+        (Payload (variant (Constructor (label left) (payload ((Bool (T true))))))
+         (label right))))))
     |}]
 ;;
 
@@ -443,7 +447,12 @@ let _ = match x { .left v -> v, .right v -> let _ = assert erased (v == 1) in 1 
     ((loc ((line 4) (column 52)))
      (reason
       (Static_failure
-       (Assert_failed (Bool (Eq (Var (Anon <opaque>)) (Int (T 1))))))))
+       (Assert_failed
+        (Bool
+         (Eq
+          (Payload (variant (Constructor (label left) (payload ((Int (T 4))))))
+           (label right))
+          (Int (T 1))))))))
     |}]
 ;;
 
@@ -1157,5 +1166,160 @@ fun sum (static n : int) : vec n -> dynamic int =
             (env <opaque>) (family <opaque>) (hash <opaque>))))
          (arg (Var (Anon <opaque>)))))
        (label cons))))
+    |}]
+;;
+
+(* [Value.payload]: a matching concrete constructor extracts the payload. *)
+let%expect_test "static match payload: matching constructor extracts" =
+  go
+    {|
+let box = variant { boxed : int };;
+fun sel (static n : int) : erased type = if erased n == 5 then int else bool;;
+let r = match static (box.boxed 5) { .boxed u -> (1 : sel u) };;
+|};
+  [%expect {| |}]
+;;
+
+(* [Value.payload]: the arm a concrete scrutinee does not select is still typechecked, with
+   the payload bound to a stuck extraction — a static demand on it fails cleanly. *)
+let%expect_test "static match payload: unselected arm binds an opaque value" =
+  go
+    {|
+let opt = variant { a : int, b : int };;
+fun sel (static n : int) : erased type = if erased n == 5 then int else bool;;
+let r = match static (opt.b 5) { .a u -> (1 : sel u), .b w -> 1 };;
+|};
+  [%expect {|
+    ((loc ((line 4) (column 44)))
+     (reason
+      (Type_mismatch (got (Type Int))
+       (need
+        (Apply
+         (fn
+          (Binder
+           ((arg ((Id n) <opaque>))
+            (ty
+             (Type
+              (Pi (arg_ty (Type Int))
+               (arg_mode ((staticity Static) (erasure Unerased)))
+               (ret_ty (T (ty (Type Type)) (memo <opaque>)))
+               (ret_mode ((staticity Static) (erasure Erased))))))
+            (body_dst
+             (If
+              (cond
+               (Apply
+                (fn
+                 (Var (id ((Binop Eq) <opaque>)) (loc ((line 3) (column 53)))))
+                (arg
+                 (Make_tuple
+                  (elts
+                   ((Var (id ((Id n) <opaque>)) (loc ((line 3) (column 51))))
+                    (Literal (value (Int 5)) (loc ((line 3) (column 56))))))
+                  (loc ((line 3) (column 53)))))
+                (loc ((line 3) (column 53)))))
+              (then_ (Var (id ((Id int) <opaque>)) (loc ((line 3) (column 63)))))
+              (else_
+               (Var (id ((Id bool) <opaque>)) (loc ((line 3) (column 72)))))
+              (erased Erased) (loc ((line 3) (column 41)))))
+            (env <opaque>) (family <opaque>) (hash <opaque>))))
+         (arg
+          (Payload (variant (Constructor (label b) (payload ((Int (T 5))))))
+           (label a))))))))
+    |}]
+;;
+
+(* A stuck scrutinee binds payloads as stuck [Payload] values, fine to use dynamically. *)
+let%expect_test "static match payload: stuck scrutinee payload is usable dynamically" =
+  go
+    {|
+let opt = variant { a : int, b : int };;
+let f = fn (static v : opt) -> match static v { .a u -> u + 1, .b w -> w };;
+let _ = f (opt.a 1);;
+|};
+  [%expect {| |}]
+;;
+
+(* Joining the two sides of an or-pattern distributes payload extraction into the stuck
+   scrutinee's arms; the mismatched-label arm stays a stuck extraction, so the join is
+   conservatively stuck even though both worlds carry 1. Pins conservative opacity over treating
+   the mismatched arm as dead: the verdict must not depend on how far the scrutinee happened to
+   be forced. *)
+let%expect_test "or-pattern payload join over a stuck scrutinee stays opaque" =
+  go
+    {|
+let opt = variant { a : int, b : int };;
+fun sel (static n : int) : erased type = if erased n == 1 then int else bool;;
+let f = fn (static flag : bool) ->
+  match static (if erased flag then (opt.a 1) else (opt.b 1)) { .a u | .b u -> (1 : sel u) };;
+|};
+  [%expect {|
+    ((loc ((line 5) (column 82)))
+     (reason
+      (Type_mismatch (got (Type Int))
+       (need
+        (Apply
+         (fn
+          (Binder
+           ((arg ((Id n) <opaque>))
+            (ty
+             (Type
+              (Pi (arg_ty (Type Int))
+               (arg_mode ((staticity Static) (erasure Unerased)))
+               (ret_ty (T (ty (Type Type)) (memo <opaque>)))
+               (ret_mode ((staticity Static) (erasure Erased))))))
+            (body_dst
+             (If
+              (cond
+               (Apply
+                (fn
+                 (Var (id ((Binop Eq) <opaque>)) (loc ((line 3) (column 53)))))
+                (arg
+                 (Make_tuple
+                  (elts
+                   ((Var (id ((Id n) <opaque>)) (loc ((line 3) (column 51))))
+                    (Literal (value (Int 1)) (loc ((line 3) (column 56))))))
+                  (loc ((line 3) (column 53)))))
+                (loc ((line 3) (column 53)))))
+              (then_ (Var (id ((Id int) <opaque>)) (loc ((line 3) (column 63)))))
+              (else_
+               (Var (id ((Id bool) <opaque>)) (loc ((line 3) (column 72)))))
+              (erased Erased) (loc ((line 3) (column 41)))))
+            (env <opaque>) (family <opaque>) (hash <opaque>))))
+         (arg
+          (Match
+           (scrutinee
+            (Match (scrutinee (Var (Anon <opaque>)))
+             (arms
+              (((Literal (value (Bool true)) (loc ((line 5) (column 16))))
+                (Constructor (label a) (payload ((Int (T 1))))))
+               ((Literal (value (Bool false)) (loc ((line 5) (column 16))))
+                (Constructor (label b) (payload ((Int (T 1))))))))))
+           (arms
+            (((Constructor (label a)
+               (payload
+                ((Var (id ((Id u) <opaque>)) (loc ((line 5) (column 67))))))
+               (loc ((line 5) (column 64))))
+              (Payload
+               (variant
+                (Match (scrutinee (Var (Anon <opaque>)))
+                 (arms
+                  (((Literal (value (Bool true)) (loc ((line 5) (column 16))))
+                    (Constructor (label a) (payload ((Int (T 1))))))
+                   ((Literal (value (Bool false)) (loc ((line 5) (column 16))))
+                    (Constructor (label b) (payload ((Int (T 1))))))))))
+               (label a)))
+             ((Constructor (label b)
+               (payload
+                ((Var (id ((Id u) <opaque>)) (loc ((line 5) (column 74))))))
+               (loc ((line 5) (column 71))))
+              (Payload
+               (variant
+                (Match (scrutinee (Var (Anon <opaque>)))
+                 (arms
+                  (((Literal (value (Bool true)) (loc ((line 5) (column 16))))
+                    (Constructor (label a) (payload ((Int (T 1))))))
+                   ((Literal (value (Bool false)) (loc ((line 5) (column 16))))
+                    (Constructor (label b) (payload ((Int (T 1))))))))))
+               (label b))))))))))))
     |}]
 ;;

@@ -1,0 +1,91 @@
+
+(* Writing [pair int] in a type position makes the checker apply it. *)
+let pair = fn (erased t : type) -> t ^ t;;
+
+let _ = (1, 2) : pair int;;
+
+(* Curried applications unfold one step at a time. *)
+let first = fn (erased a : type) -> fn (erased b : type) -> a;;
+
+let _ = true : first bool int;;
+
+(* Matching [p] of types binds [a] and [b] as projections.
+   When [swap] is applied to a concrete pair, the projections reduce. *)
+let swap = fn (erased p : type ^ type) -> match erased p { (a, b) -> b ^ a };;
+
+let _ = (true, 1) : swap (int, bool);;
+
+(* A variant value built at compile time can also be unpacked at compile
+   time. In [unbox] [inner] is a stuck payload extraction, which gets
+   reduced when unbox is applied. *)
+let boxed = variant { box : int };;
+
+let unbox = fn (static v : boxed) -> match static v { .box inner -> inner };;
+
+let _ = print_int (unbox (boxed.box 7));;
+
+(* The anonymous application is pushed into both arms, and the result
+   is a stuck conditional, resolved when applied. *)
+fun shape (static b : bool) : erased type =
+  (if erased b
+   then (fn (erased t : type) -> t ^ t)
+   else (fn (erased t : type) -> t))
+    int
+;;
+
+let _ = (1, 2) : shape true;;
+
+let _ = 3 : shape false;;
+
+(* Stuck conditionals are related arm by arm: the checker assumes each
+   arm's condition and rewrites both sides under it. *)
+let f = fn (static s : bool) ->
+  fn (x : (if erased s then int else bool) -> int) ->
+    (x : if erased s then (int -> int) else (bool -> int))
+;;
+
+let _ = f true (fn (v : int) -> v);;
+
+let _ = f false (fn (v : bool) -> 0);;
+
+(* Recursive calls unfold like any application, under a depth limit that
+   stands in for termination checking. *)
+fun nested (static n : int) : erased type =
+  if erased n == 1 then int else int ^ nested (n - 1)
+;;
+
+let _ = (1, (2, 3)) : nested 3;;
+
+(* The shapes compose: unbox unfolds to [2], then nested to [int ^ int]. *)
+let _ = (1, 2) : nested (unbox (boxed.box 2));;
+
+(* Entering a match arm rebinds the scrutinee to what the pattern implies,
+   so scrutinee-dependent types reduce inside the arm. *)
+fun repr (static b : bool) : erased type = if erased b then int else bool;;
+
+let default = fn (static s : bool) ->
+  match static s {
+    true -> (0 : repr s),
+    false -> (false : repr s),
+  }
+;;
+
+let _ = print_int (default true);;
+
+(* Constructor patterns teach shapes. *)
+let shaped = variant { flag : bool, num : int };;
+
+fun payload (erased v : shaped) : erased type =
+  match erased v { .flag _ -> bool, .num _ -> int }
+;;
+
+let read = fn (static v : shaped) ->
+  match static v {
+    .flag b -> if (b : payload v) then 1 else 0,
+    .num n -> (n : payload v),
+  }
+;;
+
+let _ = print_int (read (shaped.flag true));;
+
+let _ = print_int (read (shaped.num 42));;

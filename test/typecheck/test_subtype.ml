@@ -718,3 +718,203 @@ let _ = f true false (fn (v : int) -> v) (fn (v : int) -> v);;
 |};
   [%expect {| |}]
 ;;
+
+(* A two-argument spine [g 0 1] with a variable head cannot unfold; comparing it against a stuck
+   [if] must fall back to arm-wise comparison, as it already does for the one-argument [g 0]. *)
+let%expect_test "leq If vs stuck spine falls back to arm comparison when unfold fails" =
+  go
+    {|
+let f = fn (static erased g : static int -> erased (static int -> erased type)) -> fn (static a : bool) ->
+  fn (x : (if erased a then g 0 1 else g 0 1)) -> (x : g 0 1);;
+let _ = f (fn (static u : int) -> fn (static v : int) -> int) true 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "join If vs stuck spine falls back to arm collapse when unfold fails" =
+  go
+    {|
+let f = fn (static erased g : static int -> erased (static int -> erased type)) -> fn (static a : bool) ->
+  fn (x : (if erased a then g 0 1 else g 0 1)) -> fn (y : g 0 1) ->
+    if true then x else y;;
+let _ = f (fn (static u : int) -> fn (static v : int) -> int) true 1 2;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test
+    "meet If vs stuck spine falls back to arm collapse when unfold fails (arrow arg in join)"
+  =
+  go
+    {|
+let f = fn (static erased g : static int -> erased (static int -> erased type)) -> fn (static a : bool) ->
+  fn (h : (if erased a then g 0 1 else g 0 1) -> int) ->
+    fn (k : g 0 1 -> int) ->
+      if true then h else k;;
+let _ = f (fn (static u : int) -> fn (static v : int) -> int) true (fn (v : int) -> v) (fn (v : int) -> v);;
+|};
+  [%expect {| |}]
+;;
+
+(* Applying a stuck [if] of type functions distributes the pending argument into the arms. *)
+let%expect_test "leq distributes a pending application into stuck-match arms" =
+  go
+    {|
+fun id (static erased t : type) : erased type = t;;
+fun id2 (static erased t : type) : erased type = t;;
+let f = fn (static a : bool) ->
+  fn (x : (if erased a then id else id2) int) -> (x : int);;
+let _ = f true 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "leq distributes a pending two-argument spine into stuck-match arms" =
+  go
+    {|
+let k = fn (static erased t : type) -> fn (static erased u : type) -> u;;
+let f = fn (static a : bool) ->
+  fn (x : (if erased a then k else k) bool int) -> (x : int);;
+let _ = f true 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "join distributes a pending application into stuck-match arms" =
+  go
+    {|
+fun id (static erased t : type) : erased type = t;;
+fun id2 (static erased t : type) : erased type = t;;
+let f = fn (static a : bool) ->
+  fn (x : (if erased a then id else id2) int) -> fn (y : int) ->
+    if true then x else y;;
+let _ = f true 1 2;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test
+    "meet distributes a pending application into stuck-match arms (arrow arg in join)"
+  =
+  go
+    {|
+fun id (static erased t : type) : erased type = t;;
+fun id2 (static erased t : type) : erased type = t;;
+let f = fn (static a : bool) ->
+  fn (h : (if erased a then id else id2) int -> int) -> fn (k : int -> int) ->
+    if true then h else k;;
+let _ = f true (fn (v : int) -> v) (fn (v : int) -> v);;
+|};
+  [%expect {| |}]
+;;
+
+(* Applying a stuck [if] of closures distributes into [Apply { fn = Closure _; _ }] arms, which
+   must unfold like binder-headed applications. *)
+let%expect_test "leq unfolds a closure-headed application from stuck-match arms" =
+  go
+    {|
+let c = fn (x : int) -> int;;
+let c2 = fn (x : int) -> int;;
+let f = fn (static a : bool) ->
+  fn (x : (if erased a then c else c2) 5) -> (x : int);;
+let _ = f true 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "join unfolds a closure-headed application from stuck-match arms" =
+  go
+    {|
+let c = fn (x : int) -> int;;
+let c2 = fn (x : int) -> int;;
+let f = fn (static a : bool) ->
+  fn (x : (if erased a then c else c2) 5) -> fn (y : int) ->
+    if true then x else y;;
+let _ = f true 1 2;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test
+    "meet unfolds a closure-headed application from stuck-match arms (arrow arg in join)"
+  =
+  go
+    {|
+let c = fn (x : int) -> int;;
+let c2 = fn (x : int) -> int;;
+let f = fn (static a : bool) ->
+  fn (h : (if erased a then c else c2) 5 -> int) -> fn (k : int -> int) ->
+    if true then h else k;;
+let _ = f true (fn (v : int) -> v) (fn (v : int) -> v);;
+|};
+  [%expect {| |}]
+;;
+
+(* Projections and payload extractions are eliminators like applications: comparisons unfold
+   their subjects and distribute them into stuck-match arms. *)
+let%expect_test "leq unfolds a projection of a stuck application" =
+  go
+    {|
+fun pair (static erased t : type) : erased (type ^ type) = (t, t);;
+fun f (static erased t : type) : t -> t =
+  match erased (pair t) { (u, v) -> fn (x : u) -> (x : t) };;
+let _ = f int 5;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "leq distributes a projection into stuck-match arms" =
+  go
+    {|
+let f = fn (static a : bool) ->
+  match erased (if erased a then (int, bool) else (int, unit)) { (u, v) -> fn (x : u) -> (x : int) };;
+let _ = f true 1;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "join distributes a projection into stuck-match arms" =
+  go
+    {|
+let f = fn (static a : bool) ->
+  match erased (if erased a then (int, bool) else (int, unit)) { (u, v) ->
+    fn (x : u) -> fn (y : int) -> if true then x else y };;
+let _ = f true 1 2;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "meet distributes a projection into stuck-match arms (arrow arg in join)" =
+  go
+    {|
+let f = fn (static a : bool) ->
+  match erased (if erased a then (int, bool) else (int, unit)) { (u, v) ->
+    fn (h : u -> int) -> fn (k : int -> int) -> if true then h else k };;
+let _ = f true (fn (w : int) -> w) (fn (w : int) -> w);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "leq unfolds an application headed by a projection" =
+  go
+    {|
+let p = ((fn (static erased u : type) -> u), (fn (static erased u : type) -> u));;
+let f = fn (static a : bool) ->
+  match erased (if erased a then p else p) { (g, h) -> fn (x : g int) -> (x : int) };;
+let _ = f true 1;;
+|};
+  [%expect {| |}]
+;;
+
+(* [refine]: decomposing a stuck match assumes the arm's pattern for both sides, so
+   correlated conditionals compare arm-by-arm even when structurally misaligned. *)
+let%expect_test "leq refines correlated conditionals across an arrow" =
+  go
+    {|
+let f = fn (static s : bool) ->
+  fn (x : (if erased s then int else bool) -> int) ->
+    (x : if erased s then (int -> int) else (bool -> int));;
+let _ = f true (fn (v : int) -> v);;
+|};
+  [%expect {| |}]
+;;

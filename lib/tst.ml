@@ -377,50 +377,314 @@ end
 
 let mono ty : dependent = T { ty; memo = Hashtbl.create (module Concrete) }
 
-let rec patterns_unify (a : Dst.Expr.pattern) (b : Dst.Expr.pattern) =
-  match a, b with
-  | Var _, Var _ ->
-    (* Arm leaves are closed, so binder names are irrelevant. *)
-    true
-  | Literal { value = a; _ }, Literal { value = b; _ } -> Dst.Literal.equal a b
-  | Tuple { elts = a; _ }, Tuple { elts = b; _ } ->
-    (match Nonempty_list.zip a b with
-     | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> patterns_unify a b)
-     | Unequal_lengths -> false)
-  | ( Constructor { label = a; payload = a_payload; _ }
-    , Constructor { label = b; payload = b_payload; _ } ) ->
-    Ident.Label.equal a b
-    &&
-      (match a_payload, b_payload with
-      | None, None -> true
-      | Some a, Some b -> patterns_unify a b
-      | None, Some _ | Some _, None -> false)
-  | Or { left = a_left; right = a_right; _ }, Or { left = b_left; right = b_right; _ } ->
-    patterns_unify a_left b_left && patterns_unify a_right b_right
-  | (Var _ | Literal _ | Constructor _ | Tuple _ | Or _), _ -> false
-;;
+module Matched = struct
+  type t =
+    | Match of (Ident.t * Step.t list) list
+    | No_match
+    | Unknown
+end
 
-let arms_unify a_arms b_arms =
-  match Nonempty_list.zip a_arms b_arms with
-  | Ok zip ->
-    let zip = Nonempty_list.to_list zip in
-    let last = List.length zip - 1 in
-    List.for_alli zip ~f:(fun i ((a_pattern, _), (b_pattern, _)) ->
-      i = last || patterns_unify a_pattern b_pattern)
-  | Unequal_lengths -> false
-;;
+module Value0 = struct
+  (* Values are reduced on construction, so every value is in normal form. *)
 
-let merge_arms a_arms b_arms ~f =
-  if arms_unify a_arms b_arms
-  then
-    Nonempty_list.zip_exn a_arms b_arms
-    |> Nonempty_list.map ~f:(fun ((pattern, a_leaf), (_, b_leaf)) ->
-      Option.map (f a_leaf b_leaf) ~f:(fun leaf -> pattern, leaf))
-    |> Nonempty_list.to_list
-    |> Option.all
-    |> Option.map ~f:Nonempty_list.of_list_exn
-  else None
-;;
+  let bottom : value = Bottom
+  let unit : value = Unit
+  let type_ ty : value = Type ty
+  let closure closure = Closure closure
+  let binder binder = Binder binder
+  let var id = Var id
+  let prim prim = Prim prim
+  let external_ ~symbol ~ty = External { symbol; ty }
+
+  let tuple elts =
+    (* A tuple with an unreachable component is unreachable. *)
+    if
+      Nonempty_list.exists elts ~f:(function
+        | Bottom -> true
+        | _ -> false)
+    then Bottom
+    else Tuple elts
+  ;;
+
+  let payload value ~label =
+    match value with
+    | Constructor { label = got; payload = got_payload } when Ident.Label.equal got label ->
+      (match got_payload with
+       | Some payload -> payload
+       | None -> raise_s [%message "Bug: expected payload" (label : Ident.Label.t) (value : value)])
+    | Bottom -> Bottom
+    | (Var _ | Constructor _ | Apply _ | Proj _ | Payload _ | Match _) as value ->
+      Payload { variant = value; label }
+    | ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Tuple _
+      | Inject _
+      | External _
+      | Prim _ ) as value ->
+      raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (value : value)]
+  ;;
+
+  let inject ~ty ~label = Inject { ty; label }
+
+  let constructor ~label ~payload =
+    (* A constructor with an unreachable payload is unreachable. *)
+    match payload with
+    | Some Bottom -> Bottom
+    | payload -> Constructor { label; payload }
+  ;;
+
+  let apply ~fn ~arg =
+    match fn, arg with
+    | Bottom, _ | _, Bottom -> Bottom
+    | Inject { label; _ }, arg -> constructor ~label ~payload:(Some arg)
+    | ( (( Closure _
+         | Binder _
+         | Var _
+         | Apply _
+         | Proj _
+         | Payload _
+         | Match _
+         | External _
+         | Prim _ ) as fn)
+      , arg ) -> Apply { fn; arg }
+    | ((Unit | Bool _ | Int _ | Type _ | Tuple _ | Constructor _) as fn), arg ->
+      raise_s [%message "Bug: expected function" (fn : value) (arg : value)]
+  ;;
+
+  let proj (tuple : value) index =
+    match tuple with
+    | Tuple elts -> Nonempty_list.nth_exn elts index
+    | Bottom -> Bottom
+    | (Var _ | Apply _ | Proj _ | Payload _ | Match _) as tuple -> Proj { tuple; index }
+    | ( Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Inject _
+      | Constructor _
+      | External _
+      | Prim _ ) as tuple -> raise_s [%message "Bug: expected tuple" (index : int) (tuple : value)]
+  ;;
+
+  let rec matches_pattern (value : value) pattern : Matched.t = match_at [] value pattern
+
+  and match_at path (value : value) (pattern : Dst.Expr.pattern) : Matched.t =
+    match pattern with
+    | Var { id; _ } -> Match (if Ident.is_anon id then [] else [ id, List.rev path ])
+    | Literal { value = literal; _ } ->
+      (match literal, value with
+       | Unit, _ (* We know value has unit type. *) -> Match []
+       | Bool want, Bool (T got) -> if Core.Bool.equal got want then Match [] else No_match
+       | Int want, Int (T got) -> if Int64.equal got want then Match [] else No_match
+       | (Bool _ | Int _), _ -> Unknown)
+    | Tuple { elts; _ } ->
+      Nonempty_list.to_list elts
+      |> List.foldi ~init:(Matched.Match []) ~f:(fun index acc elt ->
+        let matched = match_at (Step.Index index :: path) (proj value index) elt in
+        match acc, matched with
+        | No_match, _ | _, No_match -> Matched.No_match
+        | Unknown, _ | _, Unknown -> Unknown
+        | Match bindings, Match elt_bindings -> Match (bindings @ elt_bindings))
+    | Constructor { label; payload; _ } ->
+      (match value with
+       | Constructor { label = got; payload = got_payload } ->
+         if not (Ident.Label.equal got label)
+         then No_match
+         else (
+           match payload, got_payload with
+           | None, None -> Match []
+           | Some payload, Some got_payload ->
+             match_at (Step.Payload label :: path) got_payload payload
+           | Some _, None | None, Some _ ->
+             raise_s [%message "Bug: constructor payload mismatch" (label : Ident.Label.t)])
+       | _ -> Unknown)
+    | Or { left; right; _ } ->
+      (match match_at path value left with
+       | (Match _ | Unknown) as matched -> matched
+       | No_match -> match_at path value right)
+  ;;
+
+  let match_ ~scrutinee ~arms =
+    match scrutinee with
+    | Bottom -> Bottom
+    | scrutinee ->
+      (* Arms with [Bottom] bodies are provably dead. *)
+      let arms =
+        Nonempty_list.to_list arms
+        |> List.filter ~f:(fun (_, leaf) ->
+          match leaf with
+          | Bottom -> false
+          | _ -> true)
+      in
+      (* Matches are exhaustive, so a sole surviving arm is unconditional. *)
+      let rec select : _ -> value Or_unknown.t = function
+        | [] -> Known Bottom
+        | [ (_, leaf) ] -> Known leaf
+        | (pattern, leaf) :: rest ->
+          (match matches_pattern scrutinee pattern with
+           | Matched.Match _ -> Known leaf
+           | No_match -> select rest
+           | Unknown -> Unknown)
+      in
+      (match select arms with
+       | Known value -> value
+       | Unknown -> Match { scrutinee; arms = Nonempty_list.of_list_exn arms })
+  ;;
+
+  let if_ ~loc ~cond ~then_ ~else_ : value =
+    match_
+      ~scrutinee:cond
+      ~arms:
+        (Nonempty_list.create
+           ((Literal { value = Bool true; loc } : Dst.Expr.pattern), then_)
+           [ (Literal { value = Bool false; loc } : Dst.Expr.pattern), else_ ])
+  ;;
+end
+
+module Pattern = struct
+  module Matched = Matched
+
+  let matches_pattern = Value0.matches_pattern
+
+  let rec patterns_congruent (a : Dst.Expr.pattern) (b : Dst.Expr.pattern) =
+    match a, b with
+    | Var _, Var _ ->
+      (* Arm leaves are closed, so binder names are irrelevant. *)
+      true
+    | Literal { value = a; _ }, Literal { value = b; _ } -> Dst.Literal.equal a b
+    | Tuple { elts = a; _ }, Tuple { elts = b; _ } ->
+      (match Nonempty_list.zip a b with
+       | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> patterns_congruent a b)
+       | Unequal_lengths -> false)
+    | ( Constructor { label = a; payload = a_payload; _ }
+      , Constructor { label = b; payload = b_payload; _ } ) ->
+      Ident.Label.equal a b
+      &&
+        (match a_payload, b_payload with
+        | None, None -> true
+        | Some a, Some b -> patterns_congruent a b
+        | None, Some _ | Some _, None -> false)
+    | Or { left = a_left; right = a_right; _ }, Or { left = b_left; right = b_right; _ } ->
+      patterns_congruent a_left b_left && patterns_congruent a_right b_right
+    | (Var _ | Literal _ | Constructor _ | Tuple _ | Or _), _ -> false
+  ;;
+
+  let arms_congruent a_arms b_arms =
+    match Nonempty_list.zip a_arms b_arms with
+    | Ok zip ->
+      let zip = Nonempty_list.to_list zip in
+      let last = List.length zip - 1 in
+      List.for_alli zip ~f:(fun i ((a_pattern, _), (b_pattern, _)) ->
+        i = last || patterns_congruent a_pattern b_pattern)
+    | Unequal_lengths -> false
+  ;;
+
+  let map2_arms a_arms b_arms ~f =
+    if arms_congruent a_arms b_arms
+    then
+      Nonempty_list.zip_exn a_arms b_arms
+      |> Nonempty_list.map ~f:(fun ((pattern, a_leaf), (_, b_leaf)) ->
+        Option.map (f a_leaf b_leaf) ~f:(fun leaf -> pattern, leaf))
+      |> Nonempty_list.to_list
+      |> Option.all
+      |> Option.map ~f:Nonempty_list.of_list_exn
+    else None
+  ;;
+
+  let rec pattern_implies ~(fact : Dst.Expr.pattern) (pattern : Dst.Expr.pattern)
+    : bool Or_unknown.t
+    =
+    match fact, pattern with
+    | _, Var _ -> Known true
+    | Or { left; right; _ }, _ ->
+      (match pattern_implies ~fact:left pattern, pattern_implies ~fact:right pattern with
+       | Known true, Known true -> Known true
+       | Known false, Known false -> Known false
+       | _, _ -> Unknown)
+    | _, Or { left; right; _ } ->
+      (match pattern_implies ~fact left, pattern_implies ~fact right with
+       | Known true, _ | _, Known true -> Known true
+       | Known false, Known false -> Known false
+       | _, _ -> Unknown)
+    | Var _, _ -> Unknown
+    | Literal { value = fact; _ }, Literal { value = pattern; _ } ->
+      Known ([%compare.equal: Dst.Literal.t] fact pattern)
+    | ( Constructor { label = fact_label; payload = fact_payload; _ }
+      , Constructor { label; payload; _ } ) ->
+      if not (Ident.Label.equal fact_label label)
+      then Known false
+      else (
+        match fact_payload, payload with
+        | None, None -> Known true
+        | Some fact_payload, Some payload -> pattern_implies ~fact:fact_payload payload
+        | None, Some _ | Some _, None -> Unknown)
+    | Tuple { elts = fact_elts; _ }, Tuple { elts; _ } ->
+      (match Nonempty_list.zip fact_elts elts with
+       | Unequal_lengths -> Unknown
+       | Ok pairs ->
+         Nonempty_list.fold pairs ~init:(Or_unknown.Known true) ~f:(fun acc (fact, pattern) ->
+           match acc, pattern_implies ~fact pattern with
+           | Known false, _ | _, Known false -> Known false
+           | Known true, Known true -> Known true
+           | _, _ -> Unknown))
+    | Literal _, (Constructor _ | Tuple _)
+    | Constructor _, (Literal _ | Tuple _)
+    | Tuple _, (Literal _ | Constructor _) -> Unknown
+  ;;
+
+  let select_arm (scrutinee : value) patterns : _ Or_unknown.t =
+    let rec aux index : _ -> _ Or_unknown.t = function
+      | [] -> Unknown
+      | pattern :: rest ->
+        (match matches_pattern scrutinee pattern with
+         | Match bindings -> Known (index, bindings)
+         | No_match -> aux (index + 1) rest
+         | Unknown -> Unknown)
+    in
+    match scrutinee with
+    | Bottom -> Unknown
+    | _ -> aux 0 (Nonempty_list.to_list patterns)
+  ;;
+
+  (* Whether each arm's positive fact re-selects that arm: the pattern implies itself and
+     definitely excludes every earlier one. *)
+  let arms_self_selecting arms =
+    let rec go earlier = function
+      | [] -> true
+      | (pattern, _) :: rest ->
+        [%compare.equal: bool Or_unknown.t] (pattern_implies ~fact:pattern pattern) (Known true)
+        && List.for_all earlier ~f:(fun earlier ->
+          [%compare.equal: bool Or_unknown.t] (pattern_implies ~fact:pattern earlier) (Known false))
+        && go (pattern :: earlier) rest
+    in
+    go [] (Nonempty_list.to_list arms)
+  ;;
+
+  let collapse_arms ~scrutinee arms ~f ~combine =
+    match
+      Nonempty_list.to_list arms
+      |> List.map ~f:(fun (pattern, leaf) ->
+        Option.map (f pattern leaf) ~f:(fun result -> pattern, result))
+      |> Option.all
+    with
+    | None -> None
+    | Some arms ->
+      let arms = Nonempty_list.of_list_exn arms in
+      let (first :: rest) = Nonempty_list.map arms ~f:snd in
+      (match
+         List.fold rest ~init:(Some first) ~f:(fun acc leaf ->
+           Option.bind acc ~f:(fun acc -> combine acc leaf))
+       with
+       | Some result -> Some result
+       | None -> Option.some_if (arms_self_selecting arms) (Value0.match_ ~scrutinee ~arms))
+  ;;
+end
 
 let rec is_concrete_value : value -> _ = function
   | Unit | Closure _ | Binder _ | External _ | Prim _ -> true
@@ -588,7 +852,7 @@ and join_concrete_value (a : value) (b : value) : value option =
     (Type ty : value)
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
     , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
-    let%bind arms = merge_arms a_arms b_arms ~f:join_concrete_value in
+    let%bind arms = Pattern.map2_arms a_arms b_arms ~f:join_concrete_value in
     let%map scrutinee = join_concrete_value a_scrutinee b_scrutinee in
     Match { scrutinee; arms }
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
@@ -655,7 +919,7 @@ and meet_concrete_value (a : value) (b : value) : value option =
     (Type ty : value)
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
     , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
-    let%bind arms = merge_arms a_arms b_arms ~f:meet_concrete_value in
+    let%bind arms = Pattern.map2_arms a_arms b_arms ~f:meet_concrete_value in
     let%map scrutinee = meet_concrete_value a_scrutinee b_scrutinee in
     Match { scrutinee; arms }
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
@@ -1020,149 +1284,12 @@ module Value = struct
     | Prim of Builtin0.Prim.t
   [@@deriving sexp]
 
+  include Value0
+
   let ty = function
     | Type ty -> ty
     | value -> raise_s [%message "Bug: expected concrete type" (value : t)]
   ;;
-
-  module Matched = struct
-    type t =
-      | Match of (Ident.t * Step.t list) list
-      | No_match
-      | Unknown
-  end
-
-  (* Values are reduced on construction, so every value is in normal form. *)
-
-  let bottom = Bottom
-  let unit = Unit
-  let type_ ty = Type ty
-  let closure closure = Closure closure
-  let binder binder = Binder binder
-  let var id = Var id
-  let prim prim = Prim prim
-  let external_ ~symbol ~ty = External { symbol; ty }
-
-  let tuple elts =
-    (* A tuple with an unreachable component is unreachable. *)
-    if
-      Nonempty_list.exists elts ~f:(function
-        | Bottom -> true
-        | _ -> false)
-    then Bottom
-    else Tuple elts
-  ;;
-
-  let proj tuple index =
-    match tuple with
-    | Tuple elts -> Nonempty_list.nth_exn elts index
-    | Bottom -> Bottom
-    | tuple -> Proj { tuple; index }
-  ;;
-
-  let payload value ~label =
-    match value with
-    | Constructor { label = got; payload = got_payload } ->
-      (match got_payload with
-       | Some payload when Ident.Label.equal got label -> payload
-       | Some _ | None ->
-         raise_s [%message "Bug: expected constructor" (label : Ident.Label.t) (value : t)])
-    | Bottom -> Bottom
-    | value -> Payload { variant = value; label }
-  ;;
-
-  let inject ~ty ~label = Inject { ty; label }
-
-  let constructor ~label ~payload =
-    (* A constructor with an unreachable payload is unreachable. *)
-    match payload with
-    | Some Bottom -> Bottom
-    | payload -> Constructor { label; payload }
-  ;;
-
-  let apply ~fn ~arg =
-    match fn, arg with
-    | Bottom, _ | _, Bottom -> Bottom
-    | Inject { label; _ }, arg -> constructor ~label ~payload:(Some arg)
-    | fn, arg -> Apply { fn; arg }
-  ;;
-
-  let rec matches_pattern value pattern : Matched.t = match_at [] value pattern
-
-  and match_at path value (pattern : Dst.Expr.pattern) : Matched.t =
-    match pattern with
-    | Var { id; _ } -> Match (if Ident.is_anon id then [] else [ id, List.rev path ])
-    | Literal { value = literal; _ } ->
-      (match literal, value with
-       | Unit, _ (* We know value has unit type. *) -> Match []
-       | Bool want, Bool (T got) -> if Core.Bool.equal got want then Match [] else No_match
-       | Int want, Int (T got) -> if Int64.equal got want then Match [] else No_match
-       | (Bool _ | Int _), _ -> Unknown)
-    | Tuple { elts; _ } ->
-      Nonempty_list.to_list elts
-      |> List.foldi ~init:(Matched.Match []) ~f:(fun index acc elt ->
-        let matched = match_at (Step.Index index :: path) (proj value index) elt in
-        match acc, matched with
-        | No_match, _ | _, No_match -> Matched.No_match
-        | Unknown, _ | _, Unknown -> Unknown
-        | Match bindings, Match elt_bindings -> Match (bindings @ elt_bindings))
-    | Constructor { label; payload; _ } ->
-      (match value with
-       | Constructor { label = got; payload = got_payload } ->
-         if not (Ident.Label.equal got label)
-         then No_match
-         else (
-           match payload, got_payload with
-           | None, None -> Match []
-           | Some payload, Some got_payload ->
-             match_at (Step.Payload label :: path) got_payload payload
-           | Some _, None | None, Some _ ->
-             raise_s [%message "Bug: constructor payload mismatch" (label : Ident.Label.t)])
-       | _ -> Unknown)
-    | Or { left; right; _ } ->
-      (match match_at path value left with
-       | (Match _ | Unknown) as matched -> matched
-       | No_match -> match_at path value right)
-  ;;
-
-  let match_ ~scrutinee ~arms : t =
-    match scrutinee with
-    | Bottom -> Bottom
-    | scrutinee ->
-      (* Arms with [Bottom] bodies are provably dead. *)
-      let arms =
-        Nonempty_list.to_list arms
-        |> List.filter ~f:(fun (_, leaf) ->
-          match leaf with
-          | Bottom -> false
-          | _ -> true)
-      in
-      (* Matches are exhaustive, so a sole surviving arm is unconditional. *)
-      let rec select = function
-        | [] -> Some (Bottom : t)
-        | [ (_, leaf) ] -> Some leaf
-        | (pattern, leaf) :: rest ->
-          (match matches_pattern scrutinee pattern with
-           | Matched.Match _ -> Some leaf
-           | No_match -> select rest
-           | Unknown -> None)
-      in
-      (match select arms with
-       | Some value -> value
-       | None -> Match { scrutinee; arms = Nonempty_list.of_list_exn arms })
-  ;;
-
-  let if_ ~loc ~cond ~then_ ~else_ : t =
-    match_
-      ~scrutinee:cond
-      ~arms:
-        (Nonempty_list.create
-           ((Literal { value = Bool true; loc } : Dst.Expr.pattern), then_)
-           [ (Literal { value = Bool false; loc } : Dst.Expr.pattern), else_ ])
-  ;;
-
-  let arms_unify = arms_unify
-  let merge_arms = merge_arms
 
   let of_literal : Dst.Literal.t -> t = function
     | Unit -> Unit

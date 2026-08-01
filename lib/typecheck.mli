@@ -59,3 +59,12 @@ end
 
 val typecheck : Dst.Program.t -> (Tst.Program.t, Error.t Loc.t) Result.t
 val typecheck_exn : Dst.Program.t -> Tst.Program.t
+
+module For_testing : sig
+  type state
+
+  val create_state : unit -> state
+  val leq_value : state -> Value.t -> Value.t -> bool
+  val join_value : state -> Value.t -> Value.t -> Value.t option
+  val meet_value : state -> Value.t -> Value.t -> Value.t option
+end

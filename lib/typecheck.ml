@@ -401,12 +401,6 @@ let rebind_condition env (expr : Expr.t) value =
   | _ -> env
 ;;
 
-let payload_or_fresh state value ~label =
-  match (value : Value.t) with
-  | Constructor { label = got; _ } when not (Ident.Label.equal got label) -> State.fresh_var state
-  | value -> Value.payload value ~label
-;;
-
 let rec rebind_scrutinee state env (scrutinee : Dst.Expr.t) (pattern : Dst.Expr.pattern) value =
   let rec specialize_matched (pattern : Dst.Expr.pattern) (ty : Value.t) default =
     match pattern with
@@ -421,9 +415,7 @@ let rec rebind_scrutinee state env (scrutinee : Dst.Expr.t) (pattern : Dst.Expr.
          (match payload, Map.find constructors label with
           | None, Some None -> Value.constructor ~label ~payload:None
           | Some payload, Some (Some payload_ty) ->
-            let payload =
-              specialize_matched payload payload_ty (payload_or_fresh state default ~label)
-            in
+            let payload = specialize_matched payload payload_ty (Value.payload default ~label) in
             Value.constructor ~label ~payload:(Some payload)
           | (None | Some _), _ -> default)
        | _ -> default)
@@ -458,20 +450,6 @@ let rec rebind_scrutinee state env (scrutinee : Dst.Expr.t) (pattern : Dst.Expr.
   | _ -> env
 ;;
 
-let try_select_arm (scrutinee : Value.t) patterns =
-  let rec aux index = function
-    | [] -> None
-    | pattern :: rest ->
-      (match Value.matches_pattern scrutinee pattern with
-       | Match bindings -> Some (index, bindings)
-       | No_match -> aux (index + 1) rest
-       | Unknown -> None)
-  in
-  match scrutinee with
-  | Bottom -> None
-  | _ -> aux 0 (Nonempty_list.to_list patterns)
-;;
-
 let compile_match ~loc ~ty patterns =
   let compiled = Match.compile ~ty patterns in
   (match compiled.redundant with
@@ -504,8 +482,18 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
      | Some arg_concrete -> Hashtbl.set memo ~key:arg_concrete ~data:ty
      | None -> ());
     ty
-  | Meet (a, b) -> Option.value_exn (meet_value state (eval state a arg_val) (eval state b arg_val))
-  | Join (a, b) -> Option.value_exn (join_value state (eval state a arg_val) (eval state b arg_val))
+  | Meet (a, b) ->
+    let a = eval state a arg_val in
+    let b = eval state b arg_val in
+    meet_value state a b
+    |> Option.value_or_thunk ~default:(fun () ->
+      raise_s [%message "Bug: meet did not unify" (a : Value.t) (b : Value.t) (arg_val : Value.t)])
+  | Join (a, b) ->
+    let a = eval state a arg_val in
+    let b = eval state b arg_val in
+    join_value state a b
+    |> Option.value_or_thunk ~default:(fun () ->
+      raise_s [%message "Bug: join did not unify" (a : Value.t) (b : Value.t) (arg_val : Value.t)])
   | Reduce { env; arg; arg_ty; arg_mode; memo; ret_ty } ->
     let reduce () =
       let env = Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val } in
@@ -533,12 +521,26 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
 
 and leq_value state (a : Value.t) (b : Value.t) =
   let leq_stuck_match state (a : Value.t) (b : Value.t) =
-    match a, b with
-    | Match { arms; _ }, _ ->
-      Nonempty_list.for_all arms ~f:(fun (_, leaf) -> leq_value state leaf b)
-    | _, Match { arms; _ } ->
-      Nonempty_list.for_all arms ~f:(fun (_, leaf) -> leq_value state a leaf)
-    | _, _ -> false
+    let decompose_left () =
+      match a with
+      | Match { scrutinee; arms } ->
+        Nonempty_list.for_all arms ~f:(fun (pattern, leaf) ->
+          leq_value
+            state
+            (refine state leaf ~scrutinee ~pattern)
+            (refine state b ~scrutinee ~pattern))
+      | _ -> false
+    and decompose_right () =
+      match b with
+      | Match { scrutinee; arms } ->
+        Nonempty_list.for_all arms ~f:(fun (pattern, leaf) ->
+          leq_value
+            state
+            (refine state a ~scrutinee ~pattern)
+            (refine state leaf ~scrutinee ~pattern))
+      | _ -> false
+    in
+    decompose_left () || decompose_right ()
   in
   match a, b with
   | Bottom, _ -> true
@@ -558,15 +560,16 @@ and leq_value state (a : Value.t) (b : Value.t) =
   | External a, External b -> String.equal a.symbol b.symbol
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
     , Match { scrutinee = b_scrutinee; arms = b_arms } )
-    when Value.arms_unify a_arms b_arms
+    when Pattern.arms_congruent a_arms b_arms
          && leq_value state a_scrutinee b_scrutinee
          && Nonempty_list.for_all
               (Nonempty_list.zip_exn a_arms b_arms)
               ~f:(fun ((_, a_leaf), (_, b_leaf)) -> leq_value state a_leaf b_leaf) -> true
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg }
     when leq_value state a_fn b_fn && leq_value state a_arg b_arg -> true
-  | Proj a, Proj b -> a.index = b.index && leq_value state a.tuple b.tuple
-  | Payload a, Payload b -> Ident.Label.equal a.label b.label && leq_value state a.variant b.variant
+  | Proj a, Proj b when a.index = b.index && leq_value state a.tuple b.tuple -> true
+  | Payload a, Payload b
+    when Ident.Label.equal a.label b.label && leq_value state a.variant b.variant -> true
   | Inject a, Inject b -> Ident.Label.equal a.label b.label && leq_value state a.ty b.ty
   | Constructor a, Constructor b ->
     Ident.Label.equal a.label b.label
@@ -575,10 +578,10 @@ and leq_value state (a : Value.t) (b : Value.t) =
       | None, None -> true
       | Some a, Some b -> leq_value state a b
       | None, Some _ | Some _, None -> false)
-  | a, (Apply { fn = Binder _ | Apply _; _ } as b) | (Apply { fn = Binder _ | Apply _; _ } as a), b
-    ->
-    unfold_value state a b ~f:(fun a b -> Some (leq_value state a b))
-    |> Option.value_or_thunk ~default:(fun () -> leq_stuck_match state a b)
+  | a, ((Apply _ | Proj _ | Payload _) as b) | ((Apply _ | Proj _ | Payload _) as a), b ->
+    (match unfold_both state a b ~f:(fun a b -> Option.some_if (leq_value state a b) ()) with
+     | Some () -> true
+     | None -> leq_stuck_match state a b)
   | Match _, _ | _, Match _ -> leq_stuck_match state a b
   | ( ( Unit
       | Bool _
@@ -587,9 +590,6 @@ and leq_value state (a : Value.t) (b : Value.t) =
       | Closure _
       | Binder _
       | Var _
-      | Apply _
-      | Proj _
-      | Payload _
       | External _
       | Tuple _
       | Inject _
@@ -599,42 +599,168 @@ and leq_value state (a : Value.t) (b : Value.t) =
 
 and geq_value state (a : Value.t) (b : Value.t) = leq_value state b a
 
-and unfold_spine : 'r. State.t -> Value.t -> f:(Value.t -> 'r) -> 'r option =
-  fun state value ~f ->
-  let rec peel (value : Value.t) args =
+(* [refine state value ~scrutinee ~pattern] rewrites [value] under the assumption that
+   [scrutinee] matches [pattern] *)
+and refine state (value : Value.t) ~scrutinee ~pattern : Value.t =
+  let refines value = leq_value state scrutinee value && leq_value state value scrutinee in
+  let rec go (value : Value.t) : Value.t =
     match value with
-    | Apply { fn; arg } -> peel fn (arg :: args)
-    | head -> head, args
+    | Bottom | Unit | Bool _ | Int _ | Closure _ | Binder _ | Var _ | External _ | Inject _ | Prim _
+      -> value
+    | Type ty -> Value.type_ (go_ty ty)
+    | Tuple elts -> Value.tuple (Nonempty_list.map elts ~f:go)
+    | Constructor { label; payload } -> Value.constructor ~label ~payload:(Option.map payload ~f:go)
+    | Apply { fn; arg } -> Value.apply ~fn:(go fn) ~arg:(go arg)
+    | Proj { tuple; index } -> Value.proj (go tuple) index
+    | Payload { variant; label } -> Value.payload (go variant) ~label
+    | Match { scrutinee = scrutinee'; arms } ->
+      let scrutinee' = go scrutinee' in
+      let arms = Nonempty_list.map arms ~f:(fun (pattern, leaf) -> pattern, go leaf) in
+      let rec select : _ -> Value.t Or_unknown.t = function
+        | [] -> Unknown
+        | (arm_pattern, leaf) :: rest ->
+          (match Pattern.pattern_implies ~fact:pattern arm_pattern with
+           | Known true -> Known leaf
+           | Known false -> select rest
+           | Unknown -> Unknown)
+      in
+      (match if refines scrutinee' then select (Nonempty_list.to_list arms) else Unknown with
+       | Known leaf -> leaf
+       | Unknown -> Value.match_ ~scrutinee:scrutinee' ~arms)
+  and go_ty (ty : Ty.t) : Ty.t =
+    match ty with
+    | Unit | Bool | Int | Type -> ty
+    | Arrow { arg_ty; arg_mode; ret_ty; ret_mode } ->
+      Arrow { arg_ty = go arg_ty; arg_mode; ret_ty = go ret_ty; ret_mode }
+    (* TODO: consider refining the dependent body *)
+    | Pi { arg_ty; arg_mode; ret_ty; ret_mode } ->
+      Pi { arg_ty = go arg_ty; arg_mode; ret_ty; ret_mode }
+    | Tuple elts -> Tuple (Nonempty_list.map elts ~f:go)
+    | Variant constructors -> Variant (Map.map constructors ~f:(Option.map ~f:go))
   in
-  let rec apply (value : Value.t) args =
-    match value, args with
+  go value
+
+and unfold_value : 'r. State.t -> Value.t -> f:(Value.t -> 'r) -> 'r option =
+  fun state value ~f ->
+  let open struct
+    (* A stuck eliminator awaiting a value *)
+    type t =
+      | Apply of Value.t
+      | Proj of int
+      | Payload of Ident.Label.t
+  end in
+  let rec peel (value : Value.t) frames =
+    match value with
+    | Apply { fn; arg } -> peel fn (Apply arg :: frames)
+    | Proj { tuple; index } -> peel tuple (Proj index :: frames)
+    | Payload { variant; label } -> peel variant (Payload label :: frames)
+    | ( Bottom
+      | Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Var _
+      | Tuple _
+      | Inject _
+      | Constructor _
+      | Match _
+      | External _
+      | Prim _ ) as head -> head, frames
+  in
+  let unwind leaf frames =
+    List.fold frames ~init:leaf ~f:(fun value (frame : t) ->
+      match frame with
+      | Apply arg -> Value.apply ~fn:value ~arg
+      | Proj index -> Value.proj value index
+      | Payload label -> Value.payload value ~label)
+  in
+  let rec reduce_frames (head : Value.t) (frames : t list) =
+    match head, frames with
     | value, [] -> Some (f value)
     | ( (Binder { arg; ty; env; body_dst; _ } | Closure { arg; ty; env; body_dst; _ })
-      , arg_val :: args ) ->
+      , Apply arg_val :: frames ) ->
       let loc = Dst.Expr.loc body_dst in
       State.recur state ~loc ~f:(fun () ->
         let env =
           Env.bind env arg { ty = Ty.arg ty; mode = Ty.arg_mode ty; static = Lazy.from_val arg_val }
         in
-        apply (force_or_var state (reduce state env body_dst).static) args)
-    | (Apply _ as value), args ->
-      let head, args = peel value args in
-      apply head args
-    | _, _ :: _ -> None
+        continue (force_or_var state (reduce state env body_dst).static) frames)
+    | Tuple elts, Proj index :: frames -> continue (Nonempty_list.nth_exn elts index) frames
+    | Constructor { label = got; payload = Some payload }, Payload label :: frames
+      when Ident.Label.equal got label -> continue payload frames
+    | Match { scrutinee; arms }, (_ :: _ as frames) ->
+      let arms = Nonempty_list.map arms ~f:(fun (pattern, leaf) -> pattern, unwind leaf frames) in
+      Some (f (Value.match_ ~scrutinee ~arms))
+    | ( ( Bottom
+        | Unit
+        | Bool _
+        | Int _
+        | Type _
+        | Closure _
+        | Binder _
+        | Var _
+        | Tuple _
+        | Inject _
+        | Constructor _
+        | Apply _
+        | Proj _
+        | Payload _
+        | External _
+        | Prim _ )
+      , _ :: _ ) -> None
+  and continue value frames =
+    let head, frames = peel value frames in
+    reduce_frames head frames
   in
   match peel value [] with
   | _, [] -> None
-  | head, args -> apply head args
+  | head, frames -> reduce_frames head frames
 
-and unfold_value
+and unfold_both
   : 'r. State.t -> Value.t -> Value.t -> f:(Value.t -> Value.t -> 'r option) -> 'r option
   =
   fun state a b ~f ->
-  unfold_spine state b ~f:(fun b -> f a b)
-  |> Option.value_or_thunk ~default:(fun () ->
-    unfold_spine state a ~f:(fun a -> f a b) |> Option.value ~default:None)
+  match unfold_value state a ~f:(fun a -> f a b) |> Option.join with
+  | Some _ as result -> result
+  | None -> unfold_value state b ~f:(fun b -> f a b) |> Option.join
 
 and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
+  let join_stuck_match state (a : Value.t) (b : Value.t) =
+    if leq_value state a b
+    then Some b
+    else if leq_value state b a
+    then Some a
+    else (
+      let decompose_left () =
+        match a with
+        | Match { scrutinee; arms } ->
+          Pattern.collapse_arms ~scrutinee arms ~combine:(join_value state) ~f:(fun pattern leaf ->
+            join_value
+              state
+              (refine state leaf ~scrutinee ~pattern)
+              (refine state b ~scrutinee ~pattern))
+        | _ -> None
+      and decompose_right () =
+        match b with
+        | Match { scrutinee; arms } ->
+          Pattern.collapse_arms ~scrutinee arms ~combine:(join_value state) ~f:(fun pattern leaf ->
+            join_value
+              state
+              (refine state a ~scrutinee ~pattern)
+              (refine state leaf ~scrutinee ~pattern))
+        | _ -> None
+      in
+      match decompose_left () with
+      | Some _ as join -> join
+      | None -> decompose_right ())
+  in
+  let unfold_or_stuck a b =
+    match unfold_both state a b ~f:(join_value state) with
+    | Some join -> Some join
+    | None -> join_stuck_match state a b
+  in
   match a, b with
   | a, Bottom -> Some a
   | Bottom, b -> Some b
@@ -656,28 +782,30 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | External a, External b when String.equal a.symbol b.symbol ->
     Some (Value.external_ ~symbol:a.symbol ~ty:a.ty)
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
-    , (Match { scrutinee = b_scrutinee; arms = b_arms } as b) ) ->
+    , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
     (match
        let%bind scrutinee = join_value state a_scrutinee b_scrutinee in
-       let%map arms = Value.merge_arms a_arms b_arms ~f:(join_value state) in
+       let%map arms = Pattern.map2_arms a_arms b_arms ~f:(join_value state) in
        Value.match_ ~scrutinee ~arms
      with
      | Some join -> Some join
-     | None -> join_all_arms state a_arms ~f:(fun leaf -> join_value state leaf b))
-  | (Apply { fn = a_fn; arg = a_arg } as a), (Apply { fn = b_fn; arg = b_arg } as b) ->
+     | None -> join_stuck_match state a b)
+  | (Apply { fn = a_fn; arg = a_arg } as a), Apply { fn = b_fn; arg = b_arg } ->
     (match
        let%bind fn = join_value state a_fn b_fn in
        let%map arg = join_value state a_arg b_arg in
        Value.apply ~fn ~arg
      with
      | Some join -> Some join
-     | None -> unfold_value state a b ~f:(join_value state))
-  | Proj a, Proj b when a.index = b.index ->
-    let%map tuple = join_value state a.tuple b.tuple in
-    Value.proj tuple a.index
-  | Payload a, Payload b when Ident.Label.equal a.label b.label ->
-    let%map variant = join_value state a.variant b.variant in
-    Value.payload variant ~label:a.label
+     | None -> unfold_or_stuck a b)
+  | Proj a_proj, Proj b_proj when a_proj.index = b_proj.index ->
+    (match join_value state a_proj.tuple b_proj.tuple with
+     | Some tuple -> Some (Value.proj tuple a_proj.index)
+     | None -> unfold_or_stuck a b)
+  | Payload a_payload, Payload b_payload when Ident.Label.equal a_payload.label b_payload.label ->
+    (match join_value state a_payload.variant b_payload.variant with
+     | Some variant -> Some (Value.payload variant ~label:a_payload.label)
+     | None -> unfold_or_stuck a b)
   | Inject a, Inject b when Ident.Label.equal a.label b.label ->
     let%map ty = join_value state a.ty b.ty in
     Value.inject ~ty ~label:a.label
@@ -688,10 +816,9 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
        let%map payload = join_value state a_payload b_payload in
        Value.constructor ~label:a.label ~payload:(Some payload)
      | None, Some _ | Some _, None -> None)
-  | a, (Apply { fn = Binder _ | Apply _; _ } as b) | (Apply { fn = Binder _ | Apply _; _ } as a), b
-    -> unfold_value state a b ~f:(join_value state)
-  | Match { arms; _ }, b -> join_all_arms state arms ~f:(fun leaf -> join_value state leaf b)
-  | a, Match { arms; _ } -> join_all_arms state arms ~f:(fun leaf -> join_value state a leaf)
+  | a, ((Apply _ | Proj _ | Payload _) as b) | ((Apply _ | Proj _ | Payload _) as a), b ->
+    unfold_or_stuck a b
+  | Match _, _ | _, Match _ -> join_stuck_match state a b
   | ( ( Unit
       | Bool _
       | Int _
@@ -699,9 +826,6 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | Closure _
       | Binder _
       | Var _
-      | Apply _
-      | Proj _
-      | Payload _
       | External _
       | Tuple _
       | Inject _
@@ -710,6 +834,40 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
     , _ ) -> None
 
 and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
+  let meet_stuck_match state (a : Value.t) (b : Value.t) =
+    if leq_value state a b
+    then Some a
+    else if leq_value state b a
+    then Some b
+    else (
+      let decompose_left () =
+        match a with
+        | Match { scrutinee; arms } ->
+          Pattern.collapse_arms ~scrutinee arms ~combine:(meet_value state) ~f:(fun pattern leaf ->
+            meet_value
+              state
+              (refine state leaf ~scrutinee ~pattern)
+              (refine state b ~scrutinee ~pattern))
+        | _ -> None
+      and decompose_right () =
+        match b with
+        | Match { scrutinee; arms } ->
+          Pattern.collapse_arms ~scrutinee arms ~combine:(meet_value state) ~f:(fun pattern leaf ->
+            meet_value
+              state
+              (refine state a ~scrutinee ~pattern)
+              (refine state leaf ~scrutinee ~pattern))
+        | _ -> None
+      in
+      match decompose_left () with
+      | Some _ as meet -> meet
+      | None -> decompose_right ())
+  in
+  let unfold_or_stuck a b =
+    match unfold_both state a b ~f:(meet_value state) with
+    | Some meet -> Some meet
+    | None -> meet_stuck_match state a b
+  in
   match a, b with
   | Bottom, _ | _, Bottom -> Some Value.bottom
   | Unit, Unit -> Some Value.unit
@@ -730,28 +888,30 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | External a, External b when String.equal a.symbol b.symbol ->
     Some (Value.external_ ~symbol:a.symbol ~ty:a.ty)
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
-    , (Match { scrutinee = b_scrutinee; arms = b_arms } as b) ) ->
+    , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
     (match
        let%bind scrutinee = meet_value state a_scrutinee b_scrutinee in
-       let%map arms = Value.merge_arms a_arms b_arms ~f:(meet_value state) in
+       let%map arms = Pattern.map2_arms a_arms b_arms ~f:(meet_value state) in
        Value.match_ ~scrutinee ~arms
      with
      | Some meet -> Some meet
-     | None -> meet_all_arms state a_arms ~f:(fun leaf -> meet_value state leaf b))
-  | (Apply { fn = a_fn; arg = a_arg } as a), (Apply { fn = b_fn; arg = b_arg } as b) ->
+     | None -> meet_stuck_match state a b)
+  | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
     (match
        let%bind fn = meet_value state a_fn b_fn in
        let%map arg = meet_value state a_arg b_arg in
        Value.apply ~fn ~arg
      with
      | Some meet -> Some meet
-     | None -> unfold_value state a b ~f:(meet_value state))
-  | Proj a, Proj b when a.index = b.index ->
-    let%map tuple = meet_value state a.tuple b.tuple in
-    Value.proj tuple a.index
-  | Payload a, Payload b when Ident.Label.equal a.label b.label ->
-    let%map variant = meet_value state a.variant b.variant in
-    Value.payload variant ~label:a.label
+     | None -> unfold_or_stuck a b)
+  | Proj a_proj, Proj b_proj when a_proj.index = b_proj.index ->
+    (match meet_value state a_proj.tuple b_proj.tuple with
+     | Some tuple -> Some (Value.proj tuple a_proj.index)
+     | None -> unfold_or_stuck a b)
+  | Payload a_payload, Payload b_payload when Ident.Label.equal a_payload.label b_payload.label ->
+    (match meet_value state a_payload.variant b_payload.variant with
+     | Some variant -> Some (Value.payload variant ~label:a_payload.label)
+     | None -> unfold_or_stuck a b)
   | Inject a, Inject b when Ident.Label.equal a.label b.label ->
     let%map ty = meet_value state a.ty b.ty in
     Value.inject ~ty ~label:a.label
@@ -762,10 +922,9 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
        let%map payload = meet_value state a_payload b_payload in
        Value.constructor ~label:a.label ~payload:(Some payload)
      | None, Some _ | Some _, None -> None)
-  | a, (Apply { fn = Binder _ | Apply _; _ } as b) | (Apply { fn = Binder _ | Apply _; _ } as a), b
-    -> unfold_value state a b ~f:(meet_value state)
-  | Match { arms; _ }, b -> meet_all_arms state arms ~f:(fun leaf -> meet_value state leaf b)
-  | a, Match { arms; _ } -> meet_all_arms state arms ~f:(fun leaf -> meet_value state a leaf)
+  | a, ((Apply _ | Proj _ | Payload _) as b) | ((Apply _ | Proj _ | Payload _) as a), b ->
+    unfold_or_stuck a b
+  | Match _, _ | _, Match _ -> meet_stuck_match state a b
   | ( ( Unit
       | Bool _
       | Int _
@@ -773,29 +932,12 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | Closure _
       | Binder _
       | Var _
-      | Apply _
-      | Proj _
-      | Payload _
       | External _
       | Tuple _
       | Inject _
       | Constructor _
       | Prim _ )
     , _ ) -> None
-
-and join_all_arms state arms ~f =
-  let (first :: rest) = Nonempty_list.map arms ~f:(fun (_, leaf) -> f leaf) in
-  List.fold rest ~init:first ~f:(fun acc leaf ->
-    let%bind acc
-    and leaf in
-    join_value state acc leaf)
-
-and meet_all_arms state arms ~f =
-  let (first :: rest) = Nonempty_list.map arms ~f:(fun (_, leaf) -> f leaf) in
-  List.fold rest ~init:first ~f:(fun acc leaf ->
-    let%bind acc
-    and leaf in
-    meet_value state acc leaf)
 
 and leq_closure (a : Closure.t) (b : Closure.t) = a.hash = b.hash
 and join_closure (a : Closure.t) (b : Closure.t) = if a.hash = b.hash then Some a else None
@@ -1132,8 +1274,8 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
            let value = Value.inject ~ty:variant_ty ~label in
            let mode = Modes.create ~staticity:Static ~erasure:Unerased in
            Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value })
-      | Apply _ as got ->
-        unfold_spine state got ~f:select
+      | (Apply _ | Proj _ | Payload _) as got ->
+        unfold_value state got ~f:select
         |> Option.value_or_thunk ~default:(fun () -> Fail.expected_variant [%here] ~loc got label)
       | got -> Fail.expected_variant [%here] ~loc got label
     in
@@ -1562,7 +1704,7 @@ and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map
         | _, None -> Fail.unknown_label [%here] ~loc desc.ty label
         | None, Some None -> Ident.Map.empty
         | Some payload, Some (Some payload_ty) ->
-          let static = Lazy.map desc.static ~f:(payload_or_fresh state ~label) in
+          let static = Lazy.map desc.static ~f:(Value.payload ~label) in
           pattern_bindings state ~desc:{ Desc.ty = payload_ty; mode = desc.mode; static } payload
         | None, Some (Some _) -> Fail.Match.payload_mismatch [%here] ~loc label ~required:true
         | Some _, Some None -> Fail.Match.payload_mismatch [%here] ~loc label ~required:false)
@@ -1676,9 +1818,9 @@ and typecheck_match_dynamic state env ~scrutinee ~scrutinee_desc ~arms ~loc =
       Lazy.from_fun (fun () ->
         let scrutinee = force_or_var state scrutinee_desc.static in
         let statics = Nonempty_list.map descs ~f:(fun (desc : Desc.t) -> desc.static) in
-        match try_select_arm scrutinee patterns with
-        | Some (index, _) -> Lazy.force (Nonempty_list.nth_exn statics index)
-        | None ->
+        match Pattern.select_arm scrutinee patterns with
+        | Known (index, _) -> Lazy.force (Nonempty_list.nth_exn statics index)
+        | Unknown ->
           Value.match_
             ~scrutinee
             ~arms:
@@ -1727,8 +1869,8 @@ and typecheck_match_static state env ~scrutinee_dst ~scrutinee ~scrutinee_desc ~
   Nonempty_list.iter arms ~f:(fun (pattern, _) ->
     ignore (pattern_bindings state ~desc:scrutinee_desc pattern));
   let compiled = compile_match ~loc ~ty:scrutinee_desc.ty (Nonempty_list.map arms ~f:fst) in
-  match try_select_arm scrutinee_val (Nonempty_list.map arms ~f:fst) with
-  | Some (index, bindings) ->
+  match Pattern.select_arm scrutinee_val (Nonempty_list.map arms ~f:fst) with
+  | Known (index, bindings) ->
     let _, body_dst = Nonempty_list.nth_exn arms index in
     if not (State.monomorphizing state)
     then
@@ -1753,7 +1895,7 @@ and typecheck_match_static state env ~scrutinee_dst ~scrutinee ~scrutinee_desc ~
             Expr.Let { var = id; bind; rest; ty = body_desc.ty; mode = body_desc.mode; loc }))
     in
     expr, body_desc
-  | None ->
+  | Unknown ->
     let arms =
       Nonempty_list.map arms ~f:(fun ((pattern, _) as arm) ->
         let bindings, body, body_desc = typecheck_arm ~desc:scrutinee_desc arm in
@@ -1896,3 +2038,12 @@ let typecheck tst =
   try Ok (typecheck_exn tst) with
   | Error err -> Error err
 ;;
+
+module For_testing = struct
+  type state = State.t
+
+  let create_state () = State.create ~stamp:1_000_000
+  let leq_value = leq_value
+  let join_value = join_value
+  let meet_value = meet_value
+end

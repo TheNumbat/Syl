@@ -256,31 +256,6 @@ and Value : sig
   val apply : fn:t -> arg:t -> t
   val match_ : scrutinee:t -> arms:(Dst.Expr.pattern * t) Nonempty_list.t -> t
   val if_ : loc:Lex.Location.t -> cond:t -> then_:t -> else_:t -> t
-
-  (* Patterns must agree structurally, except the last arm, which
-     exhaustiveness makes unconditional. *)
-  val arms_unify
-    :  (Dst.Expr.pattern * t) Nonempty_list.t
-    -> (Dst.Expr.pattern * t) Nonempty_list.t
-    -> bool
-
-  (* Combine two arm lists positionally, keeping the first list's patterns.
-     [None] if the arms don't unify (per [arms_unify]) or [f] fails on a pair
-     of leaves. *)
-  val merge_arms
-    :  (Dst.Expr.pattern * t) Nonempty_list.t
-    -> (Dst.Expr.pattern * t) Nonempty_list.t
-    -> f:(t -> t -> t option)
-    -> (Dst.Expr.pattern * t) Nonempty_list.t option
-
-  module Matched : sig
-    type t =
-      | Match of (Ident.t * Step.t list) list
-      | No_match
-      | Unknown
-  end
-
-  val matches_pattern : t -> Dst.Expr.pattern -> Matched.t
 end
 
 and Desc : sig
@@ -492,6 +467,51 @@ and Expr : sig
   val with_ : t -> ty:Value.t -> mode:Modes.t -> t
   val with_ty : t -> Value.t -> t
   val with_mode : t -> Modes.t -> t
+end
+
+module Pattern : sig
+  module Matched : sig
+    type t =
+      | Match of (Ident.t * Step.t list) list
+      | No_match
+      | Unknown
+  end
+
+  val matches_pattern : Value.t -> Dst.Expr.pattern -> Matched.t
+
+  val select_arm
+    :  Value.t
+    -> Dst.Expr.pattern Nonempty_list.t
+    -> (int * (Ident.t * Step.t list) list) Or_unknown.t
+
+  (* Given that some scrutinee matches [fact], does it match the second pattern? *)
+  val pattern_implies : fact:Dst.Expr.pattern -> Dst.Expr.pattern -> bool Or_unknown.t
+
+  (* Patterns must agree structurally, except the last arm, which exhaustiveness
+     makes unconditional. *)
+  val arms_congruent
+    :  (Dst.Expr.pattern * Value.t) Nonempty_list.t
+    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
+    -> bool
+
+  (* Combine two arm lists positionally, keeping the first list's patterns.
+     [None] if the arms aren't congruent or [f] fails on a pair of leaves. *)
+  val map2_arms
+    :  (Dst.Expr.pattern * Value.t) Nonempty_list.t
+    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
+    -> f:(Value.t -> Value.t -> Value.t option)
+    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t option
+
+  (* Collapse one match's arms into a single value: map each arm's leaf through [f],
+     then [combine] the results. When they disagree, a stuck result is emitted if
+     every arm's pattern implies itself and excludes every earlier one, so learning
+     the scrutinee can decide the branch. *)
+  val collapse_arms
+    :  scrutinee:Value.t
+    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
+    -> f:(Dst.Expr.pattern -> Value.t -> Value.t option)
+    -> combine:(Value.t -> Value.t -> Value.t option)
+    -> Value.t option
 end
 
 module Top_level : sig
