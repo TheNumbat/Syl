@@ -135,6 +135,26 @@ module Expr = struct
         }
   [@@deriving sexp]
 
+  let rec is_unreachable = function
+    | Unreachable _ -> true
+    | Type_annotation { expr; _ } | Mode_annotation { expr; _ } -> is_unreachable expr
+    | If _
+    | Match _
+    | Let _
+    | Fun _
+    | Lambda _
+    | Apply _
+    | Var _
+    | Literal _
+    | Constructor _
+    | Select _
+    | Variant _
+    | Arrow _
+    | Tuple _
+    | Make_tuple _
+    | Builtin _ -> false
+  ;;
+
   let rec free_vars (expr : t) : Ident.Set.t =
     match expr with
     | Arrow { arg; ret; _ } -> Set.union (free_vars arg) (free_vars ret)
@@ -210,6 +230,14 @@ module Expr = struct
     | Mode_annotation { loc; _ }
     | Builtin { loc; _ }
     | Make_tuple { loc; _ } -> loc
+  ;;
+
+  let pattern_loc : pattern -> Lex.Location.t = function
+    | Var { loc; _ }
+    | Literal { loc; _ }
+    | Constructor { loc; _ }
+    | Tuple { loc; _ }
+    | Or { loc; _ } -> loc
   ;;
 end
 

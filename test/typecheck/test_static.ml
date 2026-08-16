@@ -1477,7 +1477,27 @@ let%expect_test "unreachable in phase context" =
 let f = fn (x : bool) -> if x then 1 else unreachable;;
 let _ = assert erased (f true == 1);;
 |};
-  [%expect {| ((loc ((line 2) (column 42))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 42)))
+     (reason (Misplaced_unreachable Not_under_static_branch)))
+    |}]
+;;
+
+let%expect_test "unreachable in lambda" =
+  go
+    {|
+fun f (static c : bool) : int =
+  match static c {
+    true -> (fn (static x : int) -> unreachable) 0,
+    false -> 3,
+  };;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 36)))
+     (reason (Misplaced_unreachable Not_under_static_branch)))
+    |}]
 ;;
 
 let%expect_test "unreachable in erased if -> ok" =
@@ -1489,28 +1509,96 @@ let _ = assert erased (f true == 1);;
   [%expect {| |}]
 ;;
 
-(* The dead branch of a resolved erased if is checked under the branch's
-   assumed condition, exactly like the unresolved case. *)
-let%expect_test "resolved erased if refines its dead branch" =
+(* A conditional decided in the generic pass is dead in every instance: the
+   conditional itself is the dead code, and the dead branch is never checked
+   under a pinned world. *)
+let%expect_test "resolved erased if is dead code" =
   go
     {|
 let b = true;;
 let _ = if erased b then 1 else (let _ = assert erased (!b) in 0);;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason (Dead_branch (branch Else) (value (Bool (T true))))))
+    |}]
 ;;
 
-let%expect_test "dead branch asserts still evaluate under the refinement" =
+(* No filler for the dead slot is legal, [unreachable] included. *)
+let%expect_test "unreachable cannot fill a dead branch" =
   go
     {|
-let b = true;;
-let _ = if erased b then 1 else (let _ = assert erased b in 0);;
+let _ = if erased true then 42 else unreachable;;
 |};
   [%expect
     {|
-    ((loc ((line 3) (column 41)))
-     (reason (Static_failure (Assert_failed (Bool (T false))))))
+    ((loc ((line 2) (column 8)))
+     (reason (Dead_branch (branch Else) (value (Bool (T true))))))
     |}]
+;;
+
+(* The condition position is not a branch tail. *)
+let%expect_test "unreachable cannot be a condition" =
+  go
+    {|
+let f =
+  fn (static b : bool) ->
+    if erased b then 0 else (if erased (unreachable : bool) then 1 else 2)
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 52)))
+     (reason (Misplaced_unreachable Not_in_tail_position)))
+    |}]
+;;
+
+(* The same rejection through a condition consumer. *)
+let%expect_test "a dead closure body is rejected in a condition" =
+  go
+    {|
+fun f (static c : bool) : int =
+  let h = fn (x : int) -> (match static c { true -> unreachable, false -> unreachable }) in
+  if erased h 0 then 1 else 2
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 3) (column 27)))
+     (reason (Misplaced_unreachable All_paths_unreachable)))
+    |}]
+;;
+
+(* The branch's pin decides a nested match on the condition variable. *)
+let%expect_test "a learned pin decides a nested match" =
+  go
+    {|
+fun f (static b : bool) : int =
+  if erased b then (match static b { true -> 1, false -> 2 }) else 3
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 3) (column 48)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Literal (value (Bool false)) (loc ((line 3) (column 48))))))
+       (value (Bool (T true))))))
+    |}]
+;;
+
+(* Deleting the dead arm is legal: the pin refutes the missing case. *)
+let%expect_test "a learned pin makes the single-arm spelling legal" =
+  go
+    {|
+fun f (static b : bool) : int =
+  if erased b then (match static b { true -> 1 }) else 3
+;;
+let _ = assert erased (f true == 1);;
+let _ = assert erased (f false == 3);;
+|};
+  [%expect {| |}]
 ;;
 
 let%expect_test "pi return static parametric" =

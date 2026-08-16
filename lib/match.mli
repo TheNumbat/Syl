@@ -31,7 +31,7 @@ end
 module Tree : sig
   module Occurrence : sig
     type t =
-      { path : Tst.Step.t Vec.t
+      { path : Tst.Pattern.Step.t Vec.t
       ; ty : Tst.Value.t
       }
     [@@deriving sexp]
@@ -65,7 +65,7 @@ end
 module Result : sig
   module Missing : sig
     type t =
-      | Wildcard
+      | All_except of Tst.Pattern.Excluded.t list
       | Literal of Literal.t
       | Tuple of t list
       | Constructor of
@@ -84,4 +84,11 @@ module Result : sig
   [@@deriving sexp]
 end
 
-val compile : ty:Tst.Value.t -> Pattern.t Nonempty_list.t -> Result.t
+(** [unfold] head-normalizes a type for syntactic inspection; it must be the identity
+    where no reduction applies. *)
+val compile
+  :  scrutinee:Tst.Value.t
+  -> ty:Tst.Value.t
+  -> unfold:(Tst.Value.t -> Tst.Value.t)
+  -> Pattern.t Nonempty_list.t
+  -> Result.t

@@ -1,5 +1,6 @@
 open! Core
 module Modes = Modes
+module Or_unknown = Or_unknown
 module Ident = Ident
 module Builtin = Builtin
 module Cst = Cst

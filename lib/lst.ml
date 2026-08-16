@@ -52,67 +52,54 @@ module Ty = struct
   let tag_size = 8
   let tag_align = 8
 
-  let rec size_in_mem = function
-    | Unit | Type -> 0
-    | Bool -> 1
-    | Int -> 8
-    | Env -> 8
-    | Closure _ -> 16
+  let rec size_align : t -> int * int = function
+    | Unit | Type -> 0, 1
+    | Bool -> 1, 1
+    | Int -> 8, 8
+    | Env -> 8, 8
+    | Closure _ -> 16, 8
     | Tuple elts ->
-      let elts = Nonempty_list.to_list elts in
-      if List.for_all elts ~f:(fun elt -> size_in_mem elt = 0)
-      then 0
-      else fst (tuple_size_align elts)
+      let elts = Nonempty_list.to_list elts |> List.map ~f:size_align in
+      if List.for_all elts ~f:(fun (size, _) -> size = 0) then 0, 1 else tuple_size_align elts
     | Variant constructors ->
-      let payload_align = payload_align_in_mem constructors in
+      let payload_size, payload_align = payload_size_align constructors in
       let payload_offset = align_to tag_size ~align:payload_align in
-      align_to
-        (payload_offset + payload_size_in_mem constructors)
-        ~align:(Int.max tag_align payload_align)
+      let align = Int.max tag_align payload_align in
+      align_to (payload_offset + payload_size) ~align, align
 
   (* mirrors the recursive [syl_tuple] *)
   and tuple_size_align = function
     | [] -> 1, 1
-    | elt :: rest ->
-      (match size_in_mem elt with
+    | (size, elt_align) :: rest ->
+      (match size with
        | 0 -> tuple_size_align rest
        | size ->
          (match rest with
-          | [] -> size, align_in_mem elt
+          | [] -> size, elt_align
           | _ :: _ ->
             let rest_size, rest_align = tuple_size_align rest in
-            let align = Int.max (align_in_mem elt) rest_align in
+            let align = Int.max elt_align rest_align in
             align_to (align_to size ~align:rest_align + rest_size) ~align, align))
 
-  and align_in_mem = function
-    | Bool -> 1
-    | Int -> 8
-    | Env -> 8
-    | Closure _ -> 8
-    | Tuple elts ->
-      Nonempty_list.fold elts ~init:1 ~f:(fun acc elt ->
-        match size_in_mem elt with
-        | 0 -> acc
-        | _ -> Int.max acc (align_in_mem elt))
-    | Variant constructors -> Int.max tag_align (payload_align_in_mem constructors)
-    | Unit | Type -> raise_s [%message "Bug: undefined alignment"]
-
-  and payload_size_in_mem constructors =
-    Map.fold constructors ~init:0 ~f:(fun ~key:_ ~data acc ->
+  and payload_size_align constructors =
+    Map.fold constructors ~init:(0, 1) ~f:(fun ~key:_ ~data (size_acc, align_acc) ->
       match data with
-      | None -> acc
-      | Some ty -> Int.max acc (size_in_mem ty))
-
-  and payload_align_in_mem constructors =
-    Map.fold constructors ~init:1 ~f:(fun ~key:_ ~data acc ->
-      match data with
-      | None -> acc
+      | None -> size_acc, align_acc
       | Some ty ->
-        (match size_in_mem ty with
-         | 0 -> acc
-         | _ -> Int.max acc (align_in_mem ty)))
+        let size, align = size_align ty in
+        Int.max size_acc size, if size = 0 then align_acc else Int.max align_acc align)
   ;;
 
+  let size_in_mem t = fst (size_align t)
+
+  let align_in_mem (t : t) =
+    match t with
+    | Unit | Type -> raise_s [%message "Bug: undefined alignment"]
+    | Bool | Int | Env | Closure _ | Tuple _ | Variant _ -> snd (size_align t)
+  ;;
+
+  let payload_size_in_mem constructors = fst (payload_size_align constructors)
+  let payload_align_in_mem constructors = snd (payload_size_align constructors)
   let is_zero_size t = size_in_mem t = 0
 end
 

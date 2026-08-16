@@ -3,6 +3,23 @@ open Tst
 open Option.Let_syntax
 
 module Error = struct
+  module Branch = struct
+    type t =
+      | Then
+      | Else
+      | Arm of Dst.Expr.pattern
+    [@@deriving sexp]
+  end
+
+  module Misplaced = struct
+    type t =
+      | Not_under_static_branch
+      | Not_in_tail_position
+      | Not_in_head_position
+      | All_paths_unreachable
+    [@@deriving sexp]
+  end
+
   module Match = struct
     type t =
       | Multiple_bindings of Ident.t
@@ -54,7 +71,12 @@ module Error = struct
         ; result : Modes.t
         }
     | Recursion_limit of int
+    | Dead_branch of
+        { branch : Branch.t
+        ; value : Value.t
+        }
     | Unreachable_reached
+    | Misplaced_unreachable of Misplaced.t
   [@@deriving sexp]
 end
 
@@ -109,7 +131,17 @@ module Fail = struct
   ;;
 
   let static_failure ~loc here err = raise (Error { loc; here; reason = Static_failure err })
+
+  let dead_branch ~loc here branch value =
+    raise (Error { loc; here; reason = Dead_branch { branch; value } })
+  ;;
+
   let unreachable_reached ~loc here = raise (Error { loc; here; reason = Unreachable_reached })
+
+  let misplaced_unreachable ~loc here why =
+    raise (Error { loc; here; reason = Misplaced_unreachable why })
+  ;;
+
   let static_cycle ~loc here = raise (Error { loc; here; reason = Static_cycle })
 
   let erased_application ~loc here fn result =
@@ -174,7 +206,7 @@ module State = struct
     { mutable stamp : int
     ; mutable depth : int
     ; mutable app_depth : int
-    ; mutable abs_depth : int
+    ; mutable inst_depth : int
     ; mutable path : Spec.t list
     ; families : (Family.t, int) Hashtbl.t
     ; specializations : (Instance.t, Mono.t) Hashtbl.t
@@ -187,7 +219,7 @@ module State = struct
     { stamp
     ; depth = 0
     ; app_depth = 0
-    ; abs_depth = 0
+    ; inst_depth = 0
     ; path = []
     ; families = Hashtbl.create (module Family)
     ; specializations = Hashtbl.create (module Instance)
@@ -195,8 +227,10 @@ module State = struct
     }
   ;;
 
-  let concrete t = t.abs_depth = 0
-  let monomorphizing t = t.app_depth > 0
+  (* [reducing]: re-evaluating a binder or closure body at an applied argument
+     [instancing]: additionally the argument is concrete *)
+  let reducing t = t.app_depth > 0
+  let instancing t = t.inst_depth > 0
 
   let recur ~loc t ~f =
     if t.depth > recursion_limit
@@ -211,9 +245,9 @@ module State = struct
     Exn.protect ~f ~finally:(fun () -> t.app_depth <- t.app_depth - 1)
   ;;
 
-  let with_abs t ~f =
-    t.abs_depth <- t.abs_depth + 1;
-    Exn.protect ~f ~finally:(fun () -> t.abs_depth <- t.abs_depth - 1)
+  let with_instance t ~f =
+    t.inst_depth <- t.inst_depth + 1;
+    Exn.protect ~f:(fun () -> with_app t ~f) ~finally:(fun () -> t.inst_depth <- t.inst_depth - 1)
   ;;
 
   let with_spec t spec ~f =
@@ -265,52 +299,6 @@ module State = struct
   ;;
 end
 
-let rec concrete (v : Value.t) : Value.Concrete.t option =
-  match v with
-  | Unit -> Some Unit
-  | Bool (T b) -> Some (Bool b)
-  | Int (T i) -> Some (Int i)
-  | Tuple elts ->
-    Nonempty_list.map elts ~f:concrete
-    |> Nonempty_list.to_list
-    |> Option.all
-    |> Option.map ~f:(fun elts -> Value.Concrete.Tuple (Nonempty_list.of_list_exn elts))
-  | Closure closure -> Some (Closure closure.hash)
-  | Binder binder -> Some (Closure binder.hash)
-  | Prim prim -> Some (Prim (Prim prim))
-  | Type Unit -> Some (Prim (Type Unit))
-  | Type Bool -> Some (Prim (Type Bool))
-  | Type Int -> Some (Prim (Type Int))
-  | Type Type -> Some (Prim (Type Type))
-  | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
-  | Type (Pi { arg_ty; arg_mode; ret_ty = T { ty = ret_ty; _ }; ret_mode }) ->
-    let%bind arg = concrete arg_ty in
-    let%map ret = concrete ret_ty in
-    Value.Concrete.Arrow { arg; arg_mode; ret; ret_mode }
-  | Type (Tuple elts) ->
-    let%map elts = Nonempty_list.map elts ~f:concrete |> Nonempty_list.to_list |> Option.all in
-    Value.Concrete.Tuple_t (Nonempty_list.of_list_exn elts)
-  | Type (Variant constructors) ->
-    with_return (fun { return } ->
-      Some
-        (Value.Concrete.Variant_t
-           (Map.map constructors ~f:(fun payload ->
-              Option.map payload ~f:(fun payload ->
-                match concrete payload with
-                | Some payload -> payload
-                | None -> return None)))))
-  | External { symbol; _ } -> Some (External symbol)
-  | Inject { label; ty } ->
-    let%map ty = concrete ty in
-    Value.Concrete.Inject { label; ty }
-  | Constructor { label; payload = None } ->
-    Some (Value.Concrete.Constructor { label; payload = None })
-  | Constructor { label; payload = Some payload } ->
-    let%map payload = concrete payload in
-    Value.Concrete.Constructor { label; payload = Some payload }
-  | Bottom | Bool _ | Int _ | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Type (Pi _) -> None
-;;
-
 (* A static forced during its own computation becomes abstract. *)
 let force_or_var state static =
   try Lazy.force static with
@@ -352,6 +340,10 @@ let resolve_app_mode ~loc (fn_desc : Desc.t) (ret_mode : Modes.t) : Modes.t =
     if not (Modes.is_static ret_mode) then Fail.erased_application [%here] ~loc fn_desc.ty ret_mode;
     { ret_mode with erasure = Erased })
   else ret_mode
+;;
+
+let require_reachable (expr : Dst.Expr.t) =
+  if Dst.Expr.is_unreachable expr then Fail.unreachable_reached [%here] ~loc:(Dst.Expr.loc expr)
 ;;
 
 let require_mode ~loc src dst =
@@ -401,64 +393,37 @@ let rebind_condition env (expr : Expr.t) value =
   | _ -> env
 ;;
 
-let rec rebind_scrutinee state env (scrutinee : Dst.Expr.t) (pattern : Dst.Expr.pattern) value =
-  let rec specialize_matched (pattern : Dst.Expr.pattern) (ty : Value.t) default =
-    match pattern with
-    | Var _ -> default
-    | Or _ ->
-      (* TODO or-patterns would need refinement to some kind of or-type *)
-      default
-    | Literal { value; _ } -> Value.of_literal value
-    | Constructor { label; payload; _ } ->
-      (match ty with
-       | Type (Variant constructors) ->
-         (match payload, Map.find constructors label with
-          | None, Some None -> Value.constructor ~label ~payload:None
-          | Some payload, Some (Some payload_ty) ->
-            let payload = specialize_matched payload payload_ty (Value.payload default ~label) in
-            Value.constructor ~label ~payload:(Some payload)
-          | (None | Some _), _ -> default)
-       | _ -> default)
-    | Tuple { elts; _ } ->
-      (match ty with
-       | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = Nonempty_list.length elts ->
-         Value.tuple
-           (Nonempty_list.zip_exn elts elt_tys
-            |> Nonempty_list.mapi ~f:(fun index (elt, elt_ty) ->
-              specialize_matched elt elt_ty (Value.proj default index)))
-       | _ -> default)
-  in
-  match scrutinee, pattern with
-  | Var { id; _ }, _ ->
-    (match Env.find env id with
-     | Some desc ->
-       Env.bind
-         env
-         id
-         { desc with static = Lazy.from_val (specialize_matched pattern desc.ty value) }
-     | None -> env)
-  | (Type_annotation { expr; _ } | Mode_annotation { expr; _ }), _ ->
-    rebind_scrutinee state env expr pattern value
-  | Make_tuple { elts; _ }, Tuple { elts = pats; _ } ->
-    (match Nonempty_list.zip elts pats with
-     | Ok pairs ->
-       Nonempty_list.to_list pairs
-       |> List.foldi ~init:env ~f:(fun index env (elt, pat) ->
-         rebind_scrutinee state env elt pat (Value.proj value index))
-     | Unequal_lengths -> env)
-  (* TODO non-variable scrutinees need refinement keyed on values (equality types) *)
-  | _ -> env
+let collapse_arms ~scrutinee arms ~f ~combine =
+  match
+    Pattern.with_refuted arms
+    |> List.map ~f:(fun (refuted, pattern, leaf) ->
+      Option.map (f ~refuted pattern leaf) ~f:(fun result -> pattern, result))
+    |> Option.all
+  with
+  | None -> None
+  | Some arms ->
+    let arms = Nonempty_list.of_list_exn arms in
+    let (first :: rest) = Nonempty_list.map arms ~f:snd in
+    (match
+       List.fold rest ~init:(Some first) ~f:(fun acc leaf ->
+         Option.bind acc ~f:(fun acc -> combine acc leaf))
+     with
+     | Some result -> Some result
+     | None -> Some (Value.match_ ~scrutinee ~arms))
 ;;
 
-let compile_match ~loc ~ty patterns =
-  let compiled = Match.compile ~ty patterns in
-  (match compiled.redundant with
-   | [] -> ()
-   | first :: rest -> Fail.Match.redundant [%here] ~loc (Nonempty_list.create first rest));
-  (match compiled.missing with
-   | [] -> ()
-   | first :: rest -> Fail.Match.non_exhaustive [%here] ~loc (Nonempty_list.create first rest));
-  compiled
+let build_condition ~loc ~scrutinee ~scrutinee_desc (literal : Dst.Literal.t) : Expr.t =
+  match literal with
+  | Unit -> Expr.literal ~loc (Bool true)
+  | Bool true -> scrutinee
+  | Bool false -> Builtin.apply ~loc (Bool Not) scrutinee scrutinee_desc
+  | Int i ->
+    let arg, arg_desc =
+      let lit = Expr.literal ~loc (Int i) in
+      let lit_desc = Expr.desc lit (Lazy.from_val (Value.of_literal (Int i))) in
+      Expr.tuple ~loc (Nonempty_list.create (scrutinee, scrutinee_desc) [ lit, lit_desc ])
+    in
+    Builtin.apply ~loc (Int Eq) arg arg_desc
 ;;
 
 let rec require_leq state ~loc src dst =
@@ -478,7 +443,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
   (* We've already typechecked forall args, so these can't fail. *)
   match dep with
   | T { ty; memo } ->
-    (match concrete arg_val with
+    (match Value.Concrete.of_value arg_val with
      | Some arg_concrete -> Hashtbl.set memo ~key:arg_concrete ~data:ty
      | None -> ());
     ty
@@ -500,44 +465,49 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
       let ret_ty_desc = reduce state env ret_ty in
       force_or_var state ret_ty_desc.static
     in
-    (match concrete arg_val with
+    (match Value.Concrete.of_value arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> State.with_app state ~f:reduce
+         | None -> State.with_instance state ~f:reduce
          | Some ty -> ty)
-     | None -> reduce ())
+     | None -> State.with_app state ~f:reduce)
   | Typecheck { env; arg; arg_ty; arg_mode; memo; body } ->
     let reduce () =
       let env = Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val } in
       let body_desc = reduce state env body in
       body_desc.ty
     in
-    (match concrete arg_val with
+    (match Value.Concrete.of_value arg_val with
      | Some arg_concrete ->
        Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> State.with_app state ~f:reduce
+         | None -> State.with_instance state ~f:reduce
          | Some ty -> ty)
-     | None -> reduce ())
+     | None -> State.with_app state ~f:reduce)
 
+(* TODO: memoize leq in [State] (e.g. keyed on the pair's physical identity) *)
 and leq_value state (a : Value.t) (b : Value.t) =
   let leq_stuck_match state (a : Value.t) (b : Value.t) =
+    let decompose_arms arms ~f =
+      Pattern.with_refuted arms
+      |> List.for_all ~f:(fun (refuted, pattern, leaf) -> f ~refuted pattern leaf)
+    in
     let decompose_left () =
       match a with
       | Match { scrutinee; arms } ->
-        Nonempty_list.for_all arms ~f:(fun (pattern, leaf) ->
+        decompose_arms arms ~f:(fun ~refuted pattern leaf ->
           leq_value
             state
-            (refine state leaf ~scrutinee ~pattern)
-            (refine state b ~scrutinee ~pattern))
+            (rewrite state leaf ~scrutinee ~pattern ~refuted)
+            (rewrite state b ~scrutinee ~pattern ~refuted))
       | _ -> false
     and decompose_right () =
       match b with
       | Match { scrutinee; arms } ->
-        Nonempty_list.for_all arms ~f:(fun (pattern, leaf) ->
+        decompose_arms arms ~f:(fun ~refuted pattern leaf ->
           leq_value
             state
-            (refine state a ~scrutinee ~pattern)
-            (refine state leaf ~scrutinee ~pattern))
+            (rewrite state a ~scrutinee ~pattern ~refuted)
+            (rewrite state leaf ~scrutinee ~pattern ~refuted))
       | _ -> false
     in
     decompose_left () || decompose_right ()
@@ -549,8 +519,8 @@ and leq_value state (a : Value.t) (b : Value.t) =
   | Bool a, Bool b -> leq_bool state a b
   | Int a, Int b -> leq_int state a b
   | Type a, Type b -> leq_ty state a b
-  | Closure a, Closure b -> leq_closure a b
-  | Binder a, Binder b -> leq_binder a b
+  | Closure a, Closure b -> Closure.equal a b
+  | Binder a, Binder b -> Binder.equal a b
   | Var a, Var b -> Ident.equal a b
   | Prim a, Prim b -> Builtin.Prim.equal a b
   | Tuple a_elts, Tuple b_elts ->
@@ -560,7 +530,7 @@ and leq_value state (a : Value.t) (b : Value.t) =
   | External a, External b -> String.equal a.symbol b.symbol
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
     , Match { scrutinee = b_scrutinee; arms = b_arms } )
-    when Pattern.arms_congruent a_arms b_arms
+    when Pattern.arms_agree a_arms b_arms
          && leq_value state a_scrutinee b_scrutinee
          && Nonempty_list.for_all
               (Nonempty_list.zip_exn a_arms b_arms)
@@ -578,8 +548,30 @@ and leq_value state (a : Value.t) (b : Value.t) =
       | None, None -> true
       | Some a, Some b -> leq_value state a b
       | None, Some _ | Some _, None -> false)
+  | Refine a_refine, Refine b_refine ->
+    leq_value state a_refine.value b_refine.value
+    && Set.for_all (Set.diff b_refine.excluded a_refine.excluded) ~f:(fun excluded ->
+      Or_unknown.is_false (Pattern.Excluded.is_excluded excluded a_refine.value))
+  | Refine a_refine, b ->
+    leq_value state a_refine.value b
+    ||
+      (match
+         try_unfold_either state a b ~f:(fun a b -> Option.some_if (leq_value state a b) ())
+       with
+      | Some () -> true
+      | None -> leq_stuck_match state a b)
+  | a, Refine b_refine ->
+    (leq_value state a b_refine.value
+     && Set.for_all b_refine.excluded ~f:(fun excluded ->
+       Or_unknown.is_false (Pattern.Excluded.is_excluded excluded a)))
+    ||
+      (match
+         try_unfold_either state a b ~f:(fun a b -> Option.some_if (leq_value state a b) ())
+       with
+      | Some () -> true
+      | None -> leq_stuck_match state a b)
   | a, ((Apply _ | Proj _ | Payload _) as b) | ((Apply _ | Proj _ | Payload _) as a), b ->
-    (match unfold_both state a b ~f:(fun a b -> Option.some_if (leq_value state a b) ()) with
+    (match try_unfold_either state a b ~f:(fun a b -> Option.some_if (leq_value state a b) ()) with
      | Some () -> true
      | None -> leq_stuck_match state a b)
   | Match _, _ | _, Match _ -> leq_stuck_match state a b
@@ -599,10 +591,21 @@ and leq_value state (a : Value.t) (b : Value.t) =
 
 and geq_value state (a : Value.t) (b : Value.t) = leq_value state b a
 
-(* [refine state value ~scrutinee ~pattern] rewrites [value] under the assumption that
-   [scrutinee] matches [pattern] *)
-and refine state (value : Value.t) ~scrutinee ~pattern : Value.t =
+(* [rewrite state value ~scrutinee ~pattern] rewrites [value] under the assumption that
+   [scrutinee] matches [pattern] and none of the [refuted] patterns. *)
+and rewrite state (value : Value.t) ~scrutinee ~pattern ~refuted : Value.t =
+  let value =
+    Value.rewrite
+      value
+      ~target:scrutinee
+      ~replacement:(Value.refine_branch ~scrutinee ~pattern ~refuted)
+  in
   let refines value = leq_value state scrutinee value && leq_value state value scrutinee in
+  (* An arm whose matching would imply a refuted pattern matched is dead — exact on a
+     conditional carrying this fact's own arm list, conservative across matches. *)
+  let dead arm_pattern =
+    List.exists refuted ~f:(fun refuted -> Or_unknown.is_true (Pattern.implies arm_pattern refuted))
+  in
   let rec go (value : Value.t) : Value.t =
     match value with
     | Bottom | Unit | Bool _ | Int _ | Closure _ | Binder _ | Var _ | External _ | Inject _ | Prim _
@@ -613,16 +616,21 @@ and refine state (value : Value.t) ~scrutinee ~pattern : Value.t =
     | Apply { fn; arg } -> Value.apply ~fn:(go fn) ~arg:(go arg)
     | Proj { tuple; index } -> Value.proj (go tuple) index
     | Payload { variant; label } -> Value.payload (go variant) ~label
+    | Refine { value; excluded } -> Value.refine (go value) ~excluded
     | Match { scrutinee = scrutinee'; arms } ->
       let scrutinee' = go scrutinee' in
       let arms = Nonempty_list.map arms ~f:(fun (pattern, leaf) -> pattern, go leaf) in
       let rec select : _ -> Value.t Or_unknown.t = function
         | [] -> Unknown
+        (* Exhaustiveness makes a sole surviving arm unconditional, unless it is dead
+           too (a contradictory world; leave the conditional). *)
+        | [ (arm_pattern, leaf) ] -> if dead arm_pattern then Unknown else Known leaf
         | (arm_pattern, leaf) :: rest ->
-          (match Pattern.pattern_implies ~fact:pattern arm_pattern with
-           | Known true -> Known leaf
-           | Known false -> select rest
-           | Unknown -> Unknown)
+          if dead arm_pattern
+          then select rest
+          else (
+            let%bind.Or_unknown implied = Pattern.implies pattern arm_pattern in
+            if implied then Known leaf else select rest)
       in
       (match if refines scrutinee' then select (Nonempty_list.to_list arms) else Unknown with
        | Known leaf -> leaf
@@ -640,58 +648,38 @@ and refine state (value : Value.t) ~scrutinee ~pattern : Value.t =
   in
   go value
 
-and unfold_value : 'r. State.t -> Value.t -> f:(Value.t -> 'r) -> 'r option =
+and try_unfold : 'r. State.t -> Value.t -> f:(Value.t -> 'r) -> 'r option =
   fun state value ~f ->
-  let open struct
-    (* A stuck eliminator awaiting a value *)
-    type t =
-      | Apply of Value.t
-      | Proj of int
-      | Payload of Ident.Label.t
-  end in
-  let rec peel (value : Value.t) frames =
-    match value with
-    | Apply { fn; arg } -> peel fn (Apply arg :: frames)
-    | Proj { tuple; index } -> peel tuple (Proj index :: frames)
-    | Payload { variant; label } -> peel variant (Payload label :: frames)
-    | ( Bottom
-      | Unit
-      | Bool _
-      | Int _
-      | Type _
-      | Closure _
-      | Binder _
-      | Var _
-      | Tuple _
-      | Inject _
-      | Constructor _
-      | Match _
-      | External _
-      | Prim _ ) as head -> head, frames
-  in
-  let unwind leaf frames =
-    List.fold frames ~init:leaf ~f:(fun value (frame : t) ->
-      match frame with
-      | Apply arg -> Value.apply ~fn:value ~arg
-      | Proj index -> Value.proj value index
-      | Payload label -> Value.payload value ~label)
-  in
-  let rec reduce_frames (head : Value.t) (frames : t list) =
-    match head, frames with
-    | value, [] -> Some (f value)
+  let rec go ~progress value frames =
+    let head, frames = Value.Eliminator.peel value frames in
+    match head, (frames : Value.Eliminator.t list) with
+    | value, [] -> if progress then Some (f value) else None
     | ( (Binder { arg; ty; env; body_dst; _ } | Closure { arg; ty; env; body_dst; _ })
       , Apply arg_val :: frames ) ->
       let loc = Dst.Expr.loc body_dst in
+      let enter =
+        match Value.Concrete.of_value arg_val with
+        | Some _ -> State.with_instance
+        | None -> State.with_app
+      in
       State.recur state ~loc ~f:(fun () ->
-        let env =
-          Env.bind env arg { ty = Ty.arg ty; mode = Ty.arg_mode ty; static = Lazy.from_val arg_val }
-        in
-        continue (force_or_var state (reduce state env body_dst).static) frames)
-    | Tuple elts, Proj index :: frames -> continue (Nonempty_list.nth_exn elts index) frames
+        enter state ~f:(fun () ->
+          let env =
+            Env.bind
+              env
+              arg
+              { ty = Ty.arg ty; mode = Ty.arg_mode ty; static = Lazy.from_val arg_val }
+          in
+          go ~progress:true (force_or_var state (reduce state env body_dst).static) frames))
+    | Tuple elts, Proj index :: frames ->
+      go ~progress:true (Nonempty_list.nth_exn elts index) frames
     | Constructor { label = got; payload = Some payload }, Payload label :: frames
-      when Ident.Label.equal got label -> continue payload frames
+      when Ident.Label.equal got label -> go ~progress:true payload frames
     | Match { scrutinee; arms }, (_ :: _ as frames) ->
-      let arms = Nonempty_list.map arms ~f:(fun (pattern, leaf) -> pattern, unwind leaf frames) in
+      let arms =
+        Nonempty_list.map arms ~f:(fun (pattern, leaf) ->
+          pattern, Value.Eliminator.unpeel leaf frames)
+      in
       Some (f (Value.match_ ~scrutinee ~arms))
     | ( ( Bottom
         | Unit
@@ -707,24 +695,30 @@ and unfold_value : 'r. State.t -> Value.t -> f:(Value.t -> 'r) -> 'r option =
         | Apply _
         | Proj _
         | Payload _
+        | Refine _
         | External _
         | Prim _ )
-      , _ :: _ ) -> None
-  and continue value frames =
-    let head, frames = peel value frames in
-    reduce_frames head frames
+      , _ :: _ ) ->
+      (* Re-stuck after progress: surface the partial reduction. It re-peels to this
+         same stuck head, so retrying callers ([try_unfold_either]) terminate. *)
+      if progress then Some (f (Value.Eliminator.unpeel head frames)) else None
   in
-  match peel value [] with
-  | _, [] -> None
-  | head, frames -> reduce_frames head frames
+  go ~progress:false value []
 
-and unfold_both
+(* Head-normalize a type for syntactic dispatch: a literal head can hide behind a
+   stuck type-function application. No-op when nothing unfolds. *)
+and unfold state (ty : Value.t) : Value.t =
+  match try_unfold state ty ~f:Fn.id with
+  | Some ty -> ty
+  | None -> ty
+
+and try_unfold_either
   : 'r. State.t -> Value.t -> Value.t -> f:(Value.t -> Value.t -> 'r option) -> 'r option
   =
   fun state a b ~f ->
-  match unfold_value state a ~f:(fun a -> f a b) |> Option.join with
+  match try_unfold state a ~f:(fun a -> f a b) |> Option.join with
   | Some _ as result -> result
-  | None -> unfold_value state b ~f:(fun b -> f a b) |> Option.join
+  | None -> try_unfold state b ~f:(fun b -> f a b) |> Option.join
 
 and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   let join_stuck_match state (a : Value.t) (b : Value.t) =
@@ -736,20 +730,20 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       let decompose_left () =
         match a with
         | Match { scrutinee; arms } ->
-          Pattern.collapse_arms ~scrutinee arms ~combine:(join_value state) ~f:(fun pattern leaf ->
+          collapse_arms ~scrutinee arms ~combine:(join_value state) ~f:(fun ~refuted pattern leaf ->
             join_value
               state
-              (refine state leaf ~scrutinee ~pattern)
-              (refine state b ~scrutinee ~pattern))
+              (rewrite state leaf ~scrutinee ~pattern ~refuted)
+              (rewrite state b ~scrutinee ~pattern ~refuted))
         | _ -> None
       and decompose_right () =
         match b with
         | Match { scrutinee; arms } ->
-          Pattern.collapse_arms ~scrutinee arms ~combine:(join_value state) ~f:(fun pattern leaf ->
+          collapse_arms ~scrutinee arms ~combine:(join_value state) ~f:(fun ~refuted pattern leaf ->
             join_value
               state
-              (refine state a ~scrutinee ~pattern)
-              (refine state leaf ~scrutinee ~pattern))
+              (rewrite state a ~scrutinee ~pattern ~refuted)
+              (rewrite state leaf ~scrutinee ~pattern ~refuted))
         | _ -> None
       in
       match decompose_left () with
@@ -757,7 +751,7 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | None -> decompose_right ())
   in
   let unfold_or_stuck a b =
-    match unfold_both state a b ~f:(join_value state) with
+    match try_unfold_either state a b ~f:(join_value state) with
     | Some join -> Some join
     | None -> join_stuck_match state a b
   in
@@ -768,8 +762,8 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Bool a, Bool b -> join_bool state a b
   | Int a, Int b -> join_int state a b
   | Type a, Type b -> Option.map (join_ty state a b) ~f:Value.type_
-  | Closure a, Closure b -> Option.map (join_closure a b) ~f:Value.closure
-  | Binder a, Binder b -> Option.map (join_binder a b) ~f:Value.binder
+  | Closure a, Closure b -> Option.some_if (Closure.equal a b) (Value.closure a)
+  | Binder a, Binder b -> Option.some_if (Binder.equal a b) (Value.binder a)
   | Var a, Var b when Ident.equal a b -> Some (Value.var a)
   | Prim a, Prim b when Builtin.Prim.equal a b -> Some (Value.prim a)
   | Tuple a_elts, Tuple b_elts ->
@@ -783,13 +777,18 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
     Some (Value.external_ ~symbol:a.symbol ~ty:a.ty)
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
     , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
-    (match
-       let%bind scrutinee = join_value state a_scrutinee b_scrutinee in
-       let%map arms = Pattern.map2_arms a_arms b_arms ~f:(join_value state) in
-       Value.match_ ~scrutinee ~arms
-     with
-     | Some join -> Some join
-     | None -> join_stuck_match state a b)
+    if leq_value state a b
+    then Some b
+    else if leq_value state b a
+    then Some a
+    else (
+      match
+        let%bind scrutinee = join_value state a_scrutinee b_scrutinee in
+        let%map arms = Pattern.map2_arms a_arms b_arms ~f:(join_value state) in
+        Value.match_ ~scrutinee ~arms
+      with
+      | Some join -> Some join
+      | None -> join_stuck_match state a b)
   | (Apply { fn = a_fn; arg = a_arg } as a), Apply { fn = b_fn; arg = b_arg } ->
     (match
        let%bind fn = join_value state a_fn b_fn in
@@ -816,6 +815,28 @@ and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
        let%map payload = join_value state a_payload b_payload in
        Value.constructor ~label:a.label ~payload:(Some payload)
      | None, Some _ | Some _, None -> None)
+  | Refine a_refine, Refine b_refine ->
+    (match leq_value state a b, leq_value state b a with
+     | true, true -> Some a
+     | false, true -> Some a
+     | true, false -> Some b
+     | false, false ->
+       let value =
+         if leq_value state a_refine.value b_refine.value
+         then Some b_refine.value
+         else if leq_value state b_refine.value a_refine.value
+         then Some a_refine.value
+         else join_value state a_refine.value b_refine.value
+       in
+       let%map value = value in
+       Value.refine value ~excluded:(Set.inter a_refine.excluded b_refine.excluded))
+  | (Refine { value; excluded = _ } as refined), other
+  | other, (Refine { value; excluded = _ } as refined) ->
+    (match leq_value state refined other, leq_value state other refined with
+     | true, true -> Some refined
+     | false, true -> Some refined
+     | true, false -> Some other
+     | false, false -> join_value state value other)
   | a, ((Apply _ | Proj _ | Payload _) as b) | ((Apply _ | Proj _ | Payload _) as a), b ->
     unfold_or_stuck a b
   | Match _, _ | _, Match _ -> join_stuck_match state a b
@@ -843,20 +864,20 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       let decompose_left () =
         match a with
         | Match { scrutinee; arms } ->
-          Pattern.collapse_arms ~scrutinee arms ~combine:(meet_value state) ~f:(fun pattern leaf ->
+          collapse_arms ~scrutinee arms ~combine:(meet_value state) ~f:(fun ~refuted pattern leaf ->
             meet_value
               state
-              (refine state leaf ~scrutinee ~pattern)
-              (refine state b ~scrutinee ~pattern))
+              (rewrite state leaf ~scrutinee ~pattern ~refuted)
+              (rewrite state b ~scrutinee ~pattern ~refuted))
         | _ -> None
       and decompose_right () =
         match b with
         | Match { scrutinee; arms } ->
-          Pattern.collapse_arms ~scrutinee arms ~combine:(meet_value state) ~f:(fun pattern leaf ->
+          collapse_arms ~scrutinee arms ~combine:(meet_value state) ~f:(fun ~refuted pattern leaf ->
             meet_value
               state
-              (refine state a ~scrutinee ~pattern)
-              (refine state leaf ~scrutinee ~pattern))
+              (rewrite state a ~scrutinee ~pattern ~refuted)
+              (rewrite state leaf ~scrutinee ~pattern ~refuted))
         | _ -> None
       in
       match decompose_left () with
@@ -864,9 +885,16 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | None -> decompose_right ())
   in
   let unfold_or_stuck a b =
-    match unfold_both state a b ~f:(meet_value state) with
+    match try_unfold_either state a b ~f:(meet_value state) with
     | Some meet -> Some meet
     | None -> meet_stuck_match state a b
+  in
+  let meet_base v w =
+    if leq_value state v w
+    then Some v
+    else if leq_value state w v
+    then Some w
+    else meet_value state v w
   in
   match a, b with
   | Bottom, _ | _, Bottom -> Some Value.bottom
@@ -874,8 +902,8 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   | Bool a, Bool b -> meet_bool state a b
   | Int a, Int b -> meet_int state a b
   | Type a, Type b -> Option.map (meet_ty state a b) ~f:Value.type_
-  | Closure a, Closure b -> Option.map (meet_closure a b) ~f:Value.closure
-  | Binder a, Binder b -> Option.map (meet_binder a b) ~f:Value.binder
+  | Closure a, Closure b -> Option.some_if (Closure.equal a b) (Value.closure a)
+  | Binder a, Binder b -> Option.some_if (Binder.equal a b) (Value.binder a)
   | Var a, Var b when Ident.equal a b -> Some (Value.var a)
   | Prim a, Prim b when Builtin.Prim.equal a b -> Some (Value.prim a)
   | Tuple a_elts, Tuple b_elts ->
@@ -889,13 +917,18 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
     Some (Value.external_ ~symbol:a.symbol ~ty:a.ty)
   | ( Match { scrutinee = a_scrutinee; arms = a_arms }
     , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
-    (match
-       let%bind scrutinee = meet_value state a_scrutinee b_scrutinee in
-       let%map arms = Pattern.map2_arms a_arms b_arms ~f:(meet_value state) in
-       Value.match_ ~scrutinee ~arms
-     with
-     | Some meet -> Some meet
-     | None -> meet_stuck_match state a b)
+    if leq_value state a b
+    then Some a
+    else if leq_value state b a
+    then Some b
+    else (
+      match
+        let%bind scrutinee = meet_value state a_scrutinee b_scrutinee in
+        let%map arms = Pattern.map2_arms a_arms b_arms ~f:(meet_value state) in
+        Value.match_ ~scrutinee ~arms
+      with
+      | Some meet -> Some meet
+      | None -> meet_stuck_match state a b)
   | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
     (match
        let%bind fn = meet_value state a_fn b_fn in
@@ -922,6 +955,23 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
        let%map payload = meet_value state a_payload b_payload in
        Value.constructor ~label:a.label ~payload:(Some payload)
      | None, Some _ | Some _, None -> None)
+  | Refine a_refine, Refine b_refine ->
+    (match leq_value state a b, leq_value state b a with
+     | true, true -> Some a
+     | true, false -> Some a
+     | false, true -> Some b
+     | false, false ->
+       let%map value = meet_base a_refine.value b_refine.value in
+       Value.refine value ~excluded:(Set.union a_refine.excluded b_refine.excluded))
+  | (Refine { value; excluded } as refined), other | other, (Refine { value; excluded } as refined)
+    ->
+    (match leq_value state refined other, leq_value state other refined with
+     | true, false -> Some refined
+     | false, true -> Some other
+     | true, true -> Some refined
+     | false, false ->
+       let%map value = meet_base value other in
+       Value.refine value ~excluded)
   | a, ((Apply _ | Proj _ | Payload _) as b) | ((Apply _ | Proj _ | Payload _) as a), b ->
     unfold_or_stuck a b
   | Match _, _ | _, Match _ -> meet_stuck_match state a b
@@ -938,13 +988,6 @@ and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
       | Constructor _
       | Prim _ )
     , _ ) -> None
-
-and leq_closure (a : Closure.t) (b : Closure.t) = a.hash = b.hash
-and join_closure (a : Closure.t) (b : Closure.t) = if a.hash = b.hash then Some a else None
-and meet_closure (a : Closure.t) (b : Closure.t) = if a.hash = b.hash then Some a else None
-and leq_binder (a : Binder.t) (b : Binder.t) = a.hash = b.hash
-and join_binder (a : Binder.t) (b : Binder.t) = if a.hash = b.hash then Some a else None
-and meet_binder (a : Binder.t) (b : Binder.t) = if a.hash = b.hash then Some a else None
 
 and leq_bool state a b =
   match a, b with
@@ -1233,13 +1276,10 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     require_leq state ~loc desc.ty ty;
     weaken ~loc expr desc ~ty ~mode:desc.mode
   | Unreachable { loc } ->
-    if State.concrete state
-    then Fail.unreachable_reached [%here] ~loc
-    else (
-      let mode = Modes.bottom () in
-      let ty = Value.bottom in
-      let value = Value.bottom in
-      Literal { value; ty; mode; loc }, { Desc.ty; mode; static = Lazy.from_val value })
+    let mode = Modes.bottom () in
+    let ty = Value.bottom in
+    let value = Value.bottom in
+    Literal { value; ty; mode; loc }, { Desc.ty; mode; static = Lazy.from_val value }
   | Make_tuple { elts; loc } ->
     (* TODO could maybe be a primitive *)
     let elts = Nonempty_list.map elts ~f:(fun elt -> typecheck state env elt) in
@@ -1275,7 +1315,7 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
            let mode = Modes.create ~staticity:Static ~erasure:Unerased in
            Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value })
       | (Apply _ | Proj _ | Payload _) as got ->
-        unfold_value state got ~f:select
+        try_unfold state got ~f:select
         |> Option.value_or_thunk ~default:(fun () -> Fail.expected_variant [%here] ~loc got label)
       | got -> Fail.expected_variant [%here] ~loc got label
     in
@@ -1489,7 +1529,7 @@ and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mod
     in
     let body, body_desc =
       State.with_spec state { family = binder.family; key } ~f:(fun () ->
-        State.with_app state ~f:(fun () -> typecheck state env binder.body_dst))
+        State.with_instance state ~f:(fun () -> typecheck state env binder.body_dst))
     in
     let body =
       if Modes.is_erased arg_mode
@@ -1511,6 +1551,7 @@ and typecheck_apply state env ~fn ~arg ~loc =
   let open Lazy.Let_syntax in
   let fn, fn_desc = typecheck state env fn in
   let arg, arg_desc = typecheck state env arg in
+  let fn_desc = { fn_desc with ty = unfold state fn_desc.ty } in
   match fn_desc.ty with
   | Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode }) ->
     require_static ~loc fn_desc;
@@ -1519,7 +1560,7 @@ and typecheck_apply state env ~fn ~arg ~loc =
     let mode = resolve_app_mode ~loc fn_desc ret_mode in
     let fn_val = force_or_var state fn_desc.static in
     let arg_val = force_or_var state arg_desc.static in
-    let key = concrete arg_val in
+    let key = Value.Concrete.of_value arg_val in
     let ty =
       match fn_val, key with
       | Binder binder, Some key ->
@@ -1635,28 +1676,22 @@ and typecheck_if state env ~cond ~then_ ~else_ ~erased ~loc =
   | Erased ->
     require_static ~loc cond_desc;
     (match force_or_cyclic ~loc cond_desc.static with
-     | Bool (T true) when State.monomorphizing state -> typecheck state env then_
-     | Bool (T false) when State.monomorphizing state -> typecheck state env else_
-     | Bool (T true) ->
-       let _else_desc =
-         let env = rebind_condition env cond (Value.of_literal (Bool false)) in
-         State.with_abs state ~f:(fun () -> reduce state env else_)
-       in
+     | Bool (T true) when State.reducing state ->
+       require_reachable then_;
        typecheck state env then_
-     | Bool (T false) ->
-       let _then_desc =
-         let env = rebind_condition env cond (Value.of_literal (Bool true)) in
-         State.with_abs state ~f:(fun () -> reduce state env then_)
-       in
+     | Bool (T false) when State.reducing state ->
+       require_reachable else_;
        typecheck state env else_
+     | Bool (T true) as value -> Fail.dead_branch [%here] ~loc Else value
+     | Bool (T false) as value -> Fail.dead_branch [%here] ~loc Then value
      | value ->
        let then_, then_desc =
          let env = rebind_condition env cond (Value.of_literal (Bool true)) in
-         State.with_abs state ~f:(fun () -> typecheck state env then_)
+         typecheck state env then_
        in
        let else_, else_desc =
          let env = rebind_condition env cond (Value.of_literal (Bool false)) in
-         State.with_abs state ~f:(fun () -> typecheck state env else_)
+         typecheck state env else_
        in
        let mode = Modes.cond ~cond:cond_desc.mode [ then_desc.mode; else_desc.mode ] in
        let static =
@@ -1676,6 +1711,10 @@ and typecheck_if state env ~cond ~then_ ~else_ ~erased ~loc =
        If { cond; then_; else_; ty; mode; loc }, { ty; mode; static })
   | Unerased ->
     require_unerased ~loc cond_desc;
+    if State.instancing state
+    then (
+      require_reachable then_;
+      require_reachable else_);
     let then_, then_desc = typecheck state env then_ in
     let else_, else_desc = typecheck state env else_ in
     let mode = Modes.cond ~cond:cond_desc.mode [ then_desc.mode; else_desc.mode ] in
@@ -1698,7 +1737,7 @@ and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map
   match pattern with
   | Var { id; _ } -> if Ident.is_anon id then Ident.Map.empty else Ident.Map.singleton id desc
   | Constructor { label; payload; loc } ->
-    (match desc.ty with
+    (match unfold state desc.ty with
      | Type (Variant constructors) ->
        (match payload, Map.find constructors label with
         | _, None -> Fail.unknown_label [%here] ~loc desc.ty label
@@ -1708,12 +1747,12 @@ and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map
           pattern_bindings state ~desc:{ Desc.ty = payload_ty; mode = desc.mode; static } payload
         | None, Some (Some _) -> Fail.Match.payload_mismatch [%here] ~loc label ~required:true
         | Some _, Some None -> Fail.Match.payload_mismatch [%here] ~loc label ~required:false)
-     | _ -> Fail.expected_variant [%here] ~loc desc.ty label)
+     | ty -> Fail.expected_variant [%here] ~loc ty label)
   | Literal { value; loc } ->
     require_leq ~loc state desc.ty (Value.type_ (Ty.of_literal value));
     Ident.Map.empty
   | Tuple { elts; loc } ->
-    (match desc.ty with
+    (match unfold state desc.ty with
      | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = Nonempty_list.length elts ->
        Nonempty_list.zip_exn elts elt_tys
        |> Nonempty_list.mapi ~f:(fun index (elt, ty) ->
@@ -1723,7 +1762,7 @@ and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map
          pattern_bindings state ~desc:elt_desc elt
          |> Map.merge_skewed acc ~combine:(fun ~key _ _ ->
            Fail.Match.multiple_bindings [%here] ~loc key))
-     | _ -> Fail.Match.expected_tuple [%here] ~loc desc.ty)
+     | ty -> Fail.Match.expected_tuple [%here] ~loc ty)
   | Or { left; right; loc } ->
     let lhs = pattern_bindings state ~desc left in
     let rhs = pattern_bindings state ~desc right in
@@ -1762,21 +1801,67 @@ and pattern_bindings state ~desc (pattern : Dst.Expr.pattern) : Desc.t Ident.Map
       in
       { Desc.ty; mode; static })
 
-and build_condition ~loc ~scrutinee ~scrutinee_desc (literal : Dst.Literal.t) : Expr.t =
-  match literal with
-  | Unit -> Expr.literal ~loc (Bool true)
-  | Bool true -> scrutinee
-  | Bool false -> Builtin.apply ~loc (Bool Not) scrutinee scrutinee_desc
-  | Int i ->
-    let arg, arg_desc =
-      let lit = Expr.literal ~loc (Int i) in
-      let lit_desc = Expr.desc lit (Lazy.from_val (Value.of_literal (Int i))) in
-      Expr.tuple ~loc (Nonempty_list.create (scrutinee, scrutinee_desc) [ lit, lit_desc ])
-    in
-    Builtin.apply ~loc (Int Eq) arg arg_desc
+and rebind_scrutinee state env (scrutinee : Dst.Expr.t) (pattern : Dst.Expr.pattern) value =
+  let rec specialize_matched (pattern : Dst.Expr.pattern) (ty : Value.t) default =
+    match pattern with
+    | Var _ -> default
+    | Or _ ->
+      (* TODO or-patterns would need refinement to some kind of or-type *)
+      default
+    | Literal { value; _ } -> Value.of_literal value
+    | Constructor { label; payload; _ } ->
+      (match unfold state ty with
+       | Type (Variant constructors) ->
+         (match payload, Map.find constructors label with
+          | None, Some None -> Value.constructor ~label ~payload:None
+          | Some payload, Some (Some payload_ty) ->
+            let payload = specialize_matched payload payload_ty (Value.payload default ~label) in
+            Value.constructor ~label ~payload:(Some payload)
+          | (None | Some _), _ -> default)
+       | _ -> default)
+    | Tuple { elts; _ } ->
+      (match unfold state ty with
+       | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = Nonempty_list.length elts ->
+         Value.tuple
+           (Nonempty_list.zip_exn elts elt_tys
+            |> Nonempty_list.mapi ~f:(fun index (elt, elt_ty) ->
+              specialize_matched elt elt_ty (Value.proj default index)))
+       | _ -> default)
+  in
+  match scrutinee, pattern with
+  | Var { id; _ }, _ ->
+    (match Env.find env id with
+     | Some desc ->
+       Env.bind
+         env
+         id
+         { desc with static = Lazy.from_val (specialize_matched pattern desc.ty value) }
+     | None -> env)
+  | (Type_annotation { expr; _ } | Mode_annotation { expr; _ }), _ ->
+    rebind_scrutinee state env expr pattern value
+  | Make_tuple { elts; _ }, Tuple { elts = pats; _ } ->
+    (match Nonempty_list.zip elts pats with
+     | Ok pairs ->
+       Nonempty_list.to_list pairs
+       |> List.foldi ~init:env ~f:(fun index env (elt, pat) ->
+         rebind_scrutinee state env elt pat (Value.proj value index))
+     | Unequal_lengths -> env)
+  (* TODO non-variable scrutinees need refinement keyed on values (equality types) *)
+  | _ -> env
+
+and compile_match state ~loc ~scrutinee ~ty patterns =
+  let compiled = Match.compile ~scrutinee ~ty ~unfold:(unfold state) patterns in
+  (match compiled.redundant with
+   | [] -> ()
+   | first :: rest -> Fail.Match.redundant [%here] ~loc (Nonempty_list.create first rest));
+  (match compiled.missing with
+   | [] -> ()
+   | first :: rest -> Fail.Match.non_exhaustive [%here] ~loc (Nonempty_list.create first rest));
+  compiled
 
 and typecheck_match state env ~scrutinee:scrutinee_dst ~arms ~eliminator ~loc =
   let scrutinee, scrutinee_desc = typecheck state env scrutinee_dst in
+  let scrutinee_desc = { scrutinee_desc with ty = unfold state scrutinee_desc.ty } in
   let static_match (erasure : Modes.Erasure.t) =
     require_static ~loc scrutinee_desc;
     typecheck_match_static state env ~scrutinee ~scrutinee_desc ~scrutinee_dst ~arms ~erasure ~loc
@@ -1790,6 +1875,8 @@ and typecheck_match state env ~scrutinee:scrutinee_dst ~arms ~eliminator ~loc =
 
 and typecheck_match_dynamic state env ~scrutinee ~scrutinee_desc ~arms ~loc =
   require_unerased ~loc scrutinee_desc;
+  if State.instancing state
+  then Nonempty_list.iter arms ~f:(fun (_, body) -> require_reachable body);
   let patterns, (cases, descs) =
     let patterns, cases =
       Nonempty_list.map arms ~f:(fun (pattern, body) ->
@@ -1802,7 +1889,9 @@ and typecheck_match_dynamic state env ~scrutinee ~scrutinee_desc ~arms ~loc =
     in
     patterns, Nonempty_list.unzip cases
   in
-  let compiled = compile_match ~loc ~ty:scrutinee_desc.ty patterns in
+  let compiled =
+    compile_match state ~loc ~scrutinee:(State.fresh_var state) ~ty:scrutinee_desc.ty patterns
+  in
   let ty, mode =
     let ty, mode =
       let ({ ty; mode; _ } :: rest) = descs in
@@ -1818,7 +1907,7 @@ and typecheck_match_dynamic state env ~scrutinee ~scrutinee_desc ~arms ~loc =
       Lazy.from_fun (fun () ->
         let scrutinee = force_or_var state scrutinee_desc.static in
         let statics = Nonempty_list.map descs ~f:(fun (desc : Desc.t) -> desc.static) in
-        match Pattern.select_arm scrutinee patterns with
+        match Pattern.selects scrutinee patterns with
         | Known (index, _) -> Lazy.force (Nonempty_list.nth_exn statics index)
         | Unknown ->
           Value.match_
@@ -1827,25 +1916,27 @@ and typecheck_match_dynamic state env ~scrutinee ~scrutinee_desc ~arms ~loc =
               (Nonempty_list.zip_exn patterns statics
                |> Nonempty_list.map ~f:(fun (pattern, static) -> pattern, Lazy.force static)))
   in
-  let expr = build_match state ~loc ~scrutinee ~scrutinee_desc ~cases ~compiled ~ty ~mode in
+  let expr =
+    build_match state ~loc ~static:false ~scrutinee ~scrutinee_desc ~cases ~compiled ~ty ~mode
+  in
   expr, { Desc.ty; mode; static }
 
 and typecheck_match_static state env ~scrutinee_dst ~scrutinee ~scrutinee_desc ~arms ~erasure ~loc =
   let project_value value path =
-    List.fold path ~init:value ~f:(fun value (step : Step.t) ->
+    List.fold path ~init:value ~f:(fun value (step : Pattern.Step.t) ->
       match step with
       | Index index -> Value.proj value index
       | Payload label -> Value.payload value ~label)
   in
-  let rec project_ty ~loc (ty : Value.t) (path : Step.t list) =
+  let rec project_ty ~loc (ty : Value.t) (path : Pattern.Step.t list) =
     match path with
     | [] -> ty
     | Index index :: path ->
-      (match ty with
+      (match unfold state ty with
        | Value.Type (Tuple elt_tys) -> project_ty ~loc (Nonempty_list.nth_exn elt_tys index) path
        | ty -> raise_s [%message "Bug: expected tuple type" (ty : Value.t) (loc : Lex.Location.t)])
     | Payload label :: path ->
-      (match ty with
+      (match unfold state ty with
        | Value.Type (Variant constructors) ->
          (match Map.find constructors label with
           | Some (Some payload_ty) -> project_ty ~loc payload_ty path
@@ -1854,28 +1945,38 @@ and typecheck_match_static state env ~scrutinee_dst ~scrutinee ~scrutinee_desc ~
               [%message "Bug: expected payload" (label : Ident.Label.t) (loc : Lex.Location.t)])
        | ty -> raise_s [%message "Bug: expected variant type" (ty : Value.t) (loc : Lex.Location.t)])
   in
-  let typecheck_arm ~desc ((pattern, body) : Dst.Expr.pattern * Dst.Expr.t) =
+  let typecheck_arm ~(desc : Desc.t) ((pattern, body) : Dst.Expr.pattern * Dst.Expr.t) =
     let bindings =
       pattern_bindings state ~desc pattern
       |> Map.map ~f:(fun (desc : Desc.t) -> { desc with mode = { desc.mode with erasure } })
     in
     let env = Map.fold bindings ~init:env ~f:(fun ~key ~data env -> Env.bind env key data) in
     let env = rebind_scrutinee state env scrutinee_dst pattern (force_or_var state desc.static) in
-    let body, body_desc = State.with_abs state ~f:(fun () -> typecheck state env body) in
+    let body, body_desc = typecheck state env body in
     bindings, body, body_desc
   in
   let scrutinee_val = force_or_cyclic ~loc scrutinee_desc.static in
-  (* TODO duplicated work *)
-  Nonempty_list.iter arms ~f:(fun (pattern, _) ->
-    ignore (pattern_bindings state ~desc:scrutinee_desc pattern));
-  let compiled = compile_match ~loc ~ty:scrutinee_desc.ty (Nonempty_list.map arms ~f:fst) in
-  match Pattern.select_arm scrutinee_val (Nonempty_list.map arms ~f:fst) with
+  if not (State.reducing state)
+  then (* Validate patterns *)
+    Nonempty_list.iter arms ~f:(fun (pattern, _) ->
+      ignore (pattern_bindings state ~desc:scrutinee_desc pattern));
+  let compiled =
+    compile_match
+      state
+      ~loc
+      ~scrutinee:scrutinee_val
+      ~ty:scrutinee_desc.ty
+      (Nonempty_list.map arms ~f:fst)
+  in
+  match Pattern.selects scrutinee_val (Nonempty_list.map arms ~f:fst) with
   | Known (index, bindings) ->
     let _, body_dst = Nonempty_list.nth_exn arms index in
-    if not (State.monomorphizing state)
+    if not (State.reducing state)
     then
-      Nonempty_list.iteri arms ~f:(fun i arm ->
-        if i <> index then ignore (typecheck_arm ~desc:scrutinee_desc arm));
+      Nonempty_list.iteri arms ~f:(fun i (pattern, _) ->
+        if i <> index
+        then
+          Fail.dead_branch [%here] ~loc:(Dst.Expr.pattern_loc pattern) (Arm pattern) scrutinee_val);
     let bindings =
       List.map bindings ~f:(fun (id, path) ->
         let ty = project_ty ~loc scrutinee_desc.ty path in
@@ -1884,6 +1985,7 @@ and typecheck_match_static state env ~scrutinee_dst ~scrutinee ~scrutinee_desc ~
         id, path, { Desc.ty; mode; static })
     in
     let env = List.fold bindings ~init:env ~f:(fun env (id, _, desc) -> Env.bind env id desc) in
+    if State.reducing state then require_reachable body_dst;
     let body, body_desc = typecheck state env body_dst in
     let expr =
       match (erasure : Modes.Erasure.t), bindings with
@@ -1891,14 +1993,47 @@ and typecheck_match_static state env ~scrutinee_dst ~scrutinee ~scrutinee_desc ~
       | Unerased, _ :: _ ->
         Expr.rebind scrutinee ~stamp:(State.fresh_id state) ~f:(fun scrutinee ->
           List.fold_right bindings ~init:body ~f:(fun (id, path, _) rest ->
-            let bind, _ = Expr.project ~loc scrutinee scrutinee_desc path in
+            let bind, _ = project state ~loc scrutinee scrutinee_desc path in
             Expr.Let { var = id; bind; rest; ty = body_desc.ty; mode = body_desc.mode; loc }))
     in
     expr, body_desc
   | Unknown ->
+    let live =
+      Pattern.with_refuted arms
+      |> List.filter_map ~f:(fun (refuted, pattern, body) ->
+        let refined = Value.refine scrutinee_val ~excluded:(Pattern.all_excludes refuted) in
+        let witness =
+          match scrutinee_val, refined with
+          | Bottom, _ -> None
+          | _, Bottom -> Some scrutinee_val
+          | _, refined ->
+            (match Pattern.matches refined pattern with
+             | No_match -> Some refined
+             | Match _ | Unknown -> None)
+        in
+        (match witness with
+         | Some witness when not (State.reducing state) ->
+           Fail.dead_branch [%here] ~loc:(Dst.Expr.pattern_loc pattern) (Arm pattern) witness
+         | _ -> ());
+        Option.some_if (Option.is_none witness) ((pattern, body), refined))
+      |> Nonempty_list.of_list_exn
+    in
+    let compiled =
+      if Nonempty_list.length live = Nonempty_list.length arms
+      then compiled
+      else
+        compile_match
+          state
+          ~loc
+          ~scrutinee:scrutinee_val
+          ~ty:scrutinee_desc.ty
+          (Nonempty_list.map live ~f:(fun ((pattern, _), _) -> pattern))
+    in
     let arms =
-      Nonempty_list.map arms ~f:(fun ((pattern, _) as arm) ->
-        let bindings, body, body_desc = typecheck_arm ~desc:scrutinee_desc arm in
+      Nonempty_list.map live ~f:(fun (((pattern, _) as arm), refined) ->
+        let bindings, body, body_desc =
+          typecheck_arm ~desc:{ scrutinee_desc with Desc.static = Lazy.from_val refined } arm
+        in
         pattern, bindings, body, body_desc)
     in
     let mode =
@@ -1937,12 +2072,41 @@ and typecheck_match_static state env ~scrutinee_dst ~scrutinee ~scrutinee_desc ~
       Nonempty_list.map arms ~f:(fun (_, bindings, body, _) ->
         { Expr.bindings = Map.map bindings ~f:(fun (desc : Desc.t) -> desc.ty); body })
     in
-    let expr = build_match state ~loc ~scrutinee ~scrutinee_desc ~cases ~compiled ~ty ~mode in
+    let expr =
+      build_match state ~loc ~static:true ~scrutinee ~scrutinee_desc ~cases ~compiled ~ty ~mode
+    in
     expr, { Desc.ty; mode; static }
 
-and build_match state ~loc ~scrutinee ~scrutinee_desc ~cases ~(compiled : Match.Result.t) ~ty ~mode =
+and project state ~loc scrutinee (scrutinee_desc : Desc.t) path =
+  let rec aux path expr (desc : Desc.t) =
+    match (path : Pattern.Step.t list) with
+    | [] -> expr, desc
+    | Index index :: rest ->
+      (match unfold state desc.ty with
+       | Type (Tuple elt_tys) ->
+         let ty = Nonempty_list.nth_exn elt_tys index in
+         let get = Expr.Tuple_get { tuple = expr; index; ty; mode = desc.mode; loc } in
+         let static = Lazy.map desc.static ~f:(fun tuple -> Value.proj tuple index) in
+         aux rest get { Desc.ty; mode = desc.mode; static }
+       | ty -> raise_s [%message "Bug: expected tuple" (ty : Value.t) (loc : Lex.Location.t)])
+    | Payload label :: rest ->
+      (match unfold state desc.ty with
+       | Type (Variant constructors) ->
+         (match Map.find constructors label with
+          | Some (Some ty) ->
+            let get = Expr.Payload_get { variant = expr; label; ty; mode = desc.mode; loc } in
+            let static = Lazy.map desc.static ~f:(Value.payload ~label) in
+            aux rest get { Desc.ty; mode = desc.mode; static }
+          | Some None | None ->
+            raise_s
+              [%message "Bug: expected constructor" (label : Ident.Label.t) (loc : Lex.Location.t)])
+       | ty -> raise_s [%message "Bug: expected variant" (ty : Value.t) (loc : Lex.Location.t)])
+  in
+  aux path scrutinee scrutinee_desc
+
+and build_match state ~loc ~static ~scrutinee ~scrutinee_desc ~cases ~compiled ~ty ~mode =
   Expr.rebind scrutinee ~stamp:(State.fresh_id state) ~f:(fun scrutinee ->
-    let project path = Expr.project ~loc scrutinee scrutinee_desc (Vec.to_list path) in
+    let project path = project state ~loc scrutinee scrutinee_desc (Vec.to_list path) in
     let rec build_switch (tree : Match.Tree.t) : Expr.tree =
       match tree with
       | Leaf { case; bindings } ->
@@ -1953,6 +2117,13 @@ and build_match state ~loc ~scrutinee ~scrutinee_desc ~cases ~(compiled : Match.
         in
         Leaf { case; bindings }
       | Switch { occurrence; cases; default } ->
+        let default =
+          Option.bind default ~f:(function
+            | Fail when static -> None (* Missing cases were proven unreachable. *)
+            | Fail ->
+              raise_s [%message "Bug: dynamic match is non-exhaustive" (loc : Lex.Location.t)]
+            | tree -> Some tree)
+        in
         let scrutinee, scrutinee_desc = project occurrence.path in
         let build_case ((head, body) : Match.Tree.Head.t * _) acc =
           match head with
@@ -1982,12 +2153,91 @@ and build_match state ~loc ~scrutinee ~scrutinee_desc ~cases ~(compiled : Match.
             | None -> Some (build_switch tree)
             | Some acc -> Some (build_case (head, tree) acc))
         |> Option.value_exn
-      | Fail -> raise_s [%message "Bug: nonexhaustive match" (loc : Lex.Location.t)]
+      | Fail -> raise_s [%message "Bug: dynamic match is non-exhaustive" (loc : Lex.Location.t)]
     in
     Expr.Match { cases; tree = build_switch compiled.tree; ty; mode; loc })
 ;;
 
+(* [unreachable] may only appear as the entire body of a static branch, since any other code in the
+   branch is necessarily dead. At least one branch of a conditional must not be unreachable. *)
+let rec check_unreachable ~position ~in_branch (expr : Dst.Expr.t) =
+  let check_consumed expr = check_unreachable ~position:`Consumed ~in_branch expr in
+  if Dst.Expr.is_unreachable expr
+  then (
+    match position with
+    | `Tail -> ()
+    | `Continuation ->
+      Fail.misplaced_unreachable [%here] ~loc:(Dst.Expr.loc expr) Not_in_head_position
+    | `Consumed -> Fail.misplaced_unreachable [%here] ~loc:(Dst.Expr.loc expr) Not_in_tail_position);
+  match expr with
+  | Unreachable { loc } ->
+    if not in_branch then Fail.misplaced_unreachable [%here] ~loc Not_under_static_branch
+  | Type_annotation { expr; ty; loc = _ } ->
+    check_unreachable ~position ~in_branch expr;
+    check_consumed ty
+  | Mode_annotation { expr; mode = _; loc = _ } -> check_unreachable ~position ~in_branch expr
+  | If { cond; then_; else_; erased; loc } ->
+    if Dst.Expr.is_unreachable then_ && Dst.Expr.is_unreachable else_
+    then Fail.misplaced_unreachable [%here] ~loc All_paths_unreachable;
+    check_consumed cond;
+    let in_branch =
+      match (erased : Modes.Erasure.t) with
+      | Erased -> true
+      | Unerased -> in_branch
+    in
+    check_unreachable ~position:`Tail ~in_branch then_;
+    check_unreachable ~position:`Tail ~in_branch else_
+  | Match { cond; arms; eliminator; loc } ->
+    if Nonempty_list.for_all arms ~f:(fun (_, body) -> Dst.Expr.is_unreachable body)
+    then Fail.misplaced_unreachable [%here] ~loc All_paths_unreachable;
+    check_consumed cond;
+    let in_branch =
+      match (eliminator : Modes.Eliminator.t) with
+      | Static | Erased -> true
+      | Dynamic -> in_branch
+    in
+    Nonempty_list.iter arms ~f:(fun (_, body) -> check_unreachable ~position:`Tail ~in_branch body)
+  | Lambda { arg_ty; body; arg = _; arg_mode = _; loc = _ } ->
+    check_consumed arg_ty;
+    check_unreachable ~position:`Tail ~in_branch:false body
+  | Fun { funs; rest; loc = _ } ->
+    Nonempty_list.iter funs ~f:(fun { arg_ty; ret_ty; body; _ } ->
+      check_consumed arg_ty;
+      check_consumed ret_ty;
+      check_unreachable ~position:`Tail ~in_branch:false body);
+    check_unreachable ~position:`Continuation ~in_branch rest
+  | Let { bind; rest; var = _; loc = _ } ->
+    check_consumed bind;
+    check_unreachable ~position:`Continuation ~in_branch rest
+  | Apply { fn; arg; loc = _ } ->
+    check_consumed fn;
+    check_consumed arg
+  | Tuple { elts; loc = _ } | Make_tuple { elts; loc = _ } ->
+    Nonempty_list.iter elts ~f:check_consumed
+  | Arrow { arg; ret; arg_id = _; arg_mode = _; ret_mode = _; loc = _ } ->
+    check_consumed arg;
+    check_consumed ret
+  | Select { expr; label = _; loc = _ } -> check_consumed expr
+  | Variant { constructors; loc = _ } ->
+    Nonempty_list.iter constructors ~f:(fun { payload; _ } -> Option.iter payload ~f:check_consumed)
+  | Var _ | Literal _ | Constructor _ | Builtin _ -> ()
+;;
+
+let check_unreachable_top_level (dst : Dst.Top_level.t) =
+  let check ~position expr = check_unreachable ~position ~in_branch:false expr in
+  match dst with
+  | Let { bind; _ } -> check ~position:`Consumed bind
+  | Fun { funs; _ } ->
+    Nonempty_list.iter funs ~f:(fun { Dst.Expr.arg_ty; ret_ty; body; _ } ->
+      check ~position:`Consumed arg_ty;
+      check ~position:`Consumed ret_ty;
+      check ~position:`Tail body)
+  | External { ty; _ } -> check ~position:`Consumed ty
+  | Builtin _ -> ()
+;;
+
 let typecheck_top_level state env (dst : Dst.Top_level.t) : Top_level.t * Env.t =
+  check_unreachable_top_level dst;
   match dst with
   | Let { var; bind; loc } ->
     let bind, bind_desc = typecheck state env bind in

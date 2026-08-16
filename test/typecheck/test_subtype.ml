@@ -793,9 +793,7 @@ let _ = f true 1 2;;
   [%expect {| |}]
 ;;
 
-let%expect_test
-    "meet distributes a pending application into stuck-match arms (arrow arg in join)"
-  =
+let%expect_test "meet distributes a pending application into stuck-match arms (arrow arg in join)" =
   go
     {|
 fun id (static erased t : type) : erased type = t;;
@@ -902,6 +900,19 @@ let p = ((fn (static erased u : type) -> u), (fn (static erased u : type) -> u))
 let f = fn (static a : bool) ->
   match erased (if erased a then p else p) { (g, h) -> fn (x : g int) -> (x : int) };;
 let _ = f true 1;;
+|};
+  [%expect {| |}]
+;;
+
+(* A chain can reduce and then re-stick on an abstract head ([id2 (g int)] steps to
+   [g int]); the partial reduction still counts for equality. *)
+let%expect_test "leq keeps partial unfolding that re-sticks on an abstract head" =
+  go
+    {|
+fun id2 (static erased t : type) : erased type = t;;
+let coerce =
+  fn (static erased g : static erased type \ u -> erased type) ->
+    fn (x : g int) -> (x : id2 (g int));;
 |};
   [%expect {| |}]
 ;;

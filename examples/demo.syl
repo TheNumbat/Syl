@@ -193,16 +193,11 @@ let _ = wrap identity int 10;;
    Depdendent types with if erased
    ----------------------------------------------------- *)
 
-(* If erased splits types *)
+(* If erased with an abstract condition joins its branches' types. *)
 let f = fn (x : int) -> x @ dynamic;;
 
 let g = fn (static x : int) -> x;;
 
-let _ = (if erased true then f else g) : int -> dynamic int;;
-
-let _ = (if erased false then f else g) : static int -> int;;
-
-(* Unless the condition is abstract *)
 let _ = fn (static b : bool) -> (if erased b then f else g) : static int -> dynamic int;;
 
 (* Simple reductions happen automatically. *)
@@ -259,7 +254,7 @@ fun static_fib (static x : int) : static int =
 ;;
 
 (* We can use the result statically *)
-let _ = (if erased static_fib 5 == 5 then 0 else false) : int;;
+let _ = assert erased (static_fib 5 == 5);;
 
 (* Mutual recursion also works *)
 fun f (static x : int) : static int =

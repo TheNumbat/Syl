@@ -29,7 +29,10 @@ let compile patterns ~scrutinee_ty =
   let patterns =
     Nonempty_list.of_list_exn (List.map patterns ~f:(fun (pattern, _bindings) -> pattern))
   in
-  let { Match.Result.tree; redundant; missing } = Syl.Match.compile ~ty:scrutinee_ty patterns in
+  let scrutinee = Tst.Value.var (id "scrutinee" 0) in
+  let { Match.Result.tree; redundant; missing } =
+    Syl.Match.compile ~scrutinee ~ty:scrutinee_ty ~unfold:Fn.id patterns
+  in
   print_s
     [%message
       (tree : Match.Tree.t)
@@ -198,7 +201,7 @@ let%expect_test "int literal without wildcard - non-exhaustive" =
       (Switch (occurrence ((path ()) (ty (Type Int))))
        (cases (((Literal (Int 42)) (Leaf (case 0) (bindings ())))))
        (default (Fail))))
-     (redundant ()) (missing (Wildcard)))
+     (redundant ()) (missing ((All_except ((Literal (Int 42)))))))
     |}]
 ;;
 
@@ -232,7 +235,8 @@ let%expect_test "two int literals without wildcard - non-exhaustive" =
         (((Literal (Int 0)) (Leaf (case 0) (bindings ())))
          ((Literal (Int 1)) (Leaf (case 1) (bindings ())))))
        (default (Fail))))
-     (redundant ()) (missing (Wildcard)))
+     (redundant ())
+     (missing ((All_except ((Literal (Int 0)) (Literal (Int 1)))))))
     |}]
 ;;
 
@@ -439,7 +443,9 @@ let%expect_test "tuple (int, bool) - int column needs default" =
        (default ())))
      (redundant ())
      (missing
-      ((Tuple (Wildcard (Or ((Literal (Bool true)) (Literal (Bool false)))))))))
+      ((Tuple
+        ((All_except ((Literal (Int 0))))
+         (Or ((Literal (Bool true)) (Literal (Bool false)))))))))
     |}]
 ;;
 
@@ -606,7 +612,7 @@ let%expect_test "int overlapping literals - second redundant" =
        (cases (((Literal (Int 42)) (Leaf (case 0) (bindings ())))))
        (default (Fail))))
      (redundant ((Literal (value (Int 42)) (loc ((line 1) (column 0))))))
-     (missing (Wildcard)))
+     (missing ((All_except ((Literal (Int 42)))))))
     |}]
 ;;
 
@@ -984,8 +990,8 @@ let%expect_test "tuple (bool, int) - column selection prefers bool" =
        (default ())))
      (redundant ())
      (missing
-      ((Tuple ((Literal (Bool true)) Wildcard))
-       (Tuple ((Literal (Bool false)) Wildcard)))))
+      ((Tuple ((Literal (Bool true)) (All_except ((Literal (Int 0))))))
+       (Tuple ((Literal (Bool false)) (All_except ((Literal (Int 1)))))))))
     |}]
 ;;
 
@@ -1338,7 +1344,8 @@ let%expect_test "variant option exhaustive" =
     ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:option_int_ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1361,7 +1368,8 @@ let%expect_test "variant missing constructor" =
   compile
     [ ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty) ]
     ~scrutinee_ty:option_int_ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1380,7 +1388,8 @@ let%expect_test "variant payload literal - payload non-exhaustive" =
   compile
     [ ctor_pat "some" (Some (int_pat 0)), Ident.Map.empty; ctor_pat "none" None, Ident.Map.empty ]
     ~scrutinee_ty:option_int_ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1393,7 +1402,9 @@ let%expect_test "variant payload literal - payload non-exhaustive" =
          ((Constructor (label none) (payload false))
           (Leaf (case 1) (bindings ())))))
        (default ())))
-     (redundant ()) (missing ((Constructor (label some) (payload (Wildcard))))))
+     (redundant ())
+     (missing
+      ((Constructor (label some) (payload ((All_except ((Literal (Int 0))))))))))
     |}]
 ;;
 
@@ -1406,7 +1417,8 @@ let%expect_test "variant payload switch with wildcard fallback" =
     ; ctor_pat "none" None, Ident.Map.empty
     ]
     ~scrutinee_ty:option_int_ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1435,7 +1447,8 @@ let%expect_test "variant redundant constructor" =
     ; ctor_pat "none" None, Ident.Map.empty
     ]
     ~scrutinee_ty:option_int_ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1462,7 +1475,8 @@ let%expect_test "variant or across constructors" =
     ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:option_int_ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1497,7 +1511,8 @@ let%expect_test "variant in tuple - payload paths" =
       , Ident.Map.singleton x (binding_desc int_ty) )
     ]
     ~scrutinee_ty:tuple_ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1547,7 +1562,8 @@ let%expect_test "variant tag order is label order" =
     ; ctor_pat "b" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1576,7 +1592,8 @@ let%expect_test "variant missing several constructors" =
   compile
     [ ctor_pat "b" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty) ]
     ~scrutinee_ty:ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence
@@ -1602,13 +1619,14 @@ let%expect_test "variant nested payload" =
   let ty = variant_ty [ "wrap", Some inner_ty; "empty", None ] in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
-    [ ctor_pat "wrap" (Some (ctor_pat "some" (Some (var_pat "x" 0))))
-      , Ident.Map.singleton x (binding_desc int_ty)
+    [ ( ctor_pat "wrap" (Some (ctor_pat "some" (Some (var_pat "x" 0))))
+      , Ident.Map.singleton x (binding_desc int_ty) )
     ; ctor_pat "wrap" (Some (ctor_pat "none" None)), Ident.Map.empty
     ; ctor_pat "empty" None, Ident.Map.empty
     ]
     ~scrutinee_ty:ty;
-  [%expect {|
+  [%expect
+    {|
     ((tree
       (Switch
        (occurrence

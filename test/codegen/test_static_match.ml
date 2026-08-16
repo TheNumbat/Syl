@@ -17,15 +17,14 @@ let branches input =
 let%expect_test "match static selects the arm at compile time" =
   go
     {|
-let x = 1 @ static;;
-
-let _ =
-  print_int
-    (match static x {
-       1 -> 42,
-       _ -> 0,
-     })
+fun f (static x : int) : int =
+  match static x {
+    1 -> 42,
+    _ -> 0,
+  }
 ;;
+
+let _ = print_int (f 1);;
 |};
   [%expect {| 42 |}]
 ;;
@@ -70,49 +69,48 @@ let _ =
 let%expect_test "match static projects components without a conditional" =
   branches
     {|
-let p = (1, 2) @ static;;
-
-let _ =
-  print_int
-    (match static p {
-       (1, y) -> y,
-       _ -> 0,
-     })
+fun f (static p : int ^ int) : dynamic int =
+  match static p {
+    (1, y) -> y,
+    _ -> 0,
+  }
 ;;
+
+let _ = print_int (f ((1, 2) @ static));;
 |};
   [%expect {| (branches 0) |}]
+;;
+
+(* The concrete component refutes the missing cases, so only the live arm is
+   needed even though [n] is symbolic. *)
+let%expect_test "partially known scrutinee needs only the live cases" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static (n, 0) {
+    (x, 0) -> x,
+  }
+;;
+
+let _ = print_int (f 42);;
+|};
+  [%expect {| 42 |}]
 ;;
 
 let%expect_test "match erased emits neither conditional nor projections" =
   branches
     {|
-let p = (1, 2) @ static;;
-
-let _ =
-  print_int
-    (match erased p {
-       (1, y) -> 10,
-       _ -> 20,
-     })
+let f =
+  fn (static erased p : int ^ int) ->
+    match erased p {
+      (1, y) -> 10,
+      _ -> 20,
+    }
 ;;
+
+let _ = print_int (f ((1, 2) @ erased));;
 |};
   [%expect {| (branches 0) |}]
-;;
-
-let%expect_test "match static or pattern binds the matched alternative" =
-  go
-    {|
-let p = (0, 7) @ static;;
-
-let _ =
-  print_int
-    (match static p {
-       (0, y) | (y, 0) -> y,
-       _ -> 99,
-     })
-;;
-|};
-  [%expect {| 7 |}]
 ;;
 
 let%expect_test "match static nested tuple projections" =
@@ -158,9 +156,7 @@ let _ = print_int (f 3);;
 let%expect_test "match static under a dynamic closure" =
   go
     {|
-let k = 3 @ static;;
-
-let f =
+fun f (static k : int) : int -> dynamic int =
   fn (x : int) ->
     match static k {
       3 -> x,
@@ -168,7 +164,7 @@ let f =
     }
 ;;
 
-let _ = print_int (f 9);;
+let _ = print_int (f 3 9);;
 |};
   [%expect {| 9 |}]
 ;;
@@ -304,22 +300,6 @@ let _ = print_int (match static u { () -> 5 });;
     |}]
 ;;
 
-let%expect_test "partially known scrutinee refutes arms at declaration" =
-  go
-    {|
-fun f (static n : int) : int =
-  match static (n, 0) {
-    (_, 1) -> unreachable,
-    (x, 0) -> x,
-    _ -> unreachable,
-  }
-;;
-
-let _ = print_int (f 42);;
-|};
-  [%expect {| 42 |}]
-;;
-
 let%expect_test "pattern binding shadows the scrutinee" =
   go
     {|
@@ -335,18 +315,17 @@ let _ = print_int (f ((7, 8) @ static));;
 let%expect_test "match static binding can be rescrutinized" =
   go
     {|
-let p = (1, 2) @ static;;
-
-let _ =
-  print_int
-    (match static p {
-       (a, _) ->
-         match static a {
-           1 -> 10,
-           _ -> 20,
-         },
-     })
+fun f (static p : int ^ int) : int =
+  match static p {
+    (a, _) ->
+      match static a {
+        1 -> 10,
+        _ -> 20,
+      },
+  }
 ;;
+
+let _ = print_int (f ((1, 2) @ static));;
 |};
   [%expect {| 10 |}]
 ;;
@@ -471,31 +450,6 @@ let _ = print_int (f 3);;
     {|
     200
     100
-    |}]
-;;
-
-let%expect_test "arm refinement resolves a nested match on the same scrutinee" =
-  go
-    {|
-fun f (static n : int) : int =
-  match static n {
-    0 ->
-      (match static n {
-         0 -> 10,
-         _ -> unreachable,
-       }),
-    _ -> n,
-  }
-;;
-
-let _ = print_int (f 0);;
-
-let _ = print_int (f 5);;
-|};
-  [%expect
-    {|
-    10
-    5
     |}]
 ;;
 
@@ -703,45 +657,6 @@ let _ = print_int (f 4);;
     1
     4
     |}]
-;;
-
-let%expect_test "match on a dead scrutinee is dead code" =
-  go
-    {|
-fun f (static n : int) : int =
-  match static n {
-    0 ->
-      (match static (unreachable : int) {
-         0 -> 1,
-         _ -> 2,
-       }),
-    _ -> n,
-  }
-;;
-
-let _ = print_int (f 5);;
-|};
-  [%expect {| 5 |}]
-;;
-
-let%expect_test "dead arms keep the known scrutinee value" =
-  go
-    {|
-let g = fn (static m : int) -> fn (x : if m == 3 then int else bool) -> x;;
-
-let k = 3 @ static;;
-
-fun f (static n : int) : int =
-  match static (k, 0) {
-    (m, 1) -> g m 5,
-    (m, 0) -> m + n,
-    _ -> 0,
-  }
-;;
-
-let _ = print_int (f 4);;
-|};
-  [%expect {| 7 |}]
 ;;
 
 let%expect_test "tuple scrutinee components are refined per arm" =

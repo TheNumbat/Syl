@@ -2183,22 +2183,8 @@ let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : int;;
     |}]
 ;;
 
-let%expect_test "dependent if" =
-  go
-    {|
-let _ = (if erased true then 1 else true) : (if true then int else bool);;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "dependent if" =
-  go
-    {|
-let _ = (if erased true then 1 else true) : (if erased true then int else bool);;
-|};
-  [%expect {| |}]
-;;
-
+(* The dead-code error preempts the branch bodies: the ill-typed dead branch is
+   never policed. *)
 let%expect_test "dependent if" =
   go
     {|
@@ -2206,10 +2192,8 @@ let _ = (if erased true then 1 else true + 1) : int;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 41)))
-     (reason
-      (Type_mismatch (got (Type (Tuple ((Type Bool) (Type Int)))))
-       (need (Type (Tuple ((Type Int) (Type Int))))))))
+    ((loc ((line 2) (column 9)))
+     (reason (Dead_branch (branch Else) (value (Bool (T true))))))
     |}]
 ;;
 
@@ -2231,7 +2215,8 @@ let%expect_test "dependent if" =
   go
     {|
 let f = fn (static _ : unit) -> int;;
-let _ = (if erased true then 1 else (0 : f ())) : int;;
+let g = fn (static c : bool) -> (if erased c then 1 else (0 : f ())) : int;;
+let _ = g true;;
 |};
   [%expect {| |}]
 ;;
@@ -2567,7 +2552,8 @@ let%expect_test "join" =
     {|
 fun a (_ : unit) : unit = ();;
 fun b (_ : unit) : unit -> unit = fn (_ : unit) -> ();;
-let x = if erased false then a else b;;
+let pick = fn (static c : bool) -> if erased c then a else b;;
+let x = pick false;;
 let _ = x () ();;
 |};
   [%expect {| |}]

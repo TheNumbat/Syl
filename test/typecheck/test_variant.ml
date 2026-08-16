@@ -308,7 +308,8 @@ fun opt (static b : bool) : erased type =
 ;;
 fun f (static b : bool) : opt b = (opt b).none;;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 5) (column 34)))
      (reason
       (Expected_variant
@@ -346,7 +347,8 @@ let _ = replicate 3 7 : vec 3;;
 
 let%expect_test "constructor pattern on a non-variant scrutinee" =
   go "let _ = match 0 { .wat -> 1 };;";
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 1) (column 18)))
      (reason (Expected_variant (got (Type Int)) (label wat))))
     |}]
@@ -363,13 +365,50 @@ let _ = assert erased ((match opt.none { .none -> 0, .some v -> v }) == 0);;
   [%expect {| |}]
 ;;
 
-let%expect_test "match static binds the payload as a projection" =
+(* A concrete variant scrutinee decides the match generically, so the
+   non-selected arm is dead code. *)
+let%expect_test "match static on a concrete scrutinee has dead arms" =
   go
     {|
 let opt = variant { none, some : int };;
 let x = opt.some 2;;
 let y = match static x { .none -> 0, .some v -> v };;
 let _ = assert erased (y == 2);;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 25)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm
+         (Constructor (label none) (payload ()) (loc ((line 4) (column 25))))))
+       (value (Constructor (label some) (payload ((Int (T 2)))))))))
+    |}]
+;;
+
+(* Deleting the dead arm is legal: exhaustiveness sees the scrutinee, so the
+   refuted [.none] case is not required and the payload binds as a projection. *)
+let%expect_test "match static binds the payload as a projection" =
+  go
+    {|
+let opt = variant { none, some : int };;
+let x = opt.some 2;;
+let y = match static x { .some v -> v };;
+let _ = assert erased (y == 2);;
+|};
+  [%expect {| |}]
+;;
+
+(* Refutation recurses through the payload: the concrete [3] empties the rest
+   of the [.some] space, so a single literal case is exhaustive. *)
+let%expect_test "concrete payload refutes missing cases through the payload" =
+  go
+    {|
+let opt = variant { none, some : int };;
+let x = opt.some 3;;
+let y = match static x { .some 3 -> 0 };;
+let _ = assert erased (y == 0);;
 |};
   [%expect {| |}]
 ;;
@@ -426,7 +465,8 @@ let dir = variant { left : bool, right : bool };;
 let x = dir.left true;;
 let _ = match x { .left v -> 0, .right v -> let _ = assert erased v in 1 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 52)))
      (reason
       (Static_failure
@@ -443,7 +483,8 @@ let dir = variant { left : int, right : int };;
 let x = dir.left 4;;
 let _ = match x { .left v -> v, .right v -> let _ = assert erased (v == 1) in 1 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 52)))
      (reason
       (Static_failure
@@ -477,13 +518,186 @@ let _ = assert erased (get (opt.none) == 0);;
   [%expect {| |}]
 ;;
 
+(* A learned exclusion refutes the nested [.some] arm outright: it is dead in
+   every instance reaching the wildcard arm. *)
+let%expect_test "undecided match's excluded arm is dead" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun f (static o : opt) : int =
+  match static o {
+    .some v -> 1,
+    _ -> match static o { .some w -> 2, .none -> 0 },
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 6) (column 26)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm
+         (Constructor (label some)
+          (payload ((Var (id ((Id w) <opaque>)) (loc ((line 6) (column 32))))))
+          (loc ((line 6) (column 26))))))
+       (value
+        (Refine (value (Var (Anon <opaque>)))
+         (excluded ((Constructor (label some) (payload ())))))))))
+    |}]
+;;
+
+(* Failure of [.some 3] now excludes the shape, not just nothing: the nested
+   duplicate is refuted outright. *)
+let%expect_test "refutable payloads learn their exclusion shape" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun f (static o : opt) : int =
+  match static o {
+    .some 3 -> 1,
+    _ -> match static o { .some 3 -> 9, _ -> 0 },
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 6) (column 26)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm
+         (Constructor (label some)
+          (payload ((Literal (value (Int 3)) (loc ((line 6) (column 32))))))
+          (loc ((line 6) (column 26))))))
+       (value
+        (Refine (value (Var (Anon <opaque>)))
+         (excluded ((Constructor (label some) (payload ((Literal (Int 3))))))))))))
+    |}]
+;;
+
+(* The exclusion transfers through payload extraction: the binding [w] knows it
+   is not [3], deciding a nested match on it. *)
+let%expect_test "the exclusion shape transfers to the payload binding" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun f (static o : opt) : int =
+  match static o {
+    .some 3 -> 1,
+    .some w -> (match static w { 3 -> 9, _ -> 0 }),
+    .none -> 2,
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 6) (column 33)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Literal (value (Int 3)) (loc ((line 6) (column 33))))))
+       (value
+        (Refine (value (Payload (variant (Var (Anon <opaque>))) (label some)))
+         (excluded ((Literal (Int 3)))))))))
+    |}]
+;;
+
+(* The scrutinee is always [.some]-headed, so the [.none] arm collapses under
+   its predecessor's exclusions: the scrutinee decidably fell into an earlier
+   arm. *)
+let%expect_test "constructor-headed scrutinee collapses a later arm" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun f (static x : int) : int =
+  match static (opt.some x) {
+    .some 3 -> 1,
+    .some w -> w,
+    .none -> 0,
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 7) (column 4)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm (Constructor (label none) (payload ()) (loc ((line 7) (column 4))))))
+       (value (Constructor (label some) (payload ((Var (Anon <opaque>)))))))))
+    |}]
+;;
+
+(* Deleting it is legal: the constructor head refutes the missing [.none]. *)
+let%expect_test "constructor-headed scrutinee needs only its head's arms" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun f (static x : int) : int =
+  match static (opt.some x) {
+    .some 3 -> 1,
+    .some w -> w,
+  }
+;;
+let _ = assert erased (f 3 == 1);;
+let _ = assert erased (f 9 == 9);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "constructor-headed scrutinee needs only its head's arms" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun f (static x : int) : int =
+  let y = opt.some x in
+  match static y {
+    .some 3 -> 1,
+    .some w -> match static y { .some 3 -> 0, _ -> -1 },
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 7) (column 32)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm
+         (Constructor (label some)
+          (payload ((Literal (value (Int 3)) (loc ((line 7) (column 38))))))
+          (loc ((line 7) (column 32))))))
+       (value
+        (Constructor (label some)
+         (payload
+          ((Refine (value (Var (Anon <opaque>))) (excluded ((Literal (Int 3))))))))))))
+    |}]
+;;
+
+(* The wildcard arm's world excludes [.some], so a nested match on the same
+   scrutinee is exhaustive without it. *)
+let%expect_test "learned exclusions refute nested missing cases" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun f (static o : opt) : int =
+  match static o {
+    .some v -> v,
+    _ -> match static o { .none -> 0 },
+  }
+;;
+let _ = assert erased (f (opt.some 3) == 3);;
+let _ = assert erased (f (opt.none) == 0);;
+|};
+  [%expect {| |}]
+;;
+
 let%expect_test "erased match selects a type" =
   go
     {|
 let opt = variant { none, some : int };;
-let e = opt.some 1 @ erased;;
-let t = match erased e { .none -> int, .some _ -> bool };;
-let _ = true : t;;
+let sel = fn (static erased o : opt) -> match erased o { .none -> int, .some _ -> bool };;
+let _ = true : sel (opt.some 1 @ erased);;
 |};
   [%expect {| |}]
 ;;
@@ -495,7 +709,25 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .some v -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
+    ((loc ((line 4) (column 8)))
+     (reason (Match (Non_exhaustive ((Constructor (label none) (payload ())))))))
+    |}]
+;;
+
+(* A dynamic match is judged against an opaque scrutinee: the concrete static
+   does not excuse the missing [.none]. Branching on a statically known value
+   is plain-match territory, with plain-match obligations. *)
+let%expect_test "dynamic match on a static scrutinee keeps full exhaustiveness" =
+  go
+    {|
+let opt = variant { none, some : int };;
+let x = opt.some 1;;
+let _ = match x { .some v -> v };;
+|};
+  [%expect
+    {|
     ((loc ((line 4) (column 8)))
      (reason (Match (Non_exhaustive ((Constructor (label none) (payload ())))))))
     |}]
@@ -508,7 +740,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .none -> 0, .some v -> v, .none -> 2 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 8)))
      (reason
       (Match
@@ -524,7 +757,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .whoops -> 1, .none -> 0, .some v -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 27)))
      (reason
       (Unknown_label (from (Type (Variant ((none ()) (some ((Type Int)))))))
@@ -539,7 +773,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .some -> 1, .none -> 0 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 27)))
      (reason (Match (Payload_mismatch (label some) (required true)))))
     |}]
@@ -552,7 +787,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .none v -> v, .some v -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 27)))
      (reason (Match (Payload_mismatch (label none) (required false)))))
     |}]
@@ -582,7 +818,8 @@ let v = (variant { f : int -> int }).f (fn (x : int) -> x) : variant { f : int -
 
 let%expect_test "no width subtyping between rows" =
   go "let x = (variant { a }).a : variant { a, b };;";
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 1) (column 26)))
      (reason
       (Type_mismatch (got (Type (Variant ((a ())))))
@@ -701,7 +938,8 @@ fun pick (static n : int) : bool -> vec n -> vec n =
 
 let%expect_test "applying a nullary constructor value" =
   go "let x = (variant { none, some : int }).none 1;;";
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 1) (column 8)))
      (reason
       (Expected_function (fn (Type (Variant ((none ()) (some ((Type Int)))))))
@@ -711,7 +949,8 @@ let%expect_test "applying a nullary constructor value" =
 
 let%expect_test "applying a saturated constructor application" =
   go "let x = (variant { none, some : int }).some 1 2;;";
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 1) (column 8)))
      (reason
       (Expected_function (fn (Type (Variant ((none ()) (some ((Type Int)))))))
@@ -722,7 +961,8 @@ let%expect_test "applying a saturated constructor application" =
 (* Record projection from a variant value is not selection. *)
 let%expect_test "selection from a variant value" =
   go "let x = ((variant { none, some : int }).some 1).some;;";
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 1) (column 8)))
      (reason
       (Type_mismatch (got (Type (Variant ((none ()) (some ((Type Int)))))))
@@ -738,7 +978,8 @@ let%expect_test "type payloads are uninhabitable" =
 let tv = variant { none, ty : type };;
 let x = tv.ty int;;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 3) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Static) (erasure Erased)))
@@ -791,7 +1032,11 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .none -> unreachable, .some v -> v };;
 |};
-  [%expect {| ((loc ((line 4) (column 36))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 36)))
+     (reason (Misplaced_unreachable Not_under_static_branch)))
+    |}]
 ;;
 
 let%expect_test "or pattern binding payloads at different types" =
@@ -802,7 +1047,8 @@ let d = 1 @ dynamic;;
 let x = dir.left d;;
 let _ = match x { .left v | .right v -> 0 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 5) (column 18)))
      (reason (Cannot_unify (lhs (Type Int)) (rhs (Type Bool)))))
     |}]
@@ -815,7 +1061,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .some v | v -> 0 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 27)))
      (reason
       (Cannot_unify (lhs (Type Int))
@@ -831,7 +1078,8 @@ let%expect_test "static or pattern with conflicting payload types" =
 let dir = variant { left : int, right : bool };;
 fun pick (static d : dir) : dynamic int = match static d { .left v | .right v -> v @ dynamic };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 3) (column 4)))
      (reason
       (Type_mismatch
@@ -893,7 +1141,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .some 1 -> 0, .some 1 -> 1, .some _ -> 2, .none -> 3 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 8)))
      (reason
       (Match
@@ -911,10 +1160,13 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .some 1 -> 0, .none -> 1 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 8)))
      (reason
-      (Match (Non_exhaustive ((Constructor (label some) (payload (Wildcard))))))))
+      (Match
+       (Non_exhaustive
+        ((Constructor (label some) (payload ((All_except ((Literal (Int 1))))))))))))
     |}]
 ;;
 
@@ -926,7 +1178,8 @@ let w = variant { empty, wrap : opt };;
 let d = 1 @ dynamic;;
 let _ = match w.wrap (opt.some d) { .wrap (.some v) -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 5) (column 8)))
      (reason
       (Match
@@ -944,7 +1197,8 @@ let p = variant { pair : int ^ int };;
 let d = 1 @ dynamic;;
 let _ = match p.pair (d, d) { .pair (v, v) -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 36)))
      (reason (Match (Multiple_bindings ((Id v) <opaque>)))))
     |}]
@@ -957,7 +1211,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match opt.some d { .some true -> 0, .some _ -> 1, .none -> 2 };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 33)))
      (reason (Type_mismatch (got (Type Int)) (need (Type Bool)))))
     |}]
@@ -970,7 +1225,8 @@ let p = variant { pair : int ^ bool };;
 let d = 1 @ dynamic;;
 let _ = match p.pair (d, true) { .pair (a, b, c) -> a };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 39)))
      (reason (Match (Expected_tuple (Type (Tuple ((Type Int) (Type Bool))))))))
     |}]
@@ -985,7 +1241,8 @@ let opt = variant { none, some : int };;
 let e = opt.some 1 @ erased;;
 let _ = match e { .none -> 0, .some v -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Static) (erasure Erased)))
@@ -1000,7 +1257,8 @@ let opt = variant { none, some : int };;
 let e = opt.some 1 @ erased;;
 let _ = match static e { .none -> 0, .some v -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Static) (erasure Erased)))
@@ -1015,7 +1273,8 @@ let opt = variant { none, some : int };;
 let d = 1 @ dynamic;;
 let _ = match static opt.some d { .none -> 0, .some v -> v };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 4) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Dynamic) (erasure Unerased)))
@@ -1027,11 +1286,11 @@ let%expect_test "erased match binding used dynamically" =
   go
     {|
 let opt = variant { none, some : int };;
-let e = opt.some 1 @ erased;;
-let _ = match erased e { .some v -> v @ dynamic, .none -> 0 };;
+let f = fn (static erased o : opt) -> match erased o { .some v -> v @ dynamic, .none -> 0 };;
 |};
-  [%expect {|
-    ((loc ((line 4) (column 38)))
+  [%expect
+    {|
+    ((loc ((line 3) (column 68)))
      (reason
       (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
@@ -1042,12 +1301,13 @@ let%expect_test "erased match result stays erased" =
   go
     {|
 let opt = variant { none, some : int };;
-let e = opt.some 1 @ erased;;
-let r = match erased e { .some v -> v, .none -> 0 };;
+let sel = fn (static erased o : opt) -> match erased o { .some v -> v, .none -> 0 };;
+let r = sel (opt.some 1);;
 let f = fn (x : int) -> x;;
 let _ = f r;;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 6) (column 8)))
      (reason
       (Mode_mismatch (got ((staticity Static) (erasure Erased)))
@@ -1055,12 +1315,36 @@ let _ = f r;;
     |}]
 ;;
 
-let%expect_test "ghost function's variant result drives erased selection" =
+(* The ghost application reduces to a [.some] constructor, so its head decides
+   the match generically and the [.none] arm is dead. *)
+let%expect_test "ghost function's variant result decides the match" =
   go
     {|
 let opt = variant { none, some : int };;
 fun erased ghost (x : int) : opt = opt.some (x + 1);;
 let t = match erased (ghost 2) { .some v -> int, .none -> bool };;
+let _ = 5 : t;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 49)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm
+         (Constructor (label none) (payload ()) (loc ((line 4) (column 49))))))
+       (value (Constructor (label some) (payload ((Int (T 3)))))))))
+    |}]
+;;
+
+(* The single-arm spelling is legal: the ghost's constructor head refutes the
+   missing [.none] case. *)
+let%expect_test "ghost function's variant result drives erased selection" =
+  go
+    {|
+let opt = variant { none, some : int };;
+fun erased ghost (x : int) : opt = opt.some (x + 1);;
+let t = match erased (ghost 2) { .some v -> int };;
 let _ = 5 : t;;
 |};
   [%expect {| |}]
@@ -1072,24 +1356,26 @@ let%expect_test "erased payload bindings cannot feed comparisons" =
   go
     {|
 let opt = variant { none, some : int };;
-let t = match erased (opt.some 3 @ erased) { .some v -> (if erased v == 3 then int else bool), .none -> unit };;
+let t = fn (static erased o : opt) -> match erased o { .some v -> (if erased v == 3 then int else bool), .none -> unit };;
 |};
-  [%expect {|
-    ((loc ((line 3) (column 69)))
+  [%expect
+    {|
+    ((loc ((line 3) (column 79)))
      (reason
       (Mode_mismatch (got ((staticity Static) (erasure Erased)))
        (need ((staticity Dynamic) (erasure Unerased))))))
     |}]
 ;;
 
-(* The unerased spelling of the same refinement, via [match static]. *)
+(* The unerased spelling of the same refinement, via [match static]: the
+   instance pins the payload, which selects the conditional's live branch. *)
 let%expect_test "static match payload refines a type" =
   go
     {|
 let opt = variant { none, some : int };;
 let x = opt.some 3;;
-let t = match static x { .some v -> (if erased v == 3 then int else bool), .none -> unit };;
-let _ = 5 : t;;
+let t = fn (static x : opt) -> match static x { .some v -> (if erased v == 3 then int else bool), .none -> unit };;
+let _ = 5 : t x;;
 |};
   [%expect {| |}]
 ;;
@@ -1110,61 +1396,82 @@ fun sum (static n : int) : vec n -> dynamic int =
     }
 ;;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 9) (column 21)))
      (reason
       (Expected_variant
        (got
-        (Apply
-         (fn
-          (Binder
-           ((arg ((Id n) <opaque>))
-            (ty
-             (Type
-              (Pi (arg_ty (Type Int))
-               (arg_mode ((staticity Static) (erasure Unerased)))
-               (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-               (ret_mode ((staticity Static) (erasure Erased))))))
-            (body_dst
-             (Match
-              (cond (Var (id ((Id n) <opaque>)) (loc ((line 3) (column 15)))))
-              (arms
-               (((Literal (value (Int 0)) (loc ((line 3) (column 19))))
-                 (Variant (constructors (((label nil) (payload ()))))
-                  (loc ((line 3) (column 24)))))
-                ((Var (id (Anon <opaque>)) (loc ((line 3) (column 41))))
-                 (Variant
-                  (constructors
-                   (((label cons)
-                     (payload
-                      ((Tuple
-                        (elts
-                         ((Var (id ((Id int) <opaque>))
-                           (loc ((line 3) (column 63))))
-                          (Apply
-                           (fn
-                            (Var (id ((Id vec) <opaque>))
-                             (loc ((line 3) (column 69)))))
-                           (arg
-                            (Apply
-                             (fn
-                              (Var (id ((Binop Sub) <opaque>))
-                               (loc ((line 3) (column 76)))))
-                             (arg
-                              (Make_tuple
-                               (elts
-                                ((Var (id ((Id n) <opaque>))
-                                  (loc ((line 3) (column 74))))
-                                 (Literal (value (Int 1))
-                                  (loc ((line 3) (column 78))))))
-                               (loc ((line 3) (column 76)))))
-                             (loc ((line 3) (column 76)))))
-                           (loc ((line 3) (column 69))))))
-                        (loc ((line 3) (column 63)))))))))
-                  (loc ((line 3) (column 46)))))))
-              (eliminator Erased) (loc ((line 3) (column 2)))))
-            (env <opaque>) (family <opaque>) (hash <opaque>))))
-         (arg (Var (Anon <opaque>)))))
+        (Match (scrutinee (Var (Anon <opaque>)))
+         (arms
+          (((Literal (value (Int 0)) (loc ((line 3) (column 19))))
+            (Type (Variant ((nil ())))))
+           ((Var (id (Anon <opaque>)) (loc ((line 3) (column 41))))
+            (Type
+             (Variant
+              ((cons
+                ((Type
+                  (Tuple
+                   ((Type Int)
+                    (Apply
+                     (fn
+                      (Binder
+                       ((arg ((Id n) <opaque>))
+                        (ty
+                         (Type
+                          (Pi (arg_ty (Type Int))
+                           (arg_mode ((staticity Static) (erasure Unerased)))
+                           (ret_ty (T (ty (Type Type)) (memo <opaque>)))
+                           (ret_mode ((staticity Static) (erasure Erased))))))
+                        (body_dst
+                         (Match
+                          (cond
+                           (Var (id ((Id n) <opaque>))
+                            (loc ((line 3) (column 15)))))
+                          (arms
+                           (((Literal (value (Int 0))
+                              (loc ((line 3) (column 19))))
+                             (Variant (constructors (((label nil) (payload ()))))
+                              (loc ((line 3) (column 24)))))
+                            ((Var (id (Anon <opaque>))
+                              (loc ((line 3) (column 41))))
+                             (Variant
+                              (constructors
+                               (((label cons)
+                                 (payload
+                                  ((Tuple
+                                    (elts
+                                     ((Var (id ((Id int) <opaque>))
+                                       (loc ((line 3) (column 63))))
+                                      (Apply
+                                       (fn
+                                        (Var (id ((Id vec) <opaque>))
+                                         (loc ((line 3) (column 69)))))
+                                       (arg
+                                        (Apply
+                                         (fn
+                                          (Var (id ((Binop Sub) <opaque>))
+                                           (loc ((line 3) (column 76)))))
+                                         (arg
+                                          (Make_tuple
+                                           (elts
+                                            ((Var (id ((Id n) <opaque>))
+                                              (loc ((line 3) (column 74))))
+                                             (Literal (value (Int 1))
+                                              (loc ((line 3) (column 78))))))
+                                           (loc ((line 3) (column 76)))))
+                                         (loc ((line 3) (column 76)))))
+                                       (loc ((line 3) (column 69))))))
+                                    (loc ((line 3) (column 63)))))))))
+                              (loc ((line 3) (column 46)))))))
+                          (eliminator Erased) (loc ((line 3) (column 2)))))
+                        (env <opaque>) (family <opaque>) (hash <opaque>))))
+                     (arg
+                      (Int
+                       (Sub
+                        (Refine (value (Var (Anon <opaque>)))
+                         (excluded ((Literal (Int 0)))))
+                        (Int (T 1)))))))))))))))))))
        (label cons))))
     |}]
 ;;
@@ -1180,51 +1487,25 @@ let r = match static (box.boxed 5) { .boxed u -> (1 : sel u) };;
   [%expect {| |}]
 ;;
 
-(* [Value.payload]: the arm a concrete scrutinee does not select is still typechecked, with
-   the payload bound to a stuck extraction — a static demand on it fails cleanly. *)
-let%expect_test "static match payload: unselected arm binds an opaque value" =
+(* The arm a concrete scrutinee does not select is dead code. *)
+let%expect_test "static match payload: unselected arm is dead" =
   go
     {|
 let opt = variant { a : int, b : int };;
 fun sel (static n : int) : erased type = if erased n == 5 then int else bool;;
 let r = match static (opt.b 5) { .a u -> (1 : sel u), .b w -> 1 };;
 |};
-  [%expect {|
-    ((loc ((line 4) (column 44)))
+  [%expect
+    {|
+    ((loc ((line 4) (column 33)))
      (reason
-      (Type_mismatch (got (Type Int))
-       (need
-        (Apply
-         (fn
-          (Binder
-           ((arg ((Id n) <opaque>))
-            (ty
-             (Type
-              (Pi (arg_ty (Type Int))
-               (arg_mode ((staticity Static) (erasure Unerased)))
-               (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-               (ret_mode ((staticity Static) (erasure Erased))))))
-            (body_dst
-             (If
-              (cond
-               (Apply
-                (fn
-                 (Var (id ((Binop Eq) <opaque>)) (loc ((line 3) (column 53)))))
-                (arg
-                 (Make_tuple
-                  (elts
-                   ((Var (id ((Id n) <opaque>)) (loc ((line 3) (column 51))))
-                    (Literal (value (Int 5)) (loc ((line 3) (column 56))))))
-                  (loc ((line 3) (column 53)))))
-                (loc ((line 3) (column 53)))))
-              (then_ (Var (id ((Id int) <opaque>)) (loc ((line 3) (column 63)))))
-              (else_
-               (Var (id ((Id bool) <opaque>)) (loc ((line 3) (column 72)))))
-              (erased Erased) (loc ((line 3) (column 41)))))
-            (env <opaque>) (family <opaque>) (hash <opaque>))))
-         (arg
-          (Payload (variant (Constructor (label b) (payload ((Int (T 5))))))
-           (label a))))))))
+      (Dead_branch
+       (branch
+        (Arm
+         (Constructor (label a)
+          (payload ((Var (id ((Id u) <opaque>)) (loc ((line 4) (column 36))))))
+          (loc ((line 4) (column 33))))))
+       (value (Constructor (label b) (payload ((Int (T 5)))))))))
     |}]
 ;;
 
@@ -1252,7 +1533,8 @@ fun sel (static n : int) : erased type = if erased n == 1 then int else bool;;
 let f = fn (static flag : bool) ->
   match static (if erased flag then (opt.a 1) else (opt.b 1)) { .a u | .b u -> (1 : sel u) };;
 |};
-  [%expect {|
+  [%expect
+    {|
     ((loc ((line 5) (column 82)))
      (reason
       (Type_mismatch (got (Type Int))

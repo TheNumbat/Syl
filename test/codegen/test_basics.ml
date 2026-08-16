@@ -58,7 +58,8 @@ let%expect_test "join" =
     {|
 fun a (_ : unit) : unit = ();;
 fun b (_ : unit) : unit -> unit = fn (_ : unit) -> ();;
-let x = if erased false then a else b;;
+let pick = fn (static c : bool) -> if erased c then a else b;;
+let x = pick false;;
 let _ = x () ();;
 |};
   [%expect {| |}]

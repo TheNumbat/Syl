@@ -2,6 +2,23 @@ open! Core
 open Tst
 
 module Error : sig
+  module Branch : sig
+    type t =
+      | Then
+      | Else
+      | Arm of Dst.Expr.pattern
+    [@@deriving sexp]
+  end
+
+  module Misplaced : sig
+    type t =
+      | Not_under_static_branch
+      | Not_in_tail_position
+      | Not_in_head_position
+      | All_paths_unreachable
+    [@@deriving sexp]
+  end
+
   module Match : sig
     type t =
       | Multiple_bindings of Ident.t
@@ -53,7 +70,12 @@ module Error : sig
         ; result : Modes.t
         }
     | Recursion_limit of int
+    | Dead_branch of
+        { branch : Branch.t
+        ; value : Value.t
+        }
     | Unreachable_reached
+    | Misplaced_unreachable of Misplaced.t
   [@@deriving sexp]
 end
 

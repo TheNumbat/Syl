@@ -1,12 +1,5 @@
 open! Core
 
-module Step : sig
-  type t =
-    | Index of int
-    | Payload of Ident.Label.t
-  [@@deriving sexp]
-end
-
 module rec Ty : sig
   type t =
     | Unit
@@ -150,7 +143,7 @@ and Closure : sig
     ; family : int
     ; hash : int
     }
-  [@@deriving sexp, compare, hash]
+  [@@deriving sexp, compare, hash, equal]
 end
 
 and Binder : sig
@@ -162,7 +155,7 @@ and Binder : sig
     ; family : int
     ; hash : int
     }
-  [@@deriving sexp, compare, hash]
+  [@@deriving sexp, compare, hash, equal]
 end
 
 and Value : sig
@@ -195,6 +188,9 @@ and Value : sig
 
     include Comparable.S with type t := t
     include Hashable.S with type t := t
+
+    (* [None] when the value contains anything symbolic. *)
+    val of_value : Value.t -> t option
   end
 
   type t = private
@@ -231,6 +227,10 @@ and Value : sig
         { scrutinee : t
         ; arms : (Dst.Expr.pattern * t) Nonempty_list.t
         }
+    | Refine of
+        { value : t
+        ; excluded : Pattern.Excluded.Set.t
+        }
     | External of
         { symbol : string
         ; ty : t
@@ -256,6 +256,29 @@ and Value : sig
   val apply : fn:t -> arg:t -> t
   val match_ : scrutinee:t -> arms:(Dst.Expr.pattern * t) Nonempty_list.t -> t
   val if_ : loc:Lex.Location.t -> cond:t -> then_:t -> else_:t -> t
+  val refine : t -> excluded:Pattern.Excluded.Set.t -> t
+
+  module Eliminator : sig
+    (* A stuck eliminator awaiting its subject *)
+    type nonrec t =
+      | Apply of t
+      | Proj of int
+      | Payload of Ident.Label.t
+
+    (* [peel] strips a value's eliminator spine, [unpeel] rebuilds it. *)
+    val peel : Value.t -> t list -> Value.t * t list
+    val unpeel : Value.t -> t list -> Value.t
+  end
+
+  (* Syntactic identity: the equality [rewrite] matches [target] with. *)
+  val identical : t -> t -> bool
+
+  (* Rewrite occurrences of [target] (syntactic identity) to [replacement],
+     renormalizing through the smart constructors. *)
+  val rewrite : t -> target:t -> replacement:t -> t
+
+  (* Refine the scrutinee assuming it matches [pattern] and none of [refuted]. *)
+  val refine_branch : scrutinee:t -> pattern:Dst.Expr.pattern -> refuted:Dst.Expr.pattern list -> t
 end
 
 and Desc : sig
@@ -451,10 +474,6 @@ and Expr : sig
   val rebind : t -> stamp:int -> f:(t -> t) -> t
   val tuple : loc:Lex.Location.t -> (t * Desc.t) Nonempty_list.t -> t * Desc.t
 
-  (* Project a runtime component out of the scrutinee, tracking its type and
-     static value. *)
-  val project : loc:Lex.Location.t -> t -> Desc.t -> Step.t list -> t * Desc.t
-
   (* Util *)
 
   (* [monos] overrides what a [Binder] node binds: pre-reify nodes carry
@@ -469,49 +488,77 @@ and Expr : sig
   val with_mode : t -> Modes.t -> t
 end
 
-module Pattern : sig
+and Pattern : sig
+  module Excluded : sig
+    type t =
+      | Literal of Dst.Literal.t
+      | Constructor of
+          { label : Ident.Label.t
+          ; payload : t option (* None excludes the whole tag. *)
+          }
+    [@@deriving sexp, compare, equal, hash]
+
+    include Comparable.S with type t := t
+
+    (* Whether the value has the excluded shape. *)
+    val is_excluded : t -> Value.t -> bool Or_unknown.t
+  end
+
+  (* The shapes excluded by the pattern failing to match. *)
+  val excludes : Dst.Expr.pattern -> Excluded.Set.t
+
+  (* The shapes excluded by all of the patterns failing to match. *)
+  val all_excludes : Dst.Expr.pattern list -> Excluded.Set.t
+
+  (* Specialize [scrutinee] assuming it matches the pattern. *)
+  val specialize : Dst.Expr.pattern -> scrutinee:Value.t -> Value.t
+
+  module Step : sig
+    type t =
+      | Index of int
+      | Payload of Ident.Label.t
+    [@@deriving sexp, compare, equal, hash]
+  end
+
   module Matched : sig
     type t =
       | Match of (Ident.t * Step.t list) list
       | No_match
       | Unknown
+    [@@deriving sexp, compare, equal, hash]
   end
 
-  val matches_pattern : Value.t -> Dst.Expr.pattern -> Matched.t
+  (* Whether a value definitely matches a pattern. *)
+  val matches : Value.t -> Dst.Expr.pattern -> Matched.t
 
-  val select_arm
+  (* Whether a value definitely selects a particular pattern from an exhaustive list. *)
+  val selects
     :  Value.t
     -> Dst.Expr.pattern Nonempty_list.t
     -> (int * (Ident.t * Step.t list) list) Or_unknown.t
 
-  (* Given that some scrutinee matches [fact], does it match the second pattern? *)
-  val pattern_implies : fact:Dst.Expr.pattern -> Dst.Expr.pattern -> bool Or_unknown.t
+  (* If a scrutinee matches the first pattern, does it match the second pattern? *)
+  val implies : Dst.Expr.pattern -> Dst.Expr.pattern -> bool Or_unknown.t
 
   (* Patterns must agree structurally, except the last arm, which exhaustiveness
      makes unconditional. *)
-  val arms_congruent
+  val arms_agree
     :  (Dst.Expr.pattern * Value.t) Nonempty_list.t
     -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
     -> bool
 
   (* Combine two arm lists positionally, keeping the first list's patterns.
-     [None] if the arms aren't congruent or [f] fails on a pair of leaves. *)
+     [None] if the arms don't agree or [f] fails on a pair of leaves. *)
   val map2_arms
     :  (Dst.Expr.pattern * Value.t) Nonempty_list.t
     -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
     -> f:(Value.t -> Value.t -> Value.t option)
     -> (Dst.Expr.pattern * Value.t) Nonempty_list.t option
 
-  (* Collapse one match's arms into a single value: map each arm's leaf through [f],
-     then [combine] the results. When they disagree, a stuck result is emitted if
-     every arm's pattern implies itself and excludes every earlier one, so learning
-     the scrutinee can decide the branch. *)
-  val collapse_arms
-    :  scrutinee:Value.t
-    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
-    -> f:(Dst.Expr.pattern -> Value.t -> Value.t option)
-    -> combine:(Value.t -> Value.t -> Value.t option)
-    -> Value.t option
+  (* Each arm paired with the patterns refuted before it, in first-match order. *)
+  val with_refuted
+    :  (Dst.Expr.pattern * 'a) Nonempty_list.t
+    -> (Dst.Expr.pattern list * Dst.Expr.pattern * 'a) list
 end
 
 module Top_level : sig

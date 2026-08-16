@@ -2,8 +2,6 @@ open! Core
 open Sst
 module Key = Tst.Value.Concrete
 
-(* TODO constant folding *)
-
 let rec merge_ty (ty1 : Ty.t) (ty2 : Ty.t) : Ty.t =
   match ty1, ty2 with
   | Unit, Unit -> Unit
@@ -58,6 +56,7 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Proj _
   | Payload _
   | Match _
+  | Refine _
   | External _
   | Prim _
   | Tuple _
@@ -99,6 +98,93 @@ let simplify_int ~loc (int : Tst.Int.t) : int64 =
   | _ -> raise_s [%message "Bug: expected concrete int" (int : Tst.Int.t) (loc : Lex.Location.t)]
 ;;
 
+(* Pure expressions may be dropped (an inlined application no longer evaluates them) or
+   duplicated across a fold. Closure creation allocates but the allocation is unobservable. *)
+let rec is_pure (expr : Expr.t) : bool =
+  match expr with
+  | Scalar _ | Var _ | External _ | Inject _ | Lambda _ | Binder _ -> true
+  | Tuple { elts; _ } -> Nonempty_list.for_all elts ~f:is_pure
+  | Constructor { payload; _ } -> Option.for_all payload ~f:is_pure
+  | Tuple_get { tuple; _ } -> is_pure tuple
+  | Payload_get { variant; _ } | Tag_test { variant; _ } -> is_pure variant
+  | Fun _ | Apply _ | Specialize _ | Let _ | If _ | Match _ | Extcall _ -> false
+;;
+
+let rec to_value (expr : Expr.t) : Tst.Value.t option =
+  match expr with
+  | Scalar { value = Unit; _ } -> Some Tst.Value.unit
+  | Scalar { value = Bool b; _ } -> Some (Tst.Bool.const b)
+  | Scalar { value = Int i; _ } -> Some (Tst.Int.const i)
+  | Tuple { elts; _ } ->
+    Nonempty_list.to_list elts
+    |> List.map ~f:to_value
+    |> Option.all
+    |> Option.map ~f:(fun elts -> Tst.Value.tuple (Nonempty_list.of_list_exn elts))
+  | _ -> None
+;;
+
+let of_value ~loc (value : Tst.Value.t) : Expr.t option =
+  match value with
+  | Unit -> Some (Scalar { value = Unit; ty = Unit; loc })
+  | Bool (T b) -> Some (Scalar { value = Bool b; ty = Bool; loc })
+  | Int (T i) -> Some (Scalar { value = Int i; ty = Int; loc })
+  | _ -> None
+;;
+
+(* A failing prim (division by zero, false assert) must keep aborting at runtime, so on
+   [Builtin.Error] the application is left in place. *)
+let fold_prim ~loc (prim : Builtin.Prim.t) (arg : Expr.t) : Expr.t option =
+  match to_value arg with
+  | None -> None
+  | Some arg ->
+    (match Builtin.eval prim arg with
+     | value -> of_value ~loc value
+     | exception Builtin.Error _ -> None)
+;;
+
+(* Bindings with statically known contents: primitive operators (bound by the prelude's
+   [builtin] declarations, so applications see them through a [Var]) and scalar constants,
+   which propagate into the folds above. *)
+module Env = struct
+  type entry =
+    | Const of Scalar.t * Ty.t
+    | Prim of Builtin.Prim.t
+
+  type t = entry Ident.Map.t
+
+  let empty : t = Ident.Map.empty
+
+  let entry (env : t) (expr : Expr.t) : entry option =
+    match expr with
+    | Scalar { value; ty; _ } -> Some (Const (value, ty))
+    | External { symbol; _ } ->
+      (match Builtin0.find symbol with
+       | Some (Prim prim) -> Some (Prim prim)
+       | Some (Type _) | None -> None)
+    | Var { id; _ } -> Map.find env id
+    | _ -> None
+  ;;
+
+  let bind (env : t) var expr =
+    match entry env expr with
+    | Some entry -> Map.set env ~key:var ~data:entry
+    | None -> env
+  ;;
+
+  let prim (env : t) (fn : Expr.t) : Builtin.Prim.t option =
+    match entry env fn with
+    | Some (Prim prim) -> Some prim
+    | Some (Const _) | None -> None
+  ;;
+end
+
+(* Folding can leave a binding without uses; drop it if evaluating it is unobservable. *)
+let make_let ~loc var ~bind ~rest : Expr.t =
+  if is_pure bind && not (Set.mem (Expr.free_vars rest) var)
+  then rest
+  else Let { var; bind; rest; ty = Expr.ty rest; loc }
+;;
+
 let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
   match value with
   | Unit -> Scalar { value = Unit; ty = Unit; loc }
@@ -138,97 +224,154 @@ let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
        Constructor { label; payload; ty = simplify_ty ty; loc }
      | _ ->
        raise_s [%message "Bug: expected variant type" (ty : Tst.Value.t) (loc : Lex.Location.t)])
-  | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ ->
+  | Bottom -> raise_s [%message "Bug: emitted unreachable branch" (loc : Lex.Location.t)]
+  | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Refine _ ->
     raise_s [%message "Bug: expected runtime value" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
-and simplify_expr (expr : Tst.Expr.t) : Expr.t =
+and simplify_expr env (expr : Tst.Expr.t) : Expr.t =
   match expr with
   | Erased { loc; _ } -> Scalar { value = Unit; ty = Unit; loc }
   | Literal { value; ty; loc; _ } -> simplify_value ~loc ~ty value
-  | Var { id; ty; loc; _ } -> Var { id; ty = simplify_ty ty; loc }
+  | Var { id; ty; loc; _ } ->
+    (match Map.find env id with
+     | Some (Env.Const (value, ty)) -> Scalar { value; ty; loc }
+     | Some (Prim _) | None -> Var { id; ty = simplify_ty ty; loc })
   | Let { var; bind; rest; loc; _ } ->
     if Modes.is_erased (Tst.Expr.mode bind)
-    then simplify_expr rest
+    then simplify_expr env rest
     else (
-      let bind = simplify_expr bind in
-      let rest = simplify_expr rest in
-      Let { var; bind; rest; ty = Expr.ty rest; loc })
+      let bind = simplify_expr env bind in
+      let rest = simplify_expr (Env.bind env var bind) rest in
+      make_let ~loc var ~bind ~rest)
   | Tuple { elts; ty; loc; _ } ->
-    let elts = Nonempty_list.map elts ~f:simplify_expr in
+    let elts = Nonempty_list.map elts ~f:(simplify_expr env) in
     Tuple { elts; ty = simplify_ty ty; loc }
   | Tuple_get { tuple; index; ty; loc; _ } ->
-    Tuple_get { tuple = simplify_expr tuple; index; ty = simplify_ty ty; loc }
+    let tuple = simplify_expr env tuple in
+    (match tuple with
+     | Tuple { elts; _ } when Nonempty_list.for_all elts ~f:is_pure ->
+       Nonempty_list.nth_exn elts index
+     | _ -> Tuple_get { tuple; index; ty = simplify_ty ty; loc })
   | Payload_get { variant; label; ty; loc; _ } ->
-    Payload_get { variant = simplify_expr variant; label; ty = simplify_ty ty; loc }
+    let variant = simplify_expr env variant in
+    (match variant with
+     | Constructor { label = actual; payload = Some payload; _ } when Ident.Label.equal actual label
+       -> payload
+     | _ -> Payload_get { variant; label; ty = simplify_ty ty; loc })
   | Tag_test { variant; label; ty; loc; _ } ->
-    Tag_test { variant = simplify_expr variant; label; ty = simplify_ty ty; loc }
+    let variant = simplify_expr env variant in
+    (match variant with
+     | Constructor { label = actual; payload; _ } when Option.for_all payload ~f:is_pure ->
+       Scalar { value = Bool (Ident.Label.equal actual label); ty = Bool; loc }
+     | _ -> Tag_test { variant; label; ty = simplify_ty ty; loc })
   | Builtin { builtin; loc; ty; _ } ->
     (match builtin with
      | Prim prim -> External { symbol = Builtin.Prim.symbol prim; ty = simplify_ty ty; loc }
      | Type ty -> raise_s [%message "Bug: unerased type" (ty : Builtin0.Type.t)])
   | Extcall { symbol; arg; ty; loc; _ } ->
-    Extcall { symbol; arg = simplify_expr arg; ty = simplify_ty ty; loc }
+    Extcall { symbol; arg = simplify_expr env arg; ty = simplify_ty ty; loc }
+  | Apply { fn = Lambda { arg = var; body; _ }; arg; loc; _ } ->
+    let bind = simplify_expr env arg in
+    let rest = simplify_expr (Env.bind env var bind) body in
+    make_let ~loc var ~bind ~rest
   | Apply { fn; arg; ty; loc; _ } ->
-    (* TODO inline if value *)
-    let fn = simplify_expr fn in
-    let arg = simplify_expr arg in
-    (match fn with
-     | Inject { label; _ } -> Constructor { label; payload = Some arg; ty = simplify_ty ty; loc }
-     | _ -> Apply { fn; arg; ty = simplify_ty ty; loc })
+    let fn = simplify_expr env fn in
+    let arg = simplify_expr env arg in
+    let folded =
+      match Env.prim env fn with
+      | Some prim -> fold_prim ~loc prim arg
+      | None -> None
+    in
+    (match fn, folded with
+     | _, Some folded -> folded
+     | Inject { label; _ }, None ->
+       Constructor { label; payload = Some arg; ty = simplify_ty ty; loc }
+     | Lambda { arg = var; body; _ }, None -> make_let ~loc var ~bind:arg ~rest:body
+     | _, None -> Apply { fn; arg; ty = simplify_ty ty; loc })
   | Lambda { arg; body; ty; family; loc; _ } ->
     let arg_ty, ret_ty = simplify_arrow ty in
-    let body = simplify_expr body in
+    let body = simplify_expr env body in
     Lambda { arg; body; ty = Arrow { arg_ty; ret_ty }; family; loc }
   | Fun { funs; rest; loc; _ } ->
-    let funs = simplify_funs funs in
+    let funs = simplify_funs env funs in
     (match Nonempty_list.of_list funs with
      | Some funs ->
-       let rest = simplify_expr rest in
+       let rest = simplify_expr env rest in
        Fun { funs; rest; ty = Expr.ty rest; loc }
-     | None -> simplify_expr rest)
+     | None -> simplify_expr env rest)
   | If { cond; then_; else_; ty; loc; _ } ->
-    let cond = simplify_expr cond in
-    let then_ = simplify_expr then_ in
-    let else_ = simplify_expr else_ in
-    If { cond; then_; else_; ty = simplify_ty ty; loc }
+    let cond = simplify_expr env cond in
+    (match cond with
+     | Scalar { value = Bool true; _ } -> simplify_expr env then_
+     | Scalar { value = Bool false; _ } -> simplify_expr env else_
+     | _ ->
+       let then_ = simplify_expr env then_ in
+       let else_ = simplify_expr env else_ in
+       If { cond; then_; else_; ty = simplify_ty ty; loc })
   | Match { cases; tree; ty; loc; _ } ->
     let cases =
       Nonempty_list.map cases ~f:(fun { body; bindings } ->
-        let body = simplify_expr body in
+        let body = simplify_expr env body in
         let bindings = Map.map bindings ~f:simplify_ty in
         { Expr.body; bindings })
     in
-    let tree = simplify_switch (Nonempty_list.to_array cases) tree in
+    let tree = simplify_switch env (Nonempty_list.to_array cases) tree in
     Match { cases; tree; ty = simplify_ty ty; loc }
   | Binder { arg; ty; family; body; loc; _ } ->
     let arg_ty, ret_ty = simplify_pi ty in
-    let body = simplify_monos body in
+    let body = simplify_monos env body in
     Binder { arg; body; ty = Pi { arg_ty; ret_ty }; family; loc }
+  | Specialize { fn = Lambda { arg = var; body; _ }; arg; key = None; loc; _ } ->
+    let bind = simplify_expr env arg in
+    let rest = simplify_expr (Env.bind env var bind) body in
+    make_let ~loc var ~bind ~rest
   | Specialize { fn; arg; target; key; ty; loc; _ } ->
-    (* TODO inline if value *)
-    let fn = simplify_expr fn in
-    let arg = simplify_expr arg in
-    let target : Expr.target =
-      match target with
-      | Family family -> Family family
-      | Prim prim -> Prim prim
+    let arg = simplify_expr env arg in
+    let mono =
+      match fn, key with
+      | Binder { body; _ }, Some key when is_pure arg -> Map.find body key
+      | _ -> None
     in
-    Specialize { fn; arg; key; ty = simplify_ty ty; target; loc }
+    (match mono with
+     | Some body -> simplify_expr env body
+     | None ->
+       let fn = simplify_expr env fn in
+       let target : Expr.target =
+         match target with
+         | Family family -> Family family
+         | Prim prim -> Prim prim
+       in
+       let specialize () : Expr.t = Specialize { fn; arg; key; ty = simplify_ty ty; target; loc } in
+       (match target, key, fn with
+        | Prim prim, _, fn when is_pure fn ->
+          (match fold_prim ~loc prim arg with
+           | Some folded -> folded
+           | None -> specialize ())
+        | Family _, None, Lambda { arg = var; body; _ } -> make_let ~loc var ~bind:arg ~rest:body
+        | Family _, Some key, Binder { body; _ } when is_pure arg ->
+          (match Map.find body key with
+           | Some body -> body
+           | None -> specialize ())
+        | _ -> specialize ()))
 
-and simplify_monos body = Map.map body ~f:simplify_expr
+and simplify_monos env body = Map.map body ~f:(simplify_expr env)
 
-and simplify_switch cases (tree : Tst.Expr.tree) : Expr.tree =
+and simplify_switch env cases (tree : Tst.Expr.tree) : Expr.tree =
   match tree with
   | Leaf { case; bindings } ->
-    let bindings = Map.map bindings ~f:simplify_expr in
+    let bindings = Map.map bindings ~f:(simplify_expr env) in
     Leaf { case; bindings }
   | Split { cond; then_; else_ } ->
-    let cond = simplify_expr cond in
-    let then_ = simplify_switch cases then_ in
-    let else_ = simplify_switch cases else_ in
-    Split { cond; then_; else_ }
+    let cond = simplify_expr env cond in
+    (match cond with
+     | Scalar { value = Bool true; _ } -> simplify_switch env cases then_
+     | Scalar { value = Bool false; _ } -> simplify_switch env cases else_
+     | _ ->
+       let then_ = simplify_switch env cases then_ in
+       let else_ = simplify_switch env cases else_ in
+       Split { cond; then_; else_ })
 
-and simplify_funs (funs : Tst.Expr.fun_ Nonempty_list.t) : Expr.fun_ list =
+and simplify_funs env (funs : Tst.Expr.fun_ Nonempty_list.t) : Expr.fun_ list =
   Nonempty_list.filter_map funs ~f:(fun (fun_ : Tst.Expr.fun_) : Expr.fun_ option ->
     match fun_ with
     | Lambda { var; arg; body; ty; mode; family; loc; _ } ->
@@ -236,41 +379,47 @@ and simplify_funs (funs : Tst.Expr.fun_ Nonempty_list.t) : Expr.fun_ list =
       then None
       else (
         let arg_ty, ret_ty = simplify_arrow ty in
-        let body = simplify_expr body in
+        let body = simplify_expr env body in
         Some (Expr.Lambda { var; arg; body; ty = Arrow { arg_ty; ret_ty }; family; loc }))
     | Binder { var; arg; ty; mode; family; body; loc; _ } ->
       if Modes.is_erased mode
       then None
       else (
         let arg_ty, ret_ty = simplify_pi ty in
-        let body = simplify_monos body in
+        let body = simplify_monos env body in
         Some (Expr.Binder { var; arg; body; ty = Pi { arg_ty; ret_ty }; family; loc })))
 ;;
 
-let simplify_top_level (tst : Tst.Top_level.t) : Top_level.t Option.t =
+let simplify_top_level env (tst : Tst.Top_level.t) : Env.t * Top_level.t Option.t =
   match tst with
-  | Erased _ -> None
+  | Erased _ -> env, None
   | Let { var; bind; loc } ->
     if Modes.is_erased (Tst.Expr.mode bind)
-    then None
-    else Some (Let { var; bind = simplify_expr bind; loc })
+    then env, None
+    else (
+      let bind = simplify_expr env bind in
+      Env.bind env var bind, Some (Let { var; bind; loc }))
   | Fun { funs; loc } ->
-    let funs = simplify_funs funs in
+    let funs = simplify_funs env funs in
     (match Nonempty_list.of_list funs with
-     | Some funs -> Some (Fun { funs; loc })
-     | None -> None)
+     | Some funs -> env, Some (Fun { funs; loc })
+     | None -> env, None)
   | External { var; symbol; ty; mode; loc } ->
-    if Modes.is_erased mode then None else Some (External { var; symbol; ty = simplify_ty ty; loc })
+    if Modes.is_erased mode
+    then env, None
+    else env, Some (External { var; symbol; ty = simplify_ty ty; loc })
   | Builtin { var; builtin; ty; mode; loc } ->
     if Modes.is_erased mode
-    then None
+    then env, None
     else (
       match builtin with
       | Prim prim ->
-        Some (External { var; symbol = Builtin.Prim.symbol prim; ty = simplify_ty ty; loc })
+        ( Map.set env ~key:var ~data:(Env.Prim prim)
+        , Some (External { var; symbol = Builtin.Prim.symbol prim; ty = simplify_ty ty; loc }) )
       | Type ty -> raise_s [%message "Bug: unerased type" (ty : Builtin0.Type.t)])
 ;;
 
 let simplify (tst : Tst.Program.t) : Program.t =
-  { top_levels = List.filter_map tst.top_levels ~f:simplify_top_level; stamp = tst.stamp }
+  let _, top_levels = List.fold_map tst.top_levels ~init:Env.empty ~f:simplify_top_level in
+  { top_levels = List.filter_opt top_levels; stamp = tst.stamp }
 ;;

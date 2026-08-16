@@ -136,7 +136,9 @@ module Expr : sig
 
   val free_vars : t -> Ident.Set.t
   val free_vars_pattern : pattern -> Ident.Set.t
+  val is_unreachable : t -> bool
   val loc : t -> Lex.Location.t
+  val pattern_loc : pattern -> Lex.Location.t
 end
 
 module Top_level : sig

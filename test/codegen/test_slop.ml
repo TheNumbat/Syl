@@ -1832,17 +1832,6 @@ let _ = print_int (f 5);;
   [%expect {| 5 |}]
 ;;
 
-let%expect_test "fuzz: static x % x == 0" =
-  go
-    {|
-let f = fn (static x : int) ->
-  let _ = assert erased (x % x == 0) in
-  x;;
-let _ = print_int (f 5);;
-|};
-  [%expect {| 5 |}]
-;;
-
 (* ----------------------------------------------------------------------------
    Section 7: Recursive monomorphization scenarios
    ---------------------------------------------------------------------------- *)

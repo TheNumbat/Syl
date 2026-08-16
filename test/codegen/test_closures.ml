@@ -91,7 +91,8 @@ let%expect_test "closure branches" =
     {|
 let f = (fn (erased x : int) -> 1);;
 let g = (fn (static x : int) -> 2);;
-let _ = print_int ((if erased true then f else g) 0);;
+let pick = fn (static c : bool) -> if erased c then f else g;;
+let _ = print_int (pick true 0);;
 |};
   [%expect {| 1 |}]
 ;;

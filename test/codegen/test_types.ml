@@ -204,7 +204,8 @@ let _ = apply g;;
 let%expect_test "if erased true selects then branch type" =
   go
     {|
-let _ = (if erased true then 1 else true) : (if true then int else bool);;
+let f = fn (static c : bool) -> (if erased c then 1 else true) : (if c then int else bool);;
+let _ = (f true) : int;;
 |};
   [%expect {| |}]
 ;;
@@ -212,7 +213,8 @@ let _ = (if erased true then 1 else true) : (if true then int else bool);;
 let%expect_test "if erased false selects else branch type" =
   go
     {|
-let _ = (if erased false then 1 else true) : (if false then int else bool);;
+let f = fn (static c : bool) -> (if erased c then 1 else true) : (if c then int else bool);;
+let _ = (f false) : bool;;
 |};
   [%expect {| |}]
 ;;

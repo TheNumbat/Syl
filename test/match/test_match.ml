@@ -231,7 +231,11 @@ let%expect_test "non-exhaustive bool" =
 
 let%expect_test "int literal non-exhaustive" =
   go {| let _ = match 0 { 0 -> true };; |};
-  [%expect {| ((loc ((line 1) (column 9))) (reason (Match (Non_exhaustive (Wildcard))))) |}]
+  [%expect
+    {|
+    ((loc ((line 1) (column 9)))
+     (reason (Match (Non_exhaustive ((All_except ((Literal (Int 0)))))))))
+    |}]
 ;;
 
 let%expect_test "redundant case" =
@@ -295,7 +299,9 @@ let _ =
 
 (* Static and erased matches *)
 
-let%expect_test "match static selects arm with concrete scrutinee" =
+(* A concrete scrutinee decides the match generically, so the non-selected arms
+   are dead code in the source. *)
+let%expect_test "match static with a concrete scrutinee has dead arms" =
   go
     {|
 let _ =
@@ -305,7 +311,14 @@ let _ =
   }
 ;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 5) (column 4)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Var (id (Anon <opaque>)) (loc ((line 5) (column 4))))))
+       (value (Int (T 0))))))
+    |}]
 ;;
 
 let%expect_test "match static scrutinee must be static" =
@@ -382,8 +395,90 @@ let _ = (0 : pick ((int, bool) @ erased));;
 ;;
 
 let%expect_test "match static non-exhaustive" =
+  go {| let f = fn (static x : int) -> match static x { 0 -> 1 };; |};
+  [%expect
+    {|
+    ((loc ((line 1) (column 32)))
+     (reason (Match (Non_exhaustive ((All_except ((Literal (Int 0)))))))))
+    |}]
+;;
+
+(* Exhaustiveness sees the scrutinee: cases its static refutes are not
+   required, so deleting a dead arm is always legal. *)
+let%expect_test "match static exhaustive over the live remainder" =
   go {| let _ = match static 0 { 0 -> 1 };; |};
-  [%expect {| ((loc ((line 1) (column 9))) (reason (Match (Non_exhaustive (Wildcard))))) |}]
+  [%expect {| |}]
+;;
+
+(* The concrete component refutes the first arm outright even though the match
+   stays undecided: the arm is dead in every instance. *)
+let%expect_test "undecided match's refuted arm is dead" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static (n, 1) {
+    (0, 0) -> 0,
+    (0, 1) -> 1,
+    _ -> n,
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 4)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm
+         (Tuple
+          (elts
+           ((Literal (value (Int 0)) (loc ((line 4) (column 5))))
+            (Literal (value (Int 0)) (loc ((line 4) (column 8))))))
+          (loc ((line 4) (column 4))))))
+       (value (Tuple ((Var (Anon <opaque>)) (Int (T 1))))))))
+    |}]
+;;
+
+(* Partially applying [h] refutes the [(0, y)] arm in the inner instance:
+   deadness owned by the instance, not the source, so the arm is skipped — its
+   body is never checked in the instance's world, where [g a 5] would not
+   type. *)
+let%expect_test "a partial instance skips a refuted arm" =
+  go
+    {|
+let g = fn (static m : int) -> fn (x : if m == 0 then int else bool) -> x;;
+
+let h =
+  fn (static a : int) ->
+    fn (static b : int) ->
+      match static (a, b) {
+        (0, y) -> g a 5,
+        (x, 0) -> x,
+        _ -> 7,
+      }
+;;
+
+let _ = h 3 0;;
+|};
+  [%expect {| |}]
+;;
+
+(* The concrete component refutes the missing cases of an undecided match, and
+   no runtime condition guards the pruned space. *)
+let%expect_test "statically refuted missing cases are not required" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static (n, 1) {
+    (0, m) -> m,
+    (x, 1) -> x,
+  }
+;;
+
+let _ = f 0;;
+let _ = f 3;;
+|};
+  [%expect {| |}]
 ;;
 
 let%expect_test "match static redundant arm" =
@@ -438,7 +533,8 @@ let _ =
     |}]
 ;;
 
-let%expect_test "match static non-selected arms still typecheck" =
+(* The dead arm's ill-typed body is never policed: the dead-arm error preempts. *)
+let%expect_test "match static non-selected arms are dead" =
   go
     {|
 let _ =
@@ -450,10 +546,11 @@ let _ =
 |};
   [%expect
     {|
-    ((loc ((line 5) (column 14)))
+    ((loc ((line 5) (column 4)))
      (reason
-      (Type_mismatch (got (Type (Tuple ((Type Bool) (Type Int)))))
-       (need (Type (Tuple ((Type Int) (Type Int))))))))
+      (Dead_branch
+       (branch (Arm (Var (id (Anon <opaque>)) (loc ((line 5) (column 4))))))
+       (value (Int (T 0))))))
     |}]
 ;;
 
@@ -462,26 +559,155 @@ let%expect_test "match static unreachable in selected arm" =
     {|
 let _ =
   match static (0 @ static) {
-    0 -> unreachable,
-    _ -> 1,
+    _ -> unreachable,
   }
 ;;
 |};
-  [%expect {| ((loc ((line 4) (column 9))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 2)))
+     (reason (Misplaced_unreachable All_paths_unreachable)))
+    |}]
+;;
+
+(* A scrutinee with symbolic components can still decide the match: the second
+   arm matches in every instance, so its neighbors are dead. *)
+let%expect_test "match static partially known scrutinee decides the match" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static (n, 0) {
+    (_, 1) -> 0,
+    (x, 0) -> x,
+    _ -> 2,
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 4)))
+     (reason
+      (Dead_branch
+       (branch
+        (Arm
+         (Tuple
+          (elts
+           ((Var (id (Anon <opaque>)) (loc ((line 4) (column 5))))
+            (Literal (value (Int 1)) (loc ((line 4) (column 8))))))
+          (loc ((line 4) (column 4))))))
+       (value (Tuple ((Var (Anon <opaque>)) (Int (T 0))))))))
+    |}]
+;;
+
+(* Inside the [0] arm the scrutinee is rebound to [0], so a nested match on it
+   is decided: the nested wildcard arm is dead in every instance reaching the
+   outer arm. *)
+let%expect_test "arm refinement decides a nested match on the same scrutinee" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static n {
+    0 -> (match static n { 0 -> 10, _ -> unreachable }),
+    _ -> n,
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 36)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Var (id (Anon <opaque>)) (loc ((line 4) (column 36))))))
+       (value (Int (T 0))))))
+    |}]
+;;
+
+(* In the wildcard arm the scrutinee excludes [0], so a nested match on it is
+   decided the other way: the nested [0] arm is refuted. *)
+let%expect_test "learned exclusions decide a nested match on the same scrutinee" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static n {
+    0 -> 1,
+    _ -> match static n { 0 -> 99, _ -> n },
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 5) (column 26)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Literal (value (Int 0)) (loc ((line 5) (column 26))))))
+       (value
+        (Refine (value (Var (Anon <opaque>))) (excluded ((Literal (Int 0)))))))))
+    |}]
+;;
+
+(* An or-pattern predecessor excludes both alternatives, so the nested match is
+   decided past both of its literal arms. *)
+let%expect_test "or-pattern exclusions union into the arm's world" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static n {
+    0 | 1 -> n,
+    _ -> match static n { 0 -> 9, 1 -> 8, _ -> n },
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 5) (column 26)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Literal (value (Int 0)) (loc ((line 5) (column 26))))))
+       (value
+        (Refine (value (Var (Anon <opaque>)))
+         (excluded ((Literal (Int 0)) (Literal (Int 1)))))))))
+    |}]
+;;
+
+(* Refinements flatten across nesting levels: the innermost world excludes both
+   literals. *)
+let%expect_test "nested wildcard refinements merge their exclusions" =
+  go
+    {|
+fun f (static n : int) : int =
+  match static n {
+    0 -> 0,
+    _ ->
+      (match static n {
+         1 -> 1,
+         _ -> match static n { 0 -> 90, 1 -> 91, _ -> n },
+       }),
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 8) (column 31)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Literal (value (Int 0)) (loc ((line 8) (column 31))))))
+       (value
+        (Refine (value (Var (Anon <opaque>)))
+         (excluded ((Literal (Int 0)) (Literal (Int 1)))))))))
+    |}]
 ;;
 
 let%expect_test "match static or-pattern binds the matched alternative" =
   go
     {|
-let p = (0, 7) @ static;;
-
-let _ =
-  (match static p {
-     (0, y) | (y, 0) -> y,
-     _ -> 99,
-   })
-    : int
+fun f (static p : int ^ int) : int =
+  match static p {
+    (0, y) | (y, 0) -> y,
+    _ -> 99,
+  }
 ;;
+
+let _ = (f ((0, 7) @ static)) : int;;
 |};
   [%expect {| |}]
 ;;
@@ -599,15 +825,15 @@ let _ = assert erased (v == 1);;
 let%expect_test "match static or-pattern with per-alternative binding types" =
   go
     {|
-let p = (0, true) @ static;;
-
-let _ =
-  (match static p {
-     (0, y) | (y, true) -> y,
-     _ -> false,
-   })
-    : bool
+let f =
+  fn (static p : int ^ bool) ->
+    match static p {
+      (0, y) | (y, true) -> y,
+      _ -> false,
+    }
 ;;
+
+let _ = (f ((0, true) @ static)) : bool;;
 |};
   [%expect {| |}]
 ;;
@@ -640,10 +866,9 @@ let _ = f ((d 5, true));;
     |}]
 ;;
 
-let%expect_test "bottom scrutinee components collapse stuck matches" =
-  (* The scrutinee contains an unreachable component, so it reduces to
-     [Bottom] and the whole match collapses to [Bottom], which is below
-     [int]. *)
+(* A dead value cannot be built into a scrutinee: the tuple component is not a
+   branch tail. *)
+let%expect_test "unreachable cannot be built into a scrutinee" =
   go
     {|
 let f =
@@ -658,13 +883,96 @@ let f =
          : int)
 ;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 7) (column 35)))
+     (reason (Misplaced_unreachable Not_in_tail_position)))
+    |}]
 ;;
 
-let%expect_test "bottom scrutinee is not selected by an irrefutable arm" =
-  (* An irrefutable pattern matches even a [Bottom] scrutinee, but selecting
-     the arm would type this dead match as [bool]; it must collapse to
-     [Bottom] instead. *)
+(* An all-dead conditional is a spelling of [unreachable]: outside a branch
+   body it is rejected at the composite. *)
+let%expect_test "an all-dead match cannot be a scrutinee" =
+  go
+    {|
+let f =
+  fn (static c : bool) ->
+    match static (match static c { true -> unreachable, false -> unreachable }) {
+      0 -> 1,
+      _ -> 2,
+    }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 18)))
+     (reason (Misplaced_unreachable All_paths_unreachable)))
+    |}]
+;;
+
+(* A non-static function's body is emitted wherever the function survives, so
+   a dead body has no demand point to verify at: the dead function is spelled
+   [(unreachable : ty)] instead. *)
+let%expect_test "a dead closure body is rejected" =
+  go
+    {|
+fun f (static c : bool) : int =
+  let h = fn (x : int) -> (match static c { true -> unreachable, false -> unreachable }) in
+  match static (h 0) {
+    0 -> 1,
+    _ -> 2,
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 3) (column 27)))
+     (reason (Misplaced_unreachable All_paths_unreachable)))
+    |}]
+;;
+
+(* Same-scrutinee spelling: the outer arm decides the inner match, whose
+   non-selected arm is dead — the honest spelling is a bare [unreachable]. *)
+let%expect_test "an all-dead nested match is dead code" =
+  go
+    {|
+let opt = variant { a, b };;
+fun f (static o : opt) : int =
+  match static o {
+    .a -> (match static o { .a -> unreachable, .b -> unreachable }),
+    .b -> 0,
+  }
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 5) (column 11)))
+     (reason (Misplaced_unreachable All_paths_unreachable)))
+    |}]
+;;
+
+(* The argument position rejects the composite just like a bare
+   [unreachable]. *)
+let%expect_test "an all-dead match cannot be a function argument" =
+  go
+    {|
+let g = fn (y : int) -> y;;
+
+let f =
+  fn (static c : bool) ->
+    if erased c then 0 else g (match static c { true -> unreachable, false -> unreachable })
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 6) (column 31)))
+     (reason (Misplaced_unreachable All_paths_unreachable)))
+    |}]
+;;
+
+(* The scrutinee position is not a branch tail, even under an irrefutable
+   arm. *)
+let%expect_test "unreachable cannot be a scrutinee" =
   go
     {|
 let f =
@@ -672,5 +980,25 @@ let f =
     if erased b then 0 else ((match static (unreachable : int) { _ -> true }) : int)
 ;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 56)))
+     (reason (Misplaced_unreachable Not_in_tail_position)))
+    |}]
+;;
+
+(* Code before an [unreachable] is dead with it. *)
+let%expect_test "code before unreachable is dead" =
+  go
+    {|
+let f =
+  fn (static b : bool) ->
+    if erased b then 0 else (let x = 1 in unreachable)
+;;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 42)))
+     (reason (Misplaced_unreachable Not_in_head_position)))
+    |}]
 ;;

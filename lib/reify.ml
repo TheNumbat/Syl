@@ -75,6 +75,7 @@ let rec value_needs_reify (value : Value.t) =
   | Apply { fn; arg } -> value_needs_reify fn || value_needs_reify arg
   | Proj { tuple; _ } -> value_needs_reify tuple
   | Payload { variant; _ } -> value_needs_reify variant
+  | Refine { value; _ } -> value_needs_reify value
   | Constructor { payload; _ } -> Option.exists payload ~f:value_needs_reify
   | Match { scrutinee; arms } ->
     value_needs_reify scrutinee
@@ -151,7 +152,7 @@ and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
   | Proj _
   | Payload _
   | Inject _ -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
-  | (Apply _ | Match _) as value ->
+  | (Apply _ | Match _ | Refine _) as value ->
     if value_needs_reify value
     then raise_s [%message "Bug: stuck value cannot be reified" (value : Value.t)]
     else Literal { value; ty = desc.ty; mode = desc.mode; loc }

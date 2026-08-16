@@ -106,22 +106,6 @@ let _ = f 0;;
   [%expect {| |}]
 ;;
 
-let%expect_test "if erased with literal condition true" =
-  go
-    {|
-let _ = if erased true then 1 else true;;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "if erased with literal condition false" =
-  go
-    {|
-let _ = if erased false then 1 else true;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "if erased with static variable condition" =
   go
     {|

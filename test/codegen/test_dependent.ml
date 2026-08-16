@@ -278,15 +278,6 @@ let _ = f 2;;
 let%expect_test "dependent if" =
   go
     {|
-let f = fn (static x : int) -> (if erased x == (if true then x else 0) then 1 else true) : (if x == x then int else bool);;
-let _ = f 0;;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "dependent if" =
-  go
-    {|
 let f = fn (static x : int) -> (if erased x == x + 1 then 1 else true) : (if x == x + 1 then int else bool);;
 let _ = f 0;;
 |};

@@ -159,17 +159,6 @@ let _ = print_int (match y { .none -> 13, .some v -> v });;
     |}]
 ;;
 
-let%expect_test "static match payload projection" =
-  go
-    {|
-let opt = variant { none, some : int };;
-let x = opt.some 14;;
-let y = match static x { .none -> 0, .some v -> v };;
-let _ = print_int y;;
-|};
-  [%expect {| 14 |}]
-;;
-
 let%expect_test "three constructors chain tag tests" =
   go
     {|
@@ -435,10 +424,12 @@ let%expect_test "static match refinement over tuples and rebinds" =
 let opt = variant { none, some : int };;
 let a = opt.some 1;;
 let b = opt.none;;
-let r = match static (a, b) { (.some v, .none) -> v, (_, _) -> 0 };;
-let _ = print_int r;;
+fun sel (static p : opt ^ opt) : int =
+  match static p { (.some v, .none) -> v, (_, _) -> 0 }
+;;
+let _ = print_int (sel ((a, b)));;
 fun probe (static o : opt) : int =
-  match static o { .some v -> match static o { .some w -> w + v, .none -> 0 }, .none -> 0 }
+  match static o { .some v -> match static o { .some w -> w + v }, .none -> 0 }
 ;;
 let _ = print_int (probe (opt.some 20));;
 |};
@@ -447,6 +438,19 @@ let _ = print_int (probe (opt.some 20));;
     1
     40
     |}]
+;;
+
+(* Deleting the refuted [.none] arm is legal; the payload binds as a runtime
+   projection from the constructed variant. *)
+let%expect_test "static match payload projection" =
+  go
+    {|
+let opt = variant { none, some : int };;
+let x = opt.some 14;;
+let y = match static x { .some v -> v };;
+let _ = print_int y;;
+|};
+  [%expect {| 14 |}]
 ;;
 
 (* [vec 0] is a single-constructor variant with no payload storage; its match

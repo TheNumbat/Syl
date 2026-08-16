@@ -305,22 +305,6 @@ let _ = y + 1;;
   [%expect {| |}]
 ;;
 
-let%expect_test "fuzz: erased if with unreachable else" =
-  go
-    {|
-let _ = if erased true then 42 else unreachable;;
-|};
-  [%expect {| |}]
-;;
-
-let%expect_test "fuzz: erased if with unreachable then" =
-  go
-    {|
-let _ = if erased false then unreachable else 42;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "fuzz: static function returning closure over dynamic" =
   go
     {|

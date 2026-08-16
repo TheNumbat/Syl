@@ -24,7 +24,7 @@ fun replicate (static n : int) : int -> vec n =
   fn (x : int) ->
     match erased n {
       0 -> (vec n).nil,
-      _ -> (variant { cons : int ^ vec (n - 1) }).cons (x, replicate (n - 1) x),
+      _ -> (vec n).cons (x, replicate (n - 1) x),
     }
 ;;
 

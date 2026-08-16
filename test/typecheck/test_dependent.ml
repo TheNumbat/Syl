@@ -112,7 +112,11 @@ let%expect_test "if erased with literal condition true" =
     {|
 let _ = if erased true then 1 else true;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 8)))
+     (reason (Dead_branch (branch Else) (value (Bool (T true))))))
+    |}]
 ;;
 
 let%expect_test "if erased with literal condition false" =
@@ -120,7 +124,25 @@ let%expect_test "if erased with literal condition false" =
     {|
 let _ = if erased false then 1 else true;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 8)))
+     (reason (Dead_branch (branch Then) (value (Bool (T false))))))
+    |}]
+;;
+
+(* Not just literals: a condition that reduces to a constant while the parameter
+   is still symbolic is dead in every instance. *)
+let%expect_test "if erased condition decided by reduction" =
+  go
+    {|
+let f = fn (static x : int) -> if erased x == (if true then x else 0) then 1 else true;;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 31)))
+     (reason (Dead_branch (branch Else) (value (Bool (T true))))))
+    |}]
 ;;
 
 let%expect_test "if erased with static variable condition" =
@@ -207,7 +229,8 @@ let _ = h true;;
 let%expect_test "if erased true selects then branch type" =
   go
     {|
-let _ = (if erased true then 1 else true) : (if true then int else bool);;
+let f = fn (static c : bool) -> (if erased c then 1 else true) : (if c then int else bool);;
+let _ = (f true) : int;;
 |};
   [%expect {| |}]
 ;;
@@ -215,7 +238,8 @@ let _ = (if erased true then 1 else true) : (if true then int else bool);;
 let%expect_test "if erased false selects else branch type" =
   go
     {|
-let _ = (if erased false then 1 else true) : (if false then int else bool);;
+let f = fn (static c : bool) -> (if erased c then 1 else true) : (if c then int else bool);;
+let _ = (f false) : bool;;
 |};
   [%expect {| |}]
 ;;
@@ -924,7 +948,6 @@ let _ = fn (static x : int) ->
   let _ = assert erased (x == x / 1) in
   let _ = assert erased (-x == x / -1) in
   let _ = assert erased (x % 1 == 0) in
-  let _ = assert erased (x % x == 0) in
   let _ = assert erased (-(-x) == x) in
   let _ = assert erased (x == -(-x)) in
   let _ = assert erased (x * -1 == -x) in
@@ -935,6 +958,27 @@ let _ = fn (static x : int) ->
 ;;
   |};
   [%expect {| |}]
+;;
+
+(* x % x (like x / x) is not folded to a constant: both trap at x = 0, so the
+   identity does not hold for every instance. *)
+let%expect_test "same-operand division identities are not assumed" =
+  go
+    {|
+let _ = fn (static x : int) ->
+  let _ = assert erased (x % x == 0) in
+  ()
+;;
+  |};
+  [%expect
+    {|
+    ((loc ((line 3) (column 10)))
+     (reason
+      (Static_failure
+       (Assert_failed
+        (Bool
+         (Eq (Int (Mod (Var (Anon <opaque>)) (Var (Anon <opaque>)))) (Int (T 0))))))))
+    |}]
 ;;
 
 let%expect_test "static div by zero" =
@@ -1114,7 +1158,11 @@ let%expect_test "unreachable at top level is rejected" =
     {|
 let _ = unreachable;;
 |};
-  [%expect {| ((loc ((line 2) (column 8))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 8)))
+     (reason (Misplaced_unreachable Not_in_tail_position)))
+    |}]
 ;;
 
 let%expect_test "unreachable at top level rejected before type check" =
@@ -1122,7 +1170,11 @@ let%expect_test "unreachable at top level rejected before type check" =
     {|
 let _ = unreachable;;
 |};
-  [%expect {| ((loc ((line 2) (column 8))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 8)))
+     (reason (Misplaced_unreachable Not_in_tail_position)))
+    |}]
 ;;
 
 let%expect_test "unreachable in both branches of if erased" =
@@ -1131,7 +1183,11 @@ let%expect_test "unreachable in both branches of if erased" =
 let f = fn (static x : bool) ->
   if erased x then unreachable else unreachable;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 2)))
+     (reason (Misplaced_unreachable All_paths_unreachable)))
+    |}]
 ;;
 
 let%expect_test "unreachable in nested binder defined during monomorphization" =
@@ -1182,7 +1238,11 @@ let%expect_test "unreachable in dependent arrow return type — not concrete dur
     {|
 let f = fn (static g : static bool \ x -> if x then int else unreachable) -> g true;;
 |};
-  [%expect {| ((loc ((line 2) (column 61))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 61)))
+     (reason (Misplaced_unreachable Not_under_static_branch)))
+    |}]
 ;;
 
 let%expect_test "unreachable in dependent arrow return type with if erased — not concrete" =
@@ -1218,7 +1278,11 @@ let%expect_test
     {|
 fun f (static x : bool) : if x then int else unreachable = if erased x then 42 else unreachable;;
 |};
-  [%expect {| ((loc ((line 2) (column 45))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 45)))
+     (reason (Misplaced_unreachable Not_under_static_branch)))
+    |}]
 ;;
 
 let%expect_test "unreachable in fun body — not concrete during definition" =
@@ -1273,7 +1337,11 @@ let%expect_test "unreachable in dependent arrow return type — non-erased if su
     {|
 let f = fn (static g : static bool \ x -> if x then int else unreachable) -> ();;
 |};
-  [%expect {| ((loc ((line 2) (column 61))) (reason Unreachable_reached)) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 61)))
+     (reason (Misplaced_unreachable Not_under_static_branch)))
+    |}]
 ;;
 
 let%expect_test "unreachable in dependent arrow return type — non-erased if survives definition" =
@@ -1293,7 +1361,8 @@ let _ = f true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "unreachable leq — Bottom type accepted as function argument" =
+(* An argument is not a branch tail: passing a dead value is dead code. *)
+let%expect_test "unreachable cannot be a function argument" =
   go
     {|
 let f = fn (static x : bool) ->
@@ -1301,7 +1370,11 @@ let f = fn (static x : bool) ->
   if erased x then g 42 else g unreachable;;
 let _ = f true;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 31)))
+     (reason (Misplaced_unreachable Not_in_tail_position)))
+    |}]
 ;;
 
 let%expect_test "unreachable leq — Bottom type accepted where function type expected" =
@@ -1479,7 +1552,7 @@ fun erased unerase (erased t : type) : erased (erased t -> t) =
     |}]
 ;;
 
-let%expect_test "match static with literal scrutinee selects branch type" =
+let%expect_test "match static literal scrutinee shadows later arms" =
   go
     {|
 let _ =
@@ -1489,7 +1562,20 @@ let _ =
    })
     : int
 ;;
+|};
+  [%expect
+    {|
+    ((loc ((line 5) (column 5)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Var (id (Anon <opaque>)) (loc ((line 5) (column 5))))))
+       (value (Int (T 0))))))
+    |}]
+;;
 
+let%expect_test "match static literal scrutinee refutes earlier arms" =
+  go
+    {|
 let _ =
   (match static 3 {
      0 -> 1,
@@ -1498,7 +1584,14 @@ let _ =
     : bool
 ;;
 |};
-  [%expect {| |}]
+  [%expect
+    {|
+    ((loc ((line 4) (column 5)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Literal (value (Int 0)) (loc ((line 4) (column 5))))))
+       (value (Int (T 3))))))
+    |}]
 ;;
 
 let%expect_test "match static with static variable scrutinee" =
@@ -1519,7 +1612,10 @@ let b = f 1;;
   [%expect {| |}]
 ;;
 
-let%expect_test "no cross-shape equality with the equivalent if" =
+(* Cross-shape equality: the arm rules decompose the [x]-scrutineed conditional and
+   substitute each arm's implied value into the [x == 0]-scrutineed one, where the
+   comparison consumers decide the condition — the two spellings correlate. *)
+let%expect_test "cross-shape equality with the equivalent if" =
   go
     {|
 let f =
@@ -1530,24 +1626,12 @@ let f =
      })
       : (if x == 0 then int else bool)
 ;;
+
+let _ = f 0;;
+
+let _ = f 1;;
 |};
-  [%expect
-    {|
-    ((loc ((line 8) (column 6)))
-     (reason
-      (Type_mismatch
-       (got
-        (Match (scrutinee (Var (Anon <opaque>)))
-         (arms
-          (((Literal (value (Int 0)) (loc ((line 5) (column 7)))) (Type Int))
-           ((Var (id (Anon <opaque>)) (loc ((line 6) (column 7)))) (Type Bool))))))
-       (need
-        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
-         (arms
-          (((Literal (value (Bool true)) (loc ((line 8) (column 9)))) (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 8) (column 9))))
-            (Type Bool)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "match static annotated with the equivalent match" =
@@ -1617,7 +1701,9 @@ let _ = h 2;;
   [%expect {| |}]
 ;;
 
-let%expect_test "wildcard arms get no negative refinement" =
+(* The wildcard arm's world excludes [0], which resolves the dependent
+   conditional: [g n true] demands exactly the [n != 0] branch. *)
+let%expect_test "wildcard arms learn the negative refinement" =
   go
     {|
 let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
@@ -1629,20 +1715,12 @@ let h =
       _ -> g n true,
     }
 ;;
+
+let _ = h 0;;
+
+let _ = h 5;;
 |};
-  [%expect
-    {|
-    ((loc ((line 8) (column 11)))
-     (reason
-      (Type_mismatch (got (Type Bool))
-       (need
-        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
-         (arms
-          (((Literal (value (Bool true)) (loc ((line 2) (column 39))))
-            (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 2) (column 39))))
-            (Type Bool)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "match static refines tuple components" =
@@ -1751,7 +1829,7 @@ let f =
     |}]
 ;;
 
-let%expect_test "no cross-shape equality across an if chain" =
+let%expect_test "cross-shape equality across an if chain" =
   go
     {|
 let f =
@@ -1774,27 +1852,5 @@ let _ = f 1;;
 
 let _ = f 2;;
 |};
-  [%expect
-    {|
-    ((loc ((line 9) (column 6)))
-     (reason
-      (Type_mismatch
-       (got
-        (Match (scrutinee (Var (Anon <opaque>)))
-         (arms
-          (((Literal (value (Int 0)) (loc ((line 5) (column 7)))) (Type Int))
-           ((Literal (value (Int 1)) (loc ((line 6) (column 7)))) (Type Bool))
-           ((Var (id (Anon <opaque>)) (loc ((line 7) (column 7)))) (Type Unit))))))
-       (need
-        (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
-         (arms
-          (((Literal (value (Bool true)) (loc ((line 9) (column 9)))) (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 9) (column 9))))
-            (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 1)))))
-             (arms
-              (((Literal (value (Bool true)) (loc ((line 11) (column 14))))
-                (Type Bool))
-               ((Literal (value (Bool false)) (loc ((line 11) (column 14))))
-                (Type Unit)))))))))))))
-    |}]
+  [%expect {| |}]
 ;;
