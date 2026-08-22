@@ -24,6 +24,7 @@ module Error = struct
     type t =
       | Multiple_bindings of Ident.t
       | Expected_tuple of Value.t
+      | Expected_ref of Value.t
       | Redundant of Dst.Expr.pattern Nonempty_list.t
       | Non_exhaustive of Match.Result.Missing.t Nonempty_list.t
       | Or_unbound of Ident.t Nonempty_list.t
@@ -96,6 +97,8 @@ module Fail = struct
     let expected_tuple ~loc here got =
       raise (Error { loc; here; reason = Match (Expected_tuple got) })
     ;;
+
+    let expected_ref ~loc here got = raise (Error { loc; here; reason = Match (Expected_ref got) })
 
     let non_exhaustive ~loc here missing =
       raise (Error { loc; here; reason = Match (Non_exhaustive missing) })
@@ -177,25 +180,13 @@ module Fail = struct
 end
 
 module State = struct
-  module Whnf = Stdlib.Hashtbl.Make (struct
-      type t = Value.t
-
-      (* Interning makes physical equality coincide with structural
-         equality, and cells are immutable. *)
-      let equal = Hashcons.equal
-      let hash = Hashcons.hash
-    end)
-
-  module Leq = Stdlib.Hashtbl.Make (struct
-      type t = Value.t * Value.t
-
-      let equal (a1, b1) (a2, b2) = Hashcons.equal a1 a2 && Hashcons.equal b1 b2
-      let hash (a, b) = hash_int (Hashcons.hash a + Hashcons.hash b)
-    end)
+  module Pair = struct
+    type t = Value.t * Value.t [@@deriving sexp_of, compare, hash]
+  end
 
   module Spec = struct
     type t =
-      { key : Value.Concrete.t
+      { key : Value.t
       ; family : int
       }
     [@@deriving sexp_of, compare, hash]
@@ -212,7 +203,7 @@ module State = struct
   module Instance = struct
     type t =
       { uid : int
-      ; key : Value.Concrete.t
+      ; key : Value.t
       }
     [@@deriving sexp_of, compare, hash]
   end
@@ -230,23 +221,26 @@ module State = struct
     ; mutable depth : int
     ; mutable judgment_fuel : int
     ; mutable path : Spec.t list
-    ; leq : bool Leq.t
-    ; whnf : Value.t option Whnf.t
+    ; leq : (Pair.t, bool) Hashtbl.t
+    ; bisim : (Pair.t, unit) Hashtbl.t
+    ; whnf : (Value.t, Value.t option) Hashtbl.t
     ; families : (Family.t, int) Hashtbl.t
-    ; specializations : (Instance.t, Mono.t) Hashtbl.t
+    ; specializations : (Instance.t, Mono.t option) Hashtbl.t
     ; groups : (int, Ident.t) Hashtbl.t
     }
 
   let recursion_limit = 1000
   let judgment_limit = 1000
+  let bisim_limit = 16
 
   let create ~stamp =
     { stamp
     ; depth = 0
     ; judgment_fuel = -1
     ; path = []
-    ; leq = Leq.create 4096
-    ; whnf = Whnf.create 4096
+    ; leq = Hashtbl.create (module Pair)
+    ; bisim = Hashtbl.create (module Pair)
+    ; whnf = Hashtbl.create (module Value)
     ; families = Hashtbl.create (module Family)
     ; specializations = Hashtbl.create (module Instance)
     ; groups = Hashtbl.create (module Core.Int)
@@ -277,6 +271,14 @@ module State = struct
       f ())
   ;;
 
+  let assuming t pair ~f =
+    Hashtbl.mem t.bisim pair
+    ||
+    (if Hashtbl.length t.bisim >= bisim_limit then raise Gave_up;
+     Hashtbl.set t.bisim ~key:pair ~data:();
+     Exn.protect ~f ~finally:(fun () -> Hashtbl.remove t.bisim pair))
+  ;;
+
   let with_spec t spec ~f =
     t.path <- spec :: t.path;
     Exn.protect ~f ~finally:(fun () -> t.path <- List.tl_exn t.path)
@@ -295,12 +297,24 @@ module State = struct
     Hashtbl.find_or_add t.families key ~default:(fun () -> Hashtbl.length t.families)
   ;;
 
+  let in_progress t (instance : Instance.t) =
+    match Hashtbl.find t.specializations instance with
+    | Some None -> true
+    | Some (Some _) | None -> false
+  ;;
+
   let specialize t instance ~f =
     match Hashtbl.find t.specializations instance with
-    | Some mono -> mono
-    | None ->
-      let mono = f () in
-      Hashtbl.set t.specializations ~key:instance ~data:mono;
+    | Some (Some mono) -> mono
+    | (Some None | None) as entry ->
+      let owner = Option.is_none entry in
+      if owner then Hashtbl.set t.specializations ~key:instance ~data:None;
+      let mono =
+        Exn.protect ~f ~finally:(fun () ->
+          if owner && Hashtbl.mem t.specializations instance
+          then Hashtbl.remove t.specializations instance)
+      in
+      Hashtbl.set t.specializations ~key:instance ~data:(Some mono);
       mono
   ;;
 
@@ -316,16 +330,18 @@ module State = struct
     Hashtbl.fold
       t.specializations
       ~init:Core.Int.Map.empty
-      ~f:(fun ~key:{ uid = _; key } ~data:{ Mono.family; body; desc = _ } acc ->
-        Map.update acc family ~f:(fun monos ->
-          let monos = Option.value monos ~default:Value.Concrete.Map.empty in
-          Map.update monos key ~f:(function
-            | None -> body
-            | Some existing -> existing)))
+      ~f:(fun ~key:{ uid = _; key } ~data acc ->
+        match data with
+        | None -> acc
+        | Some { Mono.family; body; desc = _ } ->
+          Map.update acc family ~f:(fun monos ->
+            let monos = Option.value monos ~default:Core.Int.Map.empty in
+            Map.update monos (Hashcons.tag key) ~f:(function
+              | None -> body
+              | Some existing -> existing)))
   ;;
 end
 
-(* A static forced during its own computation becomes abstract. *)
 let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
   let expr : Expr.t =
     if (not (Modes.is_erased src_mode)) && Modes.is_erased dst_mode
@@ -427,9 +443,6 @@ and require_join state ~loc ty1 ty2 =
   | None -> Fail.cannot_unify [%here] ~loc ty1 ty2
   | exception Gave_up -> Fail.giveup_cannot_unify [%here] ~loc ty1 ty2
 
-(* The kind check is this function's own dispatch, so it normalizes what it
-   inspects; the returned value stays folded — dispatch sites own value
-   normalization, and folded spellings are what errors should print. *)
 and require_static_type ~loc state (desc : Desc.t) =
   require_static ~loc desc;
   require_leq state ~loc (unfold state desc.ty) (Value.type_ Type);
@@ -438,9 +451,7 @@ and require_static_type ~loc state (desc : Desc.t) =
 and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
   match dep with
   | T { ty; memo } ->
-    (match Value.Concrete.of_value arg_val with
-     | Some arg_concrete -> Hashtbl.set memo ~key:arg_concrete ~data:ty
-     | None -> ());
+    Hashtbl.set memo ~key:arg_val ~data:ty;
     ty
   | Reduce { env; arg; arg_ty; arg_mode; memo; ret_ty; uid = _ } ->
     let reduce kind =
@@ -449,12 +460,9 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
       let ret_ty_desc = reduce state env ret_ty in
       Lazy.force ret_ty_desc.static
     in
-    (match Value.Concrete.of_value arg_val with
-     | Some arg_concrete ->
-       Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> reduce Instancing
-         | Some ty -> ty)
-     | None -> reduce Reducing)
+    Hashtbl.update_and_return memo arg_val ~f:(function
+      | Some ty -> ty
+      | None -> reduce (if Dependent.is_concrete arg_val then Instancing else Reducing))
   | Typecheck { env; arg; arg_ty; arg_mode; memo; body; uid = _ } ->
     let reduce kind =
       let env = Env.enter env kind in
@@ -462,20 +470,17 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
       let body_desc = reduce state env body in
       body_desc.ty
     in
-    (match Value.Concrete.of_value arg_val with
-     | Some arg_concrete ->
-       Hashtbl.update_and_return memo arg_concrete ~f:(function
-         | None -> reduce Instancing
-         | Some ty -> ty)
-     | None -> reduce Reducing)
+    Hashtbl.update_and_return memo arg_val ~f:(function
+      | Some ty -> ty
+      | None -> reduce (if Dependent.is_concrete arg_val then Instancing else Reducing))
 
 and leq_value state (a : Value.t) (b : Value.t) =
   State.with_judgement state ~f:(fun () ->
-    match State.Leq.find_opt state.leq (a, b) with
+    match Hashtbl.find state.leq (a, b) with
     | Some verdict -> verdict
     | None ->
       let verdict = leq_value' state a b in
-      State.Leq.replace state.leq (a, b) verdict;
+      if Hashtbl.length state.bisim = 0 then Hashtbl.set state.leq ~key:(a, b) ~data:verdict;
       verdict)
 
 and leq_value' state (a : Value.t) (b : Value.t) =
@@ -486,8 +491,8 @@ and leq_value' state (a : Value.t) (b : Value.t) =
   | Bool a, Bool b -> leq_bool state a b
   | Int a, Int b -> leq_int state a b
   | Type a, Type b -> leq_ty state a b
-  | Closure a, Closure b -> Closure.equal a b
-  | Binder a, Binder b -> Binder.equal a b
+  | Closure p, Closure q -> Closure.equal p q || bisim_binder state a b
+  | Binder p, Binder q -> Binder.equal p q || bisim_binder state a b
   | Var a, Var b -> Ident.equal a b
   | Prim a, Prim b -> Builtin.Prim.equal a b
   | Tuple a_elts, Tuple b_elts ->
@@ -507,7 +512,10 @@ and leq_value' state (a : Value.t) (b : Value.t) =
   | Proj a, Proj b when a.index = b.index && leq_value state a.tuple b.tuple -> true
   | Payload a, Payload b
     when Ident.Label.equal a.label b.label && leq_value state a.variant b.variant -> true
-  | _, (Apply _ | Proj _ | Payload _ | Match _) | (Apply _ | Proj _ | Payload _ | Match _), _ ->
+  | Box a, Box b -> leq_value state a b
+  | Deref a, Deref b when leq_value state a b -> true
+  | _, (Apply _ | Proj _ | Payload _ | Match _ | Deref _)
+  | (Apply _ | Proj _ | Payload _ | Match _ | Deref _), _ ->
     (match State.judge state ~f:(fun () -> whnf state a) with
      | Some a -> leq_value state a b
      | None -> false)
@@ -534,6 +542,7 @@ and leq_value' state (a : Value.t) (b : Value.t) =
       | Tuple _
       | Inject _
       | Constructor _
+      | Box _
       | Prim _ )
     , _ ) -> false
 
@@ -560,7 +569,7 @@ and leq_arms state (a : Value.t) (b : Value.t) =
   | _ -> false
 
 and whnf (state : State.t) (value : Value.t) : Value.t option =
-  match State.Whnf.find_opt state.whnf value with
+  match Hashtbl.find state.whnf value with
   | Some result -> result
   | None ->
     let rec go ~progress value frames =
@@ -582,9 +591,7 @@ and whnf (state : State.t) (value : Value.t) : Value.t option =
       | ( (Binder { arg; ty; env; body_dst; _ } | Closure { arg; ty; env; body_dst; _ })
         , Apply arg_val :: frames ) ->
         let loc = Dst.Expr.loc body_dst in
-        let kind : Env.Kind.t =
-          if Option.is_some (Value.Concrete.of_value arg_val) then Instancing else Reducing
-        in
+        let kind : Env.Kind.t = if Dependent.is_concrete arg_val then Instancing else Reducing in
         State.recur state ~loc ~f:(fun () ->
           let env = Env.enter env kind in
           let env =
@@ -596,6 +603,7 @@ and whnf (state : State.t) (value : Value.t) : Value.t option =
           go ~progress:true (Lazy.force (reduce state env body_dst).static) frames)
       | Tuple elts, Proj index :: frames ->
         go ~progress:true (Nonempty_list.nth_exn elts index) frames
+      | Box payload, Deref :: frames -> go ~progress:true payload frames
       | Constructor { label = got; payload = Some payload }, Payload label :: frames
         when Ident.Label.equal got label -> go ~progress:true payload frames
       | ( ( Bottom
@@ -613,13 +621,15 @@ and whnf (state : State.t) (value : Value.t) : Value.t option =
           | Proj _
           | Payload _
           | External _
+          | Box _
+          | Deref _
           | Prim _ )
         , _ :: _ ) ->
         (* Surface the partial reduction *)
         if progress then Some (Value.Eliminator.unpeel head frames) else None
     in
     let result = go ~progress:false value [] in
-    State.Whnf.add state.whnf value result;
+    Hashtbl.set state.whnf ~key:value ~data:result;
     result
 
 and unfold state (ty : Value.t) : Value.t =
@@ -688,6 +698,12 @@ and join_value' state (a : Value.t) (b : Value.t) : Value.t Option.t =
          let%map payload = join_value state a_payload b_payload in
          Value.constructor ~label:a.label ~payload:(Some payload)
        | None, Some _ | Some _, None -> None)
+    | Box a, Box b ->
+      let%map payload = join_value state a b in
+      Value.box payload
+    | Deref a, Deref b ->
+      let%map ref = join_value state a b in
+      Value.deref ref
     | ( ( Bottom
         | Unit
         | Bool _
@@ -703,6 +719,8 @@ and join_value' state (a : Value.t) (b : Value.t) : Value.t Option.t =
         | Apply _
         | Proj _
         | Payload _
+        | Box _
+        | Deref _
         | Prim _ )
       , _ ) -> None)
 
@@ -767,6 +785,12 @@ and meet_value' state (a : Value.t) (b : Value.t) : Value.t Option.t =
          let%map payload = meet_value state a_payload b_payload in
          Value.constructor ~label:a.label ~payload:(Some payload)
        | None, Some _ | Some _, None -> None)
+    | Box a, Box b ->
+      let%map payload = meet_value state a b in
+      Value.box payload
+    | Deref a, Deref b ->
+      let%map ref = meet_value state a b in
+      Value.deref ref
     | ( ( Bottom
         | Unit
         | Bool _
@@ -782,6 +806,8 @@ and meet_value' state (a : Value.t) (b : Value.t) : Value.t Option.t =
         | Apply _
         | Proj _
         | Payload _
+        | Box _
+        | Deref _
         | Prim _ )
       , _ ) -> None)
 
@@ -841,6 +867,75 @@ and unify_int ~f (a : Int.t) (b : Int.t) : Value.t option =
 and join_int state a b = unify_int ~f:(join_value state) a b
 and meet_int state a b = unify_int ~f:(meet_value state) a b
 
+and is_suspension (v : Value.t) =
+  match v.node with
+  | Apply { fn; _ } -> is_suspension fn
+  | Binder _ | Closure _ -> true
+  | _ -> false
+
+and ref_content state (payload : Value.t) : Value.t option =
+  if is_suspension payload then whnf state payload else Some payload
+
+and ref_content_exn state (payload : Value.t) : Value.t =
+  match ref_content state payload with
+  | Some content -> content
+  | None -> raise_s [%message "Bug: ref name did not unfold" (payload : Value.t)]
+
+(* Refs are invariant *)
+and eq_ref state (a : Value.t) (b : Value.t) =
+  let equiv a b = leq_value state a b && leq_value state b a in
+  match is_suspension a, is_suspension b with
+  | true, true ->
+    (* Same-spine names short-circuit; distinct names may still be the same
+       type, so fall back to bisimulation. *)
+    let rec spine (a : Value.t) (b : Value.t) =
+      match a.node, b.node with
+      | Apply a, Apply b -> spine a.fn b.fn && equiv a.arg b.arg
+      | _ -> equiv a b
+    in
+    spine a b || bisim_ref state a b
+  | false, false -> equiv a b
+  | true, false | false, true ->
+    (match
+       ( State.judge state ~f:(fun () -> ref_content state a)
+       , State.judge state ~f:(fun () -> ref_content state b) )
+     with
+     | Some a, Some b -> equiv a b
+     | None, _ | _, None -> false)
+
+and bisim_ref state (a : Value.t) (b : Value.t) =
+  State.assuming state (a, b) ~f:(fun () ->
+    match
+      ( State.judge state ~f:(fun () -> ref_content state a)
+      , State.judge state ~f:(fun () -> ref_content state b) )
+    with
+    | Some a, Some b -> leq_value state a b && leq_value state b a
+    | None, _ | _, None -> false)
+
+and bisim_binder state (a : Value.t) (b : Value.t) =
+  let candidate (v : Value.t) =
+    match v.node with
+    | (Binder { arg; ty; body_dst; env; _ } | Closure { arg; ty; body_dst; env; _ })
+      when Modes.is_static (Ty.ret_mode ty) -> Some (arg, ty, body_dst, env)
+    | _ -> None
+  in
+  match candidate a, candidate b with
+  | Some ((_, p_ty, _, _) as p), Some ((_, q_ty, _, _) as q) ->
+    Modes.equal (Ty.arg_mode p_ty) (Ty.arg_mode q_ty)
+    && equal_value state (Ty.arg p_ty) (Ty.arg q_ty)
+    && State.assuming state (a, b) ~f:(fun () ->
+      State.judge state ~f:(fun () ->
+        let arg_val = State.fresh_var state in
+        let reduce_at (arg, ty, body_dst, env) =
+          State.recur state ~loc:(Dst.Expr.loc body_dst) ~f:(fun () ->
+            let env = Env.enter env Reducing in
+            let mode = { (Ty.arg_mode ty) with staticity = Static } in
+            let env = Env.bind env arg { ty = Ty.arg ty; mode; static = Lazy.from_val arg_val } in
+            Lazy.force (reduce state env body_dst).static)
+        in
+        equal_value state (reduce_at p) (reduce_at q)))
+  | _, _ -> false
+
 and leq_ty state a b =
   match a, b with
   | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
@@ -883,7 +978,8 @@ and leq_ty state a b =
       | Some None, None -> true
       | Some (Some b), Some a -> leq_value state a b
       | Some None, Some _ | Some (Some _), None | None, _ -> false)
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> false
+  | Ref a, Ref b -> eq_ref state a b
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _ | Ref _), _ -> false
 
 and join_dependent state (a : Dependent.t) (b : Dependent.t) : Dependent.t option =
   match a, b with
@@ -951,7 +1047,9 @@ and join_ty state a b =
       ; ret_mode = Modes.join a_ret_mode b_ret_mode
       }
   | Variant a_ctors, Variant b_ctors -> Ty.unify_constructors ~f:(join_value state) a_ctors b_ctors
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> None
+  | Ref a, Ref b ->
+    if eq_ref state a b then Some (Ty.Ref (if is_suspension a then a else b)) else None
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _ | Ref _), _ -> None
 
 and meet_ty state a b =
   match a, b with
@@ -1009,7 +1107,9 @@ and meet_ty state a b =
       ; ret_mode = Modes.meet a_ret_mode b_ret_mode
       }
   | Variant a_ctors, Variant b_ctors -> Ty.unify_constructors ~f:(meet_value state) a_ctors b_ctors
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> None
+  | Ref a, Ref b ->
+    if eq_ref state a b then Some (Ty.Ref (if is_suspension a then a else b)) else None
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _ | Ref _), _ -> None
 
 and reduce state env (expr : Dst.Expr.t) : Desc.t =
   let _expr, expr_desc = typecheck state env expr in
@@ -1027,6 +1127,10 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
   | Lambda { arg; arg_mode; arg_ty; body = body_dst; loc } ->
     typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc
   | Apply { fn; arg; loc } -> typecheck_apply state env ~fn ~arg ~loc
+  | Select { expr; label; loc } -> typecheck_select state env ~expr ~label ~loc
+  | Variant { constructors; loc } -> typecheck_variant state env ~constructors ~loc
+  | Ref { arg; loc } -> typecheck_ref state env ~arg ~loc
+  | Box { arg; loc } -> typecheck_box state env ~arg ~loc
   | Literal { value; loc } ->
     let ty = Value.type_ (Ty.of_literal value) in
     let value = Value.of_literal value in
@@ -1090,55 +1194,79 @@ and typecheck' state env (expr : Dst.Expr.t) : Expr.t * Desc.t =
     Expr.tuple ~loc elts
   | Constructor { loc; _ } ->
     raise_s [%message "Unimplemented: variant constructors" (loc : Lex.Location.t)]
-  | Select { expr; label; loc } ->
-    (* TODO record projection *)
-    let _expr, expr_desc = typecheck state env expr in
-    let var_ty = unfold state (require_static_type ~loc state expr_desc) in
-    (match var_ty.node with
-     | Type (Variant constructors) ->
-       (match Map.find constructors label with
-        | None -> Fail.unknown_label [%here] ~loc var_ty label
-        | Some None ->
-          let value = Value.constructor ~label ~payload:None in
-          let mode = Modes.create ~staticity:Static ~erasure:Unerased in
-          ( Literal { value; ty = var_ty; mode; loc }
-          , { ty = var_ty; mode; static = Lazy.from_val value } )
-        | Some (Some payload_ty) ->
-          (* An injection function whose result is as static as its argument. *)
-          let ty =
-            Value.type_
-              (Arrow
-                 { arg_ty = payload_ty
-                 ; arg_mode = Modes.default ()
-                 ; ret_ty = var_ty
-                 ; ret_mode = Modes.create ~staticity:Static ~erasure:Unerased
-                 })
-          in
-          let value = Value.inject ~ty:var_ty ~label in
-          let mode = Modes.create ~staticity:Static ~erasure:Unerased in
-          Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value })
-     | _ -> Fail.expected_variant [%here] ~loc var_ty label)
-  | Variant { constructors; loc } ->
-    let ty = Value.type_ Type in
-    let mode = Modes.create ~staticity:Static ~erasure:Erased in
-    let constructors =
-      Nonempty_list.map constructors ~f:(fun { Dst.Expr.label; payload } ->
-        let payload =
-          Option.map payload ~f:(fun payload ->
-            let payload_desc = reduce state env payload in
-            require_static_type state ~loc payload_desc)
-        in
-        label, payload)
-    in
-    let constructors =
-      match Ident.Label.Map.of_alist (Nonempty_list.to_list constructors) with
-      | `Ok constructors -> constructors
-      | `Duplicate_key label -> Fail.duplicate_label [%here] ~loc label
-    in
-    let value = Value.type_ (Variant constructors) in
-    Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
 
-and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode : Value.t =
+and typecheck_select state env ~expr ~label ~loc =
+  (* TODO record projection *)
+  let _expr, expr_desc = typecheck state env expr in
+  let var_ty = unfold state (require_static_type ~loc state expr_desc) in
+  match var_ty.node with
+  | Type (Variant constructors) ->
+    (match Map.find constructors label with
+     | None -> Fail.unknown_label [%here] ~loc var_ty label
+     | Some None ->
+       let value = Value.constructor ~label ~payload:None in
+       let mode = Modes.create ~staticity:Static ~erasure:Unerased in
+       ( Literal { value; ty = var_ty; mode; loc }
+       , { ty = var_ty; mode; static = Lazy.from_val value } )
+     | Some (Some payload_ty) ->
+       (* An injection function whose result is as static as its argument. *)
+       let ty =
+         Value.type_
+           (Arrow
+              { arg_ty = payload_ty
+              ; arg_mode = Modes.default ()
+              ; ret_ty = var_ty
+              ; ret_mode = Modes.create ~staticity:Static ~erasure:Unerased
+              })
+       in
+       let value = Value.inject ~ty:var_ty ~label in
+       let mode = Modes.create ~staticity:Static ~erasure:Unerased in
+       Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value })
+  | _ -> Fail.expected_variant [%here] ~loc var_ty label
+
+and typecheck_variant state env ~constructors ~loc =
+  let ty = Value.type_ Type in
+  let mode = Modes.create ~staticity:Static ~erasure:Erased in
+  let constructors =
+    Nonempty_list.map constructors ~f:(fun { Dst.Expr.label; payload } ->
+      let payload =
+        Option.map payload ~f:(fun payload ->
+          let payload_desc = reduce state env payload in
+          require_static_type state ~loc payload_desc)
+      in
+      label, payload)
+  in
+  let constructors =
+    match Ident.Label.Map.of_alist (Nonempty_list.to_list constructors) with
+    | `Ok constructors -> constructors
+    | `Duplicate_key label -> Fail.duplicate_label [%here] ~loc label
+  in
+  let value = Value.type_ (Variant constructors) in
+  Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
+
+and typecheck_ref state env ~arg ~loc =
+  let _arg_expr, arg_desc =
+    match (arg : Dst.Expr.t) with
+    | Apply { fn; arg = inner; loc = app_loc } ->
+      typecheck_apply ~suspended:true state env ~fn ~arg:inner ~loc:app_loc
+    | _ -> typecheck state env arg
+  in
+  let payload = require_static_type ~loc state arg_desc in
+  let ty = Value.type_ Type in
+  let mode = Modes.create ~staticity:Static ~erasure:Erased in
+  let value = Value.type_ (Ref payload) in
+  Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
+
+and typecheck_box state env ~arg ~loc =
+  let arg_expr, arg_desc = typecheck state env arg in
+  let ty = Value.type_ (Ref arg_desc.ty) in
+  let mode = arg_desc.mode in
+  let static = Lazy.map arg_desc.static ~f:Value.box in
+  if Modes.is_erased mode
+  then Erased { ty; mode; loc }, { Desc.ty; mode; static }
+  else Make_ref { payload = arg_expr; ty; mode; loc }, { Desc.ty; mode; static }
+
+and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode =
   let arg_desc = reduce state env arg_ty in
   let arg_mode = require_mode_annotation (Modes.default ()) arg_mode in
   let ret_mode = require_mode_annotation (Modes.default ~staticity:Static ()) ret_mode in
@@ -1252,7 +1380,7 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
         require_mode ~loc body_desc.mode ret_mode;
         require_leq state ~loc body_desc.ty (eval state ret_ty arg_val);
         if Modes.is_unerased mode
-        then Some (Binder { var; arg; body = Value.Concrete.Map.empty; ty; mode; family; loc })
+        then Some (Binder { var; arg; body = Core.Int.Map.empty; ty; mode; family; loc })
         else None
       | _ -> raise_s [%message "Bug: expected function type"])
   in
@@ -1314,12 +1442,12 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
     let expr : Expr.t =
       if Modes.is_erased fn_mode
       then Erased { ty; mode = fn_mode; loc }
-      else Binder { arg; ty; body = Value.Concrete.Map.empty; mode = fn_mode; family; loc }
+      else Binder { arg; ty; body = Core.Int.Map.empty; mode = fn_mode; family; loc }
     in
     expr, { ty; mode = fn_mode; static }
 
-and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mode ~arg_val key =
-  State.specialize state { uid = binder.uid; key } ~f:(fun () ->
+and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mode ~arg_val =
+  State.specialize state { uid = binder.uid; key = arg_val } ~f:(fun () ->
     let env =
       Env.bind
         binder.env
@@ -1327,7 +1455,7 @@ and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mod
         { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
     in
     let body, body_desc =
-      State.with_spec state { family = binder.family; key } ~f:(fun () ->
+      State.with_spec state { family = binder.family; key = arg_val } ~f:(fun () ->
         typecheck state (Env.enter env Instancing) binder.body_dst)
     in
     let body =
@@ -1346,9 +1474,15 @@ and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mod
     let body, desc = weaken ~loc body body_desc ~ty:ret_ty ~mode:ret_mode in
     { State.Mono.family = binder.family; body; desc })
 
-and typecheck_apply state env ~fn ~arg ~loc =
+and typecheck_apply ?(suspended = false) state env ~fn ~arg ~loc =
   let open Lazy.Let_syntax in
-  let fn, fn_desc = typecheck state env fn in
+  let fn, fn_desc =
+    (* Suspension is spine-deep *)
+    match (fn : Dst.Expr.t) with
+    | Apply { fn = spine_fn; arg = spine_arg; loc = spine_loc } when suspended ->
+      typecheck_apply ~suspended:true state env ~fn:spine_fn ~arg:spine_arg ~loc:spine_loc
+    | _ -> typecheck state env fn
+  in
   let arg, arg_desc = typecheck state env arg in
   let fn_desc = { fn_desc with ty = unfold state fn_desc.ty } in
   match fn_desc.ty.node with
@@ -1359,34 +1493,37 @@ and typecheck_apply state env ~fn ~arg ~loc =
     let mode = resolve_app_mode ~loc fn_desc ret_mode in
     let fn_val = Lazy.force fn_desc.static in
     let arg_val = Lazy.force arg_desc.static in
-    let key = Value.Concrete.of_value arg_val in
+    let keyable = Dependent.is_concrete arg_val in
     let ty =
-      match fn_val.node, key with
-      | Binder binder, Some key ->
-        State.with_spec state { family = binder.family; key } ~f:(fun () ->
+      match fn_val.node with
+      | Binder binder when keyable ->
+        State.with_spec state { family = binder.family; key = arg_val } ~f:(fun () ->
           eval state ret_ty arg_val)
       | _ -> eval state ret_ty arg_val
     in
-    (match fn_val.node, key with
-     | Value.Binder binder, Some key ->
-       let mono =
-         specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val key
-       in
-       let desc = { Desc.ty; mode; static = mono.desc.static } in
-       if Modes.is_erased mode
-       then Erased { ty; mode; loc }, desc
-       else
-         Specialize { fn; arg; target = Family binder.family; key = Some key; ty; mode; loc }, desc
-     | Binder binder, None ->
-       let static =
-         if Modes.is_static ret_mode
-         then Lazy.from_val (Value.apply ~fn:(Value.binder binder) ~arg:arg_val)
-         else Fail.unreachable [%here] ~loc
-       in
-       let desc = { Desc.ty; mode; static } in
-       if Modes.is_erased mode
-       then Erased { ty; mode; loc }, desc
-       else Apply { fn; arg; ty; mode; loc }, desc
+    let stuck () =
+      if Modes.is_static ret_mode
+      then Lazy.from_val (Value.apply ~fn:fn_val ~arg:arg_val)
+      else Fail.unreachable [%here] ~loc
+    in
+    let emit static expr =
+      let desc = { Desc.ty; mode; static } in
+      if Modes.is_erased mode then Expr.Erased { ty; mode; loc }, desc else expr, desc
+    in
+    (match fn_val.node, keyable with
+     | Binder _, _ when suspended -> emit (stuck ()) (Apply { fn; arg; ty; mode; loc })
+     | Binder _, false -> emit (stuck ()) (Apply { fn; arg; ty; mode; loc })
+     | Binder binder, true ->
+       if State.in_progress state { uid = binder.uid; key = arg_val } && Value.is_fn_type ty
+       then
+         emit
+           (stuck ())
+           (Specialize { fn; arg; target = Family binder.family; key = Some arg_val; ty; mode; loc })
+       else (
+         let mono = specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val in
+         emit
+           mono.desc.static
+           (Specialize { fn; arg; target = Family binder.family; key = Some arg_val; ty; mode; loc }))
      | Closure closure, _ ->
        let static =
          if Modes.is_static ret_mode
@@ -1400,10 +1537,9 @@ and typecheck_apply state env ~fn ~arg ~loc =
            (reduce state env closure.body_dst).static)
          else Fail.unreachable [%here] ~loc
        in
-       let desc = { Desc.ty; mode; static } in
-       if Modes.is_erased mode
-       then Erased { ty; mode; loc }, desc
-       else Specialize { fn; arg; ty; target = Family closure.family; key = None; mode; loc }, desc
+       emit
+         static
+         (Specialize { fn; arg; ty; target = Family closure.family; key = None; mode; loc })
      | Prim prim, _ ->
        let static =
          if Modes.is_static ret_mode
@@ -1427,16 +1563,7 @@ and typecheck_apply state env ~fn ~arg ~loc =
            Literal { value = Lazy.force static; ty; mode; loc }, { desc with mode }
          | _ -> Erased { ty; mode; loc }, desc)
        else Specialize { fn; arg; ty; target = Prim prim; key = None; mode; loc }, desc
-     | _, _ ->
-       let static =
-         if Modes.is_static ret_mode
-         then Lazy.from_val (Value.apply ~fn:fn_val ~arg:arg_val)
-         else Fail.unreachable [%here] ~loc
-       in
-       let desc = { Desc.ty; mode; static } in
-       if Modes.is_erased mode
-       then Erased { ty; mode; loc }, desc
-       else Apply { fn; arg; ty; mode; loc }, desc)
+     | _, _ -> emit (stuck ()) (Apply { fn; arg; ty; mode; loc }))
   | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode }) ->
     require_mode ~loc arg_desc.mode arg_mode;
     require_leq state ~loc arg_desc.ty arg_ty;
@@ -1768,6 +1895,16 @@ and pattern_bindings state ~(desc : Desc.t) (pattern : Dst.Expr.pattern) : Desc.
          |> Map.merge_skewed acc ~combine:(fun ~key _ _ ->
            Fail.Match.multiple_bindings [%here] ~loc key))
      | _ -> Fail.Match.expected_tuple [%here] ~loc desc.ty)
+  | Ref { payload; loc } ->
+    let desc = { desc with ty = unfold state desc.ty } in
+    (match desc.ty.node with
+     | Type (Ref p) ->
+       let content = ref_content_exn state p in
+       pattern_bindings
+         state
+         ~desc:{ Desc.ty = content; mode = desc.mode; static = Lazy.map desc.static ~f:Value.deref }
+         payload
+     | _ -> Fail.Match.expected_ref [%here] ~loc desc.ty)
   | Or { left; right; loc } ->
     let lhs = pattern_bindings state ~desc left in
     let rhs = pattern_bindings state ~desc right in
@@ -1827,10 +1964,16 @@ and project_desc state ~loc (desc : Desc.t) (step : Pattern.Step.t) : Desc.t =
        }
      | Some None | None ->
        raise_s [%message "Bug: expected payload" (label : Ident.Label.t) (loc : Lex.Location.t)])
+  | Deref, Type (Ref p) ->
+    { Desc.ty = ref_content_exn state p
+    ; mode = desc.mode
+    ; static = Lazy.map desc.static ~f:Value.deref
+    }
   | Index _, _ ->
     raise_s [%message "Bug: expected tuple type" (ty : Value.t) (loc : Lex.Location.t)]
   | Payload _, _ ->
     raise_s [%message "Bug: expected variant type" (ty : Value.t) (loc : Lex.Location.t)]
+  | Deref, _ -> raise_s [%message "Bug: expected ref type" (ty : Value.t) (loc : Lex.Location.t)]
 
 and project_scrut ~loc (state : State.t) (scrutinee : Expr.t) (scrutinee_desc : Desc.t) path =
   List.fold path ~init:(scrutinee, scrutinee_desc) ~f:(fun (expr, desc) (step : Pattern.Step.t) ->
@@ -1841,6 +1984,7 @@ and project_scrut ~loc (state : State.t) (scrutinee : Expr.t) (scrutinee_desc : 
         Expr.Tuple_get { tuple = expr; index; ty = projected.ty; mode = desc.mode; loc }
       | Payload label ->
         Expr.Payload_get { variant = expr; label; ty = projected.ty; mode = desc.mode; loc }
+      | Deref -> Expr.Ref_get { ref = expr; ty = projected.ty; mode = desc.mode; loc }
     in
     expr, projected)
 
@@ -1889,6 +2033,7 @@ and build_match state ~loc ~static ~scrutinee ~scrutinee_desc ~cases ~compiled ~
             let then_ = build_switch body in
             Expr.Split { cond; then_; else_ = acc }
           | Tuple _ -> build_switch body
+          | Ref -> build_switch body
           | Constructor { label; payload = _ } ->
             let cond =
               Expr.Tag_test
@@ -1977,6 +2122,7 @@ let rec check_unreachable ~position ~in_branch (expr : Dst.Expr.t) =
   | Select { expr; label = _; loc = _ } -> check_consumed expr
   | Variant { constructors; loc = _ } ->
     Nonempty_list.iter constructors ~f:(fun { payload; _ } -> Option.iter payload ~f:check_consumed)
+  | Ref { arg; loc = _ } | Box { arg; loc = _ } -> check_consumed arg
   | Var _ | Literal _ | Constructor _ | Builtin _ -> ()
 ;;
 
@@ -2035,7 +2181,9 @@ let typecheck_exn (dst : Dst.Program.t) : Program.t =
   let groups = Core.Int.Map.of_hashtbl_exn state.groups in
   (* Check reify doesn't expand the monomorphization store. *)
   let specialization_count = Hashtbl.length state.specializations in
-  let top_levels = Reify.program ~monos:(State.collect_monos state) ~groups program in
+  let top_levels =
+    Reify.program ~monos:(State.collect_monos state) ~groups ~unfold:(unfold state) program
+  in
   if Hashtbl.length state.specializations <> specialization_count
   then raise_s [%message "Bug: specializations created during reification"];
   { top_levels; stamp = state.stamp }

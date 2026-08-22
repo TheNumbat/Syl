@@ -75,7 +75,7 @@ let op_to_ident : Lex.Op.t -> Ident.t option = function
   | Lte -> Some Ident.(binop Lte)
   | Gt -> Some Ident.(binop Gt)
   | Gte -> Some Ident.(binop Gte)
-  | Tilde | Backslash | Arrow | Caret | Comma -> None
+  | Tilde | Backslash | Arrow | Caret | Comma | Amp -> None
 ;;
 
 let expect_ident t =
@@ -362,8 +362,20 @@ and expr_neg t : Expr.t =
 and can_start_atom t =
   match Tokenizer.peek t.tokens with
   | Op Not
-  | Assert | Match | If | Fun | Fn | Let | Lparen | Unit | Bool _ | Int _ | Ident _ | Unreachable ->
-    true
+  | Op Amp
+  | Assert
+  | Box
+  | Match
+  | If
+  | Fun
+  | Fn
+  | Let
+  | Lparen
+  | Unit
+  | Bool _
+  | Int _
+  | Ident _
+  | Unreachable -> true
   | _ -> false
 
 and expr_app t : Expr.t =
@@ -380,6 +392,10 @@ and expr_lnot t : Expr.t =
     Tokenizer.skip t.tokens;
     let arg = expr_select t in
     with_loc ~loc ~before:comments (Unop { op = Not; arg })
+  | Op Amp ->
+    Tokenizer.skip t.tokens;
+    let arg = expr_select t in
+    with_loc ~loc ~before:comments (Ref { arg })
   | _ ->
     let expr = expr_select t in
     if List.is_empty comments then expr else { expr with before = comments @ expr.before }
@@ -406,6 +422,9 @@ and expr_primary t : Expr.t =
       let erased = maybe_erased t in
       let cond = expr_lnot t in
       Assert { cond; erased; before_erased }
+    | Box ->
+      let arg = expr_lnot t in
+      Box { arg }
     | Match ->
       let _, before_elimination = leading t in
       let eliminator = maybe_eliminator t in
@@ -534,7 +553,7 @@ and parse_arg t : Expr.arg =
 
 and can_start_pattern_atom t =
   match Tokenizer.peek t.tokens with
-  | Unit | Bool _ | Int _ | Ident _ | Label _ | Lparen -> true
+  | Unit | Bool _ | Int _ | Ident _ | Label _ | Lparen | Op Amp -> true
   | _ -> false
 
 and pattern_atom t : Expr.pattern =
@@ -548,6 +567,7 @@ and pattern_atom t : Expr.pattern =
     | Label name ->
       let payload = if can_start_pattern_atom t then Some (pattern_atom t) else None in
       Constructor { label = Label.of_string name; payload }
+    | Op Amp -> Ref { payload = pattern_atom t }
     | Lparen ->
       let inner = parse_pattern t in
       expect t ~kind:Rparen;

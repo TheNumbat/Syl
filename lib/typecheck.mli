@@ -23,6 +23,7 @@ module Error : sig
     type t =
       | Multiple_bindings of Ident.t
       | Expected_tuple of Value.t
+      | Expected_ref of Value.t
       | Redundant of Dst.Expr.pattern Nonempty_list.t
       | Non_exhaustive of Match.Result.Missing.t Nonempty_list.t
       | Or_unbound of Ident.t Nonempty_list.t

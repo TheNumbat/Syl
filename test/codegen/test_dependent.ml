@@ -497,3 +497,81 @@ let _ = print_int (size ((int ^ bool) -> unit));;
     1
     |}]
 ;;
+
+let%expect_test "a length-indexed vector built by curried recursion" =
+  (* The curried [vec]/[mk] recursion re-applies each family at the same
+     concrete element type from inside its own specialization; the in-progress
+     instance is black-holed and the dispatch resolves at reify. *)
+  go
+    {|
+fun nat (erased _ : unit) : erased type = variant { z, s : &(nat ()) };;
+let nat = nat ();;
+let two = nat.s box (nat.s box nat.z);;
+fun vec (erased t : type) : erased (static nat -> erased type) =
+  fn (static n : nat) ->
+    match static n {
+      .z -> variant { nil },
+      .s &m -> variant { cons : t ^ vec t m },
+    }
+;;
+fun mk (erased t : type) : (static nat \ n -> t -> vec t n) =
+  fn (static n : nat) ->
+    fn (x : t) ->
+      match static n {
+        .z -> (vec t n).nil,
+        .s &m -> (vec t n).cons (x, mk t m x),
+      }
+;;
+let _ =
+  let v = mk int two 42 in
+  match v { .cons (x, .cons (y, .nil)) -> let _ = print_int x in let _ = print_int y in () }
+;;
+|};
+  [%expect
+    {|
+    42
+    42
+    |}]
+;;
+
+let%expect_test "length-indexed append runs" =
+  go
+    {|
+fun nat (erased _ : unit) : erased type = variant { z, s : &(nat ()) };;
+let nat = nat ();;
+let one = nat.s box nat.z;;
+let two = nat.s box one;;
+fun add (static nm : nat ^ nat) : static nat =
+  match static nm { (.z, n) -> n, (.s &m, n) -> nat.s box (add (m, n)) };;
+fun vec (erased t : type) : erased (static nat -> erased type) =
+  fn (static n : nat) ->
+    match static n { .z -> variant { nil }, .s &m -> variant { cons : t ^ vec t m } };;
+fun mk (erased t : type) : (static nat \ n -> t -> vec t n) =
+  fn (static n : nat) ->
+    fn (x : t) ->
+      match static n { .z -> (vec t n).nil, .s &m -> (vec t n).cons (x, mk t m x) };;
+fun append
+  (erased t : type) : (static nat \ n -> static nat \ m
+                         -> vec t n -> vec t m -> vec t (add (n, m))) =
+  fn (static n : nat) -> fn (static m : nat) ->
+    fn (v1 : vec t n) -> fn (v2 : vec t m) ->
+      match static n {
+        .z -> v2,
+        .s &k -> match v1 { .cons (x, xs) -> (vec t (add (n, m))).cons (x, append t k m xs v2) },
+      }
+;;
+let _ =
+  let a = mk int one 7 in
+  let b = mk int two 9 in
+  let c = append int one two a b in
+  match c { .cons (x, .cons (y, .cons (z, .nil))) ->
+    let _ = print_int x in let _ = print_int y in let _ = print_int z in () }
+;;
+|};
+  [%expect
+    {|
+    7
+    9
+    9
+    |}]
+;;

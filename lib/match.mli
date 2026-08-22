@@ -20,6 +20,10 @@ module Pattern : sig
         { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
         }
+    | Ref of
+        { payload : t
+        ; loc : Lex.Location.t
+        }
     | Or of
         { left : t
         ; right : t
@@ -45,6 +49,7 @@ module Tree : sig
           { label : Ident.Label.t
           ; payload : bool
           }
+      | Ref
     [@@deriving sexp_of]
   end
 
@@ -72,6 +77,7 @@ module Result : sig
           { label : Ident.Label.t
           ; payload : t option
           }
+      | Ref of t
       | Or of t Nonempty_list.t
       | Excluding of Literal.t Nonempty_list.t
     [@@deriving sexp_of]

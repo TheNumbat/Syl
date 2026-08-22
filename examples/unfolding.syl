@@ -18,11 +18,11 @@ let _ = (true, 1) : swap (int, bool);;
 (* A variant value built at compile time can also be unpacked at compile
    time. In [unbox] [inner] is a stuck payload extraction, which gets
    reduced when unbox is applied. *)
-let boxed = variant { box : int };;
+let boxed = variant { wrap : int };;
 
-let unbox = fn (static v : boxed) -> match static v { .box inner -> inner };;
+let unbox = fn (static v : boxed) -> match static v { .wrap inner -> inner };;
 
-let _ = print_int (unbox (boxed.box 7));;
+let _ = print_int (unbox (boxed.wrap 7));;
 
 (* The anonymous application is pushed into both arms, and the result
    is a stuck conditional, resolved when applied. *)
@@ -57,7 +57,7 @@ fun nested (static n : int) : erased type =
 let _ = (1, (2, 3)) : nested 3;;
 
 (* The shapes compose: unbox unfolds to [2], then nested to [int ^ int]. *)
-let _ = (1, 2) : nested (unbox (boxed.box 2));;
+let _ = (1, 2) : nested (unbox (boxed.wrap 2));;
 
 (* Entering a match arm rebinds the scrutinee to what the pattern implies,
    so scrutinee-dependent types reduce inside the arm. *)

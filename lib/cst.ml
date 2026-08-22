@@ -50,6 +50,7 @@ module Expr = struct
         ; payload : pattern option
         }
     | Tuple of { elts : pattern Nonempty_list.t }
+    | Ref of { payload : pattern }
     | Or of
         { left : pattern
         ; right : pattern
@@ -119,6 +120,8 @@ module Expr = struct
         ; label : Ident.Label.t
         }
     | Variant of { constructors : constructor Nonempty_list.t }
+    | Ref of { arg : t }
+    | Box of { arg : t }
     | Unop of
         { op : Ident.Unop.t
         ; arg : t
@@ -212,6 +215,8 @@ module Expr = struct
     | Select { expr; label } -> Select { expr = strip expr; label }
     | Variant { constructors } ->
       Variant { constructors = Nonempty_list.map constructors ~f:strip_constructor }
+    | Ref { arg } -> Ref { arg = strip arg }
+    | Box { arg } -> Box { arg = strip arg }
     | Unop { op; arg } -> Unop { op; arg = strip arg }
     | Binop { op; lhs; rhs } -> Binop { op; lhs = strip lhs; rhs = strip rhs }
     | Make_tuple { elts } -> Make_tuple { elts = Nonempty_list.map elts ~f:strip }
@@ -231,6 +236,7 @@ module Expr = struct
     | Constructor { label; payload } ->
       Constructor { label; payload = Option.map payload ~f:strip_pattern }
     | Tuple { elts } -> Tuple { elts = Nonempty_list.map elts ~f:strip_pattern }
+    | Ref { payload } -> Ref { payload = strip_pattern payload }
     | Or { left; right } -> Or { left = strip_pattern left; right = strip_pattern right }
 
   and strip_constructor (c : constructor) : constructor =

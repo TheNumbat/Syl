@@ -11,6 +11,7 @@ module Op : sig
     | Backslash
     | Percent
     | And
+    | Amp
     | Or
     | Not
     | Eq
@@ -54,6 +55,7 @@ module Kind : sig
     | Assert : unit t
     | Unreachable : unit t
     | Variant : unit t
+    | Box : unit t
     | Lbrace : unit t
     | Rbrace : unit t
     | Op : Op.t t
@@ -94,6 +96,7 @@ module Token : sig
     | Assert
     | Unreachable
     | Variant
+    | Box
     | Lbrace
     | Rbrace
     | Op of Op.t

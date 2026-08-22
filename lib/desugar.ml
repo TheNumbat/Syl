@@ -66,6 +66,9 @@ let rec desugar_pattern env seen (pattern : Cst.Expr.pattern)
         (env, seen), pat)
     in
     env, seen, Tuple { elts; loc }
+  | Ref { payload } ->
+    let env, seen, payload = desugar_pattern env seen payload in
+    env, seen, Ref { payload; loc }
   | Or { left; right } ->
     let env, seen, left = desugar_pattern env seen left in
     let env, seen, right = desugar_pattern env seen right in
@@ -127,6 +130,8 @@ and desugar_expr env (expr : Cst.Expr.t) : Dst.Expr.t =
         })
     in
     Variant { constructors; loc }
+  | Ref { arg } -> Ref { arg = desugar_expr env arg; loc }
+  | Box { arg } -> Box { arg = desugar_expr env arg; loc }
   | Unop { op; arg } ->
     Apply
       { fn = Var { id = Env.find env (Ident.Raw.unop op); loc }; arg = desugar_expr env arg; loc }

@@ -1,5 +1,5 @@
 open! Core
-module Key := Tst.Value.Concrete
+module Key := Core.Int
 
 module Ty : sig
   type t =
@@ -17,6 +17,7 @@ module Ty : sig
         ; ret_ty : t Key.Map.t
         }
     | Variant of t option Ident.Label.Map.t
+    | Ref
   [@@deriving sexp_of]
 end
 
@@ -156,6 +157,16 @@ module Expr : sig
         { variant : t
         ; label : Ident.Label.t
         ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Make_ref of
+        { payload : t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Ref_get of
+        { ref : t
+        ; ty : Ty.t (* the pointee type *)
         ; loc : Lex.Location.t
         }
     | If of

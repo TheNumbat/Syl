@@ -1019,6 +1019,8 @@ let%test_unit "missing witnesses cover every unmatched value" =
         | None, Some _ | Some _, None -> false)
     | Constructor _, _ -> false
     | Or ms, _ -> Nonempty_list.exists ms ~f:(covers value)
+    | Ref m, Box v -> covers v m
+    | Ref _, _ -> false
     | Excluding literals, Bool (T got) ->
       not (Nonempty_list.exists literals ~f:(Dst.Literal.equal (Bool got)))
     | Excluding literals, Int (T got) ->
@@ -1027,7 +1029,10 @@ let%test_unit "missing witnesses cover every unmatched value" =
   in
   let loc = Lex.Location.empty in
   let ty =
-    Value.type_ (Ty.Tuple (Nonempty_list.of_list_exn [ Value.type_ Bool; Value.type_ Int ]))
+    Value.type_
+      (Ty.Tuple
+         (Nonempty_list.of_list_exn
+            [ Value.type_ Bool; Value.type_ Int; Value.type_ (Ty.Ref (Value.type_ Int)) ]))
   in
   let wild : Dst.Expr.pattern = Var { id = Ident.create Ident.Raw.anon ~stamp:0; loc } in
   let bool_pat =
@@ -1044,10 +1049,18 @@ let%test_unit "missing witnesses cover every unmatched value" =
          (Literal { value = Int i; loc } : Dst.Expr.pattern))
       ]
   in
+  let ref_pat =
+    union
+      [ return wild
+      ; (let%map p = int_pat in
+         (Ref { payload = p; loc } : Dst.Expr.pattern))
+      ]
+  in
   let row =
     let%map b = bool_pat
-    and i = int_pat in
-    (Tuple { elts = Nonempty_list.of_list_exn [ b; i ]; loc } : Dst.Expr.pattern)
+    and i = int_pat
+    and r = ref_pat in
+    (Tuple { elts = Nonempty_list.of_list_exn [ b; i; r ]; loc } : Dst.Expr.pattern)
   in
   let pattern =
     union
@@ -1064,8 +1077,9 @@ let%test_unit "missing witnesses cover every unmatched value" =
   in
   let concrete =
     let%map b = bool
-    and i = Int64.gen_incl (-2L) 3L in
-    Value.tuple (Nonempty_list.of_list_exn [ Bool.const b; Int.const i ])
+    and i = Int64.gen_incl (-2L) 3L
+    and p = Int64.gen_incl (-1L) 2L in
+    Value.tuple (Nonempty_list.of_list_exn [ Bool.const b; Int.const i; Value.box (Int.const p) ])
   in
   Quickcheck.test
     (tuple2 patterns concrete)

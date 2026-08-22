@@ -48,6 +48,7 @@ module Expr : sig
         ; payload : pattern option
         }
     | Tuple of { elts : pattern Nonempty_list.t }
+    | Ref of { payload : pattern }
     | Or of
         { left : pattern
         ; right : pattern
@@ -117,6 +118,8 @@ module Expr : sig
         ; label : Ident.Label.t
         }
     | Variant of { constructors : constructor Nonempty_list.t }
+    | Ref of { arg : t }
+    | Box of { arg : t }
     | Unop of
         { op : Ident.Unop.t
         ; arg : t

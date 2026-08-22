@@ -1,0 +1,99 @@
+(* Perfect binary trees *)
+fun nat (erased _ : unit) : erased type =
+  variant {
+    z,
+    s : &(nat ()),
+  }
+;;
+
+let nat = nat ();;
+
+fun mk_nat (static n : int) : nat =
+  if erased n < 0
+  then unreachable
+  else
+    match static n {
+      0 -> nat.z,
+      n -> nat.s box (mk_nat (n - 1)),
+    }
+;;
+
+fun perfect (erased td : type ^ nat) : erased type =
+  match erased td {
+    (t, .z) -> t,
+    (t, .s &d) -> perfect (t ^ t, d),
+  }
+;;
+
+fun elem (erased td : type ^ nat) : erased type =
+  match erased td { (t, _) -> t }
+;;
+
+fun full (erased td : type ^ nat) : elem td -> perfect td =
+  fn (x : elem td) ->
+    match erased td {
+      (t, .z) -> x,
+      (t, .s &d) -> full (t ^ t, d) (x, x),
+    }
+;;
+
+fun sum (erased td : type ^ nat) : (elem td -> dynamic int) -> perfect td -> dynamic int =
+  fn (f : elem td -> dynamic int) ->
+    fn (p : perfect td) ->
+      match erased td {
+        (t, .z) -> f p,
+        (t, .s &d) -> sum (t ^ t, d) (fn (xy : t ^ t) -> match xy { (x, y) -> f x + f y }) p,
+      }
+;;
+
+let two = mk_nat 2;;
+
+let three = mk_nat 3;;
+
+let quad = ((1, 2), (3, 4)) : perfect (int, two);;
+
+let _ = print_int (sum (int, two) (fn (x : int) -> x) quad);;
+
+let _ = print_int (sum (int, three) (fn (x : int) -> x) (full (int, three) 1));;
+
+fun ssum (erased td : type ^ nat) : (static (elem td -> int) -> static (perfect td) -> static int) =
+  fn (static f : elem td -> int) ->
+    fn (static p : perfect td) ->
+      match erased td {
+        (t, .z) -> f p,
+        (t, .s &d) -> ssum (t ^ t, d) (fn (xy : t ^ t) -> match xy { (x, y) -> f x + f y }) p,
+      }
+;;
+
+fun pow2 (static n : nat) : static int =
+  match static n {
+    .z -> 1,
+    .s &m -> 2 * pow2 m,
+  }
+;;
+
+let _ = assert erased (ssum (int, nat.z) (fn (x : int) -> x) (full (int, nat.z) 1) == pow2 nat.z);;
+
+let _ = assert erased (ssum (int, three) (fn (x : int) -> x) (full (int, three) 1) == pow2 three);;
+
+let _ =
+  let six = mk_nat 6 in
+  assert erased (ssum (int, six) (fn (x : int) -> x) (full (int, six) 1) == pow2 six)
+;;
+
+fun sq (erased t : type) : erased type =
+  t ^ t
+;;
+
+fun mirror (erased td : type ^ nat) : erased type =
+  match erased td {
+    (t, .z) -> t,
+    (t, .s &d) -> mirror (sq t, d),
+  }
+;;
+
+let crossed = quad : mirror (int, two);;
+
+let _ = print_int (sum (int, two) (fn (x : int) -> x + 10) (crossed : perfect (int, two)));;
+
+let _ = print_int (pow2 (mk_nat 10));;

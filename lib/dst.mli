@@ -33,6 +33,10 @@ module Expr : sig
         { elts : pattern Nonempty_list.t
         ; loc : Lex.Location.t
         }
+    | Ref of
+        { payload : pattern
+        ; loc : Lex.Location.t
+        }
     | Or of
         { left : pattern
         ; right : pattern
@@ -102,6 +106,14 @@ module Expr : sig
         }
     | Variant of
         { constructors : constructor Nonempty_list.t
+        ; loc : Lex.Location.t
+        }
+    | Ref of
+        { arg : t
+        ; loc : Lex.Location.t
+        }
+    | Box of
+        { arg : t
         ; loc : Lex.Location.t
         }
     | Arrow of

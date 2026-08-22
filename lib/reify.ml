@@ -1,13 +1,14 @@
 open! Core
 open Tst
-module Key = Value.Concrete
 
 type t =
-  { monos : Expr.t Key.Map.t Core.Int.Map.t (* family -> key -> body; union across the family *)
+  { monos :
+      Expr.t Core.Int.Map.t Core.Int.Map.t (* family -> key -> body; union across the family *)
   ; groups : Ident.t Core.Int.Map.t (* fun value -> its binding *)
+  ; unfold : Value.t -> Value.t (* value -> whnf or self *)
   }
 
-let family_monos t family = Map.find t.monos family |> Option.value ~default:Key.Map.empty
+let family_monos t family = Map.find t.monos family |> Option.value ~default:Core.Int.Map.empty
 let free_vars t expr = Expr.free_vars ~monos:(family_monos t) expr
 
 let tuple_elt_tys ~loc (ty : Value.t) elts =
@@ -65,28 +66,40 @@ module Func = struct
   ;;
 end
 
+(* A function or box on the literal's concrete data spine must materialize as
+   an expression. Values under stuck heads pass through as literals: they only
+   occur in mono bodies whose static context did not resolve them, which are
+   never emitted. *)
 let rec value_needs_reify (value : Value.t) =
   match value.node with
-  | Closure _ | Binder _ -> true
+  | Closure _ | Binder _ | Box _ -> true
   | Tuple elts -> Nonempty_list.exists elts ~f:value_needs_reify
-  | Apply { fn; arg } -> value_needs_reify fn || value_needs_reify arg
-  | Proj { tuple; _ } -> value_needs_reify tuple
-  | Payload { variant; _ } -> value_needs_reify variant
   | Constructor { payload; _ } -> Option.exists payload ~f:value_needs_reify
-  | Match { scrutinee; arms } ->
-    value_needs_reify scrutinee
-    || Nonempty_list.exists arms ~f:(fun (_, leaf) -> value_needs_reify leaf)
-  | Bottom | Unit | Bool _ | Int _ | Type _ | Var _ | External _ | Prim _ | Inject _ -> false
+  | _ -> false
+;;
+
+let ref_content_ty t ~loc (ty : Value.t) =
+  match ty.node with
+  | Value.Type (Ref p) ->
+    (match p.node with
+     | Apply _ ->
+       let content = t.unfold p in
+       if Value.equal content p
+       then
+         raise_s [%message "Bug: ref pointee never unfolded" (p : Value.t) (loc : Lex.Location.t)]
+       else content
+     | _ -> p)
+  | _ ->
+    raise_s [%message "Bug: boxed value at a non-ref type" (ty : Value.t) (loc : Lex.Location.t)]
 ;;
 
 let rec reify_expr t bound (expr : Expr.t) : Expr.t =
   match expr with
   | Erased _ | Builtin _ | Var _ -> expr
-  | Literal { value; ty; mode; loc } when Modes.is_static mode ->
+  | Literal { value; ty; mode; loc } ->
     if value_needs_reify value
     then quote_value t bound ~loc { ty; mode; static = Lazy.from_val value } value
     else expr
-  | Literal _ -> expr
   | Extcall x -> Extcall { x with arg = reify_expr t bound x.arg }
   | Apply x -> Apply { x with fn = reify_expr t bound x.fn; arg = reify_expr t bound x.arg }
   | Specialize x ->
@@ -94,6 +107,8 @@ let rec reify_expr t bound (expr : Expr.t) : Expr.t =
   | Tuple_get x -> Tuple_get { x with tuple = reify_expr t bound x.tuple }
   | Payload_get x -> Payload_get { x with variant = reify_expr t bound x.variant }
   | Tag_test x -> Tag_test { x with variant = reify_expr t bound x.variant }
+  | Make_ref x -> Make_ref { x with payload = reify_expr t bound x.payload }
+  | Ref_get x -> Ref_get { x with ref = reify_expr t bound x.ref }
   | Tuple x -> Tuple { x with elts = Nonempty_list.map x.elts ~f:(reify_expr t bound) }
   | If x ->
     If
@@ -147,11 +162,21 @@ and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
   | Var _
   | Proj _
   | Payload _
-  | Inject _ -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
-  | Apply _ | Match _ ->
-    if value_needs_reify value
-    then raise_s [%message "Bug: stuck value cannot be reified" (value : Value.t)]
-    else Literal { value; ty = desc.ty; mode = desc.mode; loc }
+  | Inject _
+  | Apply _
+  | Match _
+  | Deref _ -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
+  | Box payload ->
+    let content_ty = ref_content_ty t ~loc desc.ty in
+    let payload =
+      quote_value
+        t
+        bound
+        ~loc
+        { ty = content_ty; mode = desc.mode; static = Lazy.from_val payload }
+        payload
+    in
+    Make_ref { payload; ty = desc.ty; mode = desc.mode; loc }
   | Constructor { payload = None; _ } -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
   | Constructor { payload = Some payload; _ } when not (value_needs_reify payload) ->
     Literal { value; ty = desc.ty; mode = desc.mode; loc }
@@ -336,12 +361,14 @@ let rec find_targets acc (expr : Expr.t) =
   | Extcall { arg; _ } -> find_targets acc arg
   | Tuple_get { tuple; _ } -> find_targets acc tuple
   | Payload_get { variant; _ } | Tag_test { variant; _ } -> find_targets acc variant
+  | Make_ref { payload; _ } -> find_targets acc payload
+  | Ref_get { ref; _ } -> find_targets acc ref
   | Tuple { elts; _ } -> Nonempty_list.fold elts ~init:acc ~f:find_targets
   | Apply { fn; arg; _ } -> find_targets (find_targets acc fn) arg
   | Specialize { fn; arg; target; key; _ } ->
     let acc =
       match target, key with
-      | Family family, Some key -> (family, key) :: acc
+      | Family family, Some key -> (family, Hashcons.tag key) :: acc
       | Family _, None | Prim _, _ -> acc
     in
     find_targets (find_targets acc fn) arg
@@ -393,7 +420,7 @@ let reachable_monos monos top_levels =
         | Some body ->
           let kept =
             Map.update kept family ~f:(fun m ->
-              Map.set (Option.value m ~default:Key.Map.empty) ~key ~data:body)
+              Map.set (Option.value m ~default:Core.Int.Map.empty) ~key ~data:body)
           in
           visit kept (find_targets frontier body))
   in
@@ -408,7 +435,7 @@ let top_level t (top_level : Top_level.t) : Top_level.t =
   | Fun x -> Fun { x with funs = Nonempty_list.map x.funs ~f:(reify_fun t bound) }
 ;;
 
-let program ~monos ~groups top_levels =
-  let t = { monos = reachable_monos monos top_levels; groups } in
+let program ~monos ~groups ~unfold top_levels =
+  let t = { monos = reachable_monos monos top_levels; groups; unfold } in
   List.map top_levels ~f:(top_level t)
 ;;

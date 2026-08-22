@@ -1,6 +1,6 @@
 open! Core
 open Sst
-module Key = Tst.Value.Concrete
+module Key = Core.Int
 
 let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   match ty.node with
@@ -14,6 +14,7 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
     Pi { arg_ty = simplify_ty arg_ty; ret_ty = simplify_dependent ret_ty }
   | Type (Tuple elts) -> Tuple (Nonempty_list.map elts ~f:simplify_ty)
   | Type (Variant constructors) -> Variant (Map.map constructors ~f:(Option.map ~f:simplify_ty))
+  | Type (Ref _) -> Ref
   | Unit
   | Bool _
   | Int _
@@ -29,12 +30,17 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Tuple _
   | Inject _
   | Constructor _
+  | Box _
+  | Deref _
   | Bottom -> raise_s [%message "Bug: expected resolved type" (ty : Tst.Value.t)]
 
 and simplify_dependent (ty : Tst.Dependent.t) =
   match ty with
   | T { memo; _ } | Typecheck { memo; _ } | Reduce { memo; _ } ->
-    Key.Map.of_hashtbl_exn memo |> Map.map ~f:simplify_ty
+    Hashtbl.fold memo ~init:Key.Map.empty ~f:(fun ~key ~data acc ->
+      if Tst.Dependent.is_concrete key
+      then Map.set acc ~key:(Hashcons.tag key) ~data:(simplify_ty data)
+      else acc)
 ;;
 
 let simplify_arrow (ty : Tst.Value.t) : Ty.t * Ty.t =
@@ -62,7 +68,7 @@ let simplify_int ~loc (int : Tst.Int.t) : int64 =
 ;;
 
 (* Pure expressions may be dropped (an inlined application no longer evaluates them) or
-   duplicated across a fold. Closure creation allocates but the allocation is unobservable. *)
+   duplicated across a fold. We consider allocations unobservable. *)
 let rec is_pure (expr : Expr.t) : bool =
   match expr with
   | Scalar _ | Var _ | External _ | Inject _ | Lambda _ | Binder _ -> true
@@ -70,6 +76,8 @@ let rec is_pure (expr : Expr.t) : bool =
   | Constructor { payload; _ } -> Option.for_all payload ~f:is_pure
   | Tuple_get { tuple; _ } -> is_pure tuple
   | Payload_get { variant; _ } | Tag_test { variant; _ } -> is_pure variant
+  | Make_ref { payload; _ } -> is_pure payload
+  | Ref_get { ref; _ } -> is_pure ref
   | Fun _ | Apply _ | Specialize _ | Let _ | If _ | Match _ | Extcall _ -> false
 ;;
 
@@ -105,17 +113,14 @@ let fold_prim ~loc (prim : Builtin.Prim.t) (arg : Expr.t) : Expr.t option =
      | exception Builtin.Error _ -> None)
 ;;
 
-(* Bindings with statically known contents: primitive operators (bound by the prelude's
-   [builtin] declarations, so applications see them through a [Var]) and scalar constants,
-   which propagate into the folds above. *)
 module Env = struct
   type entry =
     | Const of Scalar.t * Ty.t
     | Prim of Builtin.Prim.t
 
-  type t = entry Ident.Map.t
+  type t = { consts : entry Ident.Map.t }
 
-  let empty : t = Ident.Map.empty
+  let create () = { consts = Ident.Map.empty }
 
   let entry (env : t) (expr : Expr.t) : entry option =
     match expr with
@@ -124,15 +129,17 @@ module Env = struct
       (match Builtin0.find symbol with
        | Some (Prim prim) -> Some (Prim prim)
        | Some (Type _) | None -> None)
-    | Var { id; _ } -> Map.find env id
+    | Var { id; _ } -> Map.find env.consts id
     | _ -> None
   ;;
 
   let bind (env : t) var expr =
     match entry env expr with
-    | Some entry -> Map.set env ~key:var ~data:entry
+    | Some entry -> { consts = Map.set env.consts ~key:var ~data:entry }
     | None -> env
   ;;
+
+  let bind_prim (env : t) var prim = { consts = Map.set env.consts ~key:var ~data:(Prim prim) }
 
   let prim (env : t) (fn : Expr.t) : Builtin.Prim.t option =
     match entry env fn with
@@ -141,7 +148,7 @@ module Env = struct
   ;;
 end
 
-(* Folding can leave a binding without uses; drop it if evaluating it is unobservable. *)
+(* Drop unused bindings if evaluating them is unobservable. *)
 let make_let ~loc var ~bind ~rest : Expr.t =
   if is_pure bind && not (Set.mem (Expr.free_vars rest) var)
   then rest
@@ -154,8 +161,8 @@ let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
   | Bool b -> Scalar { value = Bool (simplify_bool ~loc b); ty = Bool; loc }
   | Int i -> Scalar { value = Int (simplify_int ~loc i); ty = Int; loc }
   | Type _ -> Scalar { value = Type; ty = Type; loc }
-  | Closure _ | Binder _ ->
-    raise_s [%message "Bug: unreified function value" (value : Tst.Value.t) (loc : Lex.Location.t)]
+  | Closure _ | Binder _ | Box _ ->
+    raise_s [%message "Bug: unreified value" (value : Tst.Value.t) (loc : Lex.Location.t)]
   | Prim prim ->
     let desc = Builtin.desc (Prim prim) in
     External { symbol = Builtin.Prim.symbol prim; ty = simplify_ty desc.ty; loc }
@@ -188,15 +195,21 @@ let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
      | _ ->
        raise_s [%message "Bug: expected variant type" (ty : Tst.Value.t) (loc : Lex.Location.t)])
   | Bottom -> raise_s [%message "Bug: emitted unreachable branch" (loc : Lex.Location.t)]
-  | Var _ | Apply _ | Proj _ | Payload _ | Match _ ->
+  | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ ->
     raise_s [%message "Bug: expected runtime value" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
-and simplify_expr env (expr : Tst.Expr.t) : Expr.t =
+and simplify_expr (env : Env.t) (expr : Tst.Expr.t) : Expr.t =
   match expr with
   | Erased { loc; _ } -> Scalar { value = Unit; ty = Unit; loc }
   | Literal { value; ty; loc; _ } -> simplify_value ~loc ~ty value
+  | Make_ref { payload; ty = _; loc; _ } ->
+    Make_ref { payload = simplify_expr env payload; ty = Ref; loc }
+  | Ref_get { ref; ty; loc; _ } ->
+    (match simplify_expr env ref with
+     | Make_ref { payload; _ } -> payload
+     | ref -> Ref_get { ref; ty = simplify_ty ty; loc })
   | Var { id; ty; loc; _ } ->
-    (match Map.find env id with
+    (match Map.find env.consts id with
      | Some (Env.Const (value, ty)) -> Scalar { value; ty; loc }
      | Some (Prim _) | None -> Var { id; ty = simplify_ty ty; loc })
   | Let { var; bind; rest; loc; _ } ->
@@ -292,7 +305,7 @@ and simplify_expr env (expr : Tst.Expr.t) : Expr.t =
     let arg = simplify_expr env arg in
     let mono =
       match fn, key with
-      | Binder { body; _ }, Some key when is_pure arg -> Map.find body key
+      | Binder { body; _ }, Some key when is_pure arg -> Map.find body (Hashcons.tag key)
       | _ -> None
     in
     (match mono with
@@ -304,7 +317,10 @@ and simplify_expr env (expr : Tst.Expr.t) : Expr.t =
          | Family family -> Family family
          | Prim prim -> Prim prim
        in
-       let specialize () : Expr.t = Specialize { fn; arg; key; ty = simplify_ty ty; target; loc } in
+       let specialize () : Expr.t =
+         Specialize
+           { fn; arg; key = Option.map key ~f:Hashcons.tag; ty = simplify_ty ty; target; loc }
+       in
        (match target, key, fn with
         | Prim prim, _, fn when is_pure fn ->
           (match fold_prim ~loc prim arg with
@@ -312,7 +328,7 @@ and simplify_expr env (expr : Tst.Expr.t) : Expr.t =
            | None -> specialize ())
         | Family _, None, Lambda { arg = var; body; _ } -> make_let ~loc var ~bind:arg ~rest:body
         | Family _, Some key, Binder { body; _ } when is_pure arg ->
-          (match Map.find body key with
+          (match Map.find body (Hashcons.tag key) with
            | Some body -> body
            | None -> specialize ())
         | _ -> specialize ()))
@@ -377,12 +393,13 @@ let simplify_top_level env (tst : Tst.Top_level.t) : Env.t * Top_level.t Option.
     else (
       match builtin with
       | Prim prim ->
-        ( Map.set env ~key:var ~data:(Env.Prim prim)
+        ( Env.bind_prim env var prim
         , Some (External { var; symbol = Builtin.Prim.symbol prim; ty = simplify_ty ty; loc }) )
       | Type ty -> raise_s [%message "Bug: unerased type" (ty : Builtin0.Type.t)])
 ;;
 
 let simplify (tst : Tst.Program.t) : Program.t =
-  let _, top_levels = List.fold_map tst.top_levels ~init:Env.empty ~f:simplify_top_level in
+  let env = Env.create () in
+  let _, top_levels = List.fold_map tst.top_levels ~init:env ~f:simplify_top_level in
   { top_levels = List.filter_opt top_levels; stamp = tst.stamp }
 ;;

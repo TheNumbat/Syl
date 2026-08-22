@@ -154,11 +154,10 @@ fun g (static n : int) : int_of n -> dynamic int = fn (x : int_of n) -> x + 1;;
   [%expect {| |}]
 ;;
 
-(* The judgment fuel: comparing two isomorphic recursive families at the same
-   index would descend through n-1, n-2, ... forever (each level's recursion
-   guard unwinds before the next begins). The budget turns the descent into a
-   finite conservative rejection. *)
-let%expect_test "judgment unfolding gives up on regressive family comparisons" =
+(* Comparing two isomorphic recursive families at the same index used to
+   descend through n-1, n-2, ... into the judgment fuel; generator
+   bisimulation closes the descent at the function level instead. *)
+let%expect_test "isomorphic recursive families unify through their generators" =
   go
     {|
 fun vec (static n : int) : erased type =
@@ -167,115 +166,7 @@ fun vec2 (static n : int) : erased type =
   match static n { 0 -> variant { nil }, _ -> variant { cons : int ^ vec2 (n - 1) } };;
 fun f (static n : int) : vec n -> static int = fn (v : vec n) -> let _ = (v : vec2 n) in 0;;
 |};
-  [%expect
-    {|
-    ((loc ((line 6) (column 76)))
-     (reason
-      (Gave_up
-       (Type_mismatch
-        (got
-         (Apply
-          (fn
-           (Binder
-            ((arg ((Id n) <opaque>))
-             (ty
-              (Type
-               (Pi (arg_ty (Type Int))
-                (arg_mode ((staticity Static) (erasure Unerased)))
-                (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                (ret_mode ((staticity Static) (erasure Erased))))))
-             (body_dst
-              (Match
-               (cond (Var (id ((Id n) <opaque>)) (loc ((line 3) (column 15)))))
-               (arms
-                (((Literal (value (Int 0)) (loc ((line 3) (column 19))))
-                  (Variant (constructors (((label nil) (payload ()))))
-                   (loc ((line 3) (column 24)))))
-                 ((Var (id (Anon <opaque>)) (loc ((line 3) (column 41))))
-                  (Variant
-                   (constructors
-                    (((label cons)
-                      (payload
-                       ((Tuple
-                         (elts
-                          ((Var (id ((Id int) <opaque>))
-                            (loc ((line 3) (column 63))))
-                           (Apply
-                            (fn
-                             (Var (id ((Id vec) <opaque>))
-                              (loc ((line 3) (column 69)))))
-                            (arg
-                             (Apply
-                              (fn
-                               (Var (id ((Binop Sub) <opaque>))
-                                (loc ((line 3) (column 76)))))
-                              (arg
-                               (Make_tuple
-                                (elts
-                                 ((Var (id ((Id n) <opaque>))
-                                   (loc ((line 3) (column 74))))
-                                  (Literal (value (Int 1))
-                                   (loc ((line 3) (column 78))))))
-                                (loc ((line 3) (column 76)))))
-                              (loc ((line 3) (column 76)))))
-                            (loc ((line 3) (column 69))))))
-                         (loc ((line 3) (column 63)))))))))
-                   (loc ((line 3) (column 46)))))))
-               (eliminator Static) (loc ((line 3) (column 2)))))
-             (env <opaque>) (family <opaque>) (uid <opaque>))))
-          (arg (Var (Anon <opaque>)))))
-        (need
-         (Apply
-          (fn
-           (Binder
-            ((arg ((Id n) <opaque>))
-             (ty
-              (Type
-               (Pi (arg_ty (Type Int))
-                (arg_mode ((staticity Static) (erasure Unerased)))
-                (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                (ret_mode ((staticity Static) (erasure Erased))))))
-             (body_dst
-              (Match
-               (cond (Var (id ((Id n) <opaque>)) (loc ((line 5) (column 15)))))
-               (arms
-                (((Literal (value (Int 0)) (loc ((line 5) (column 19))))
-                  (Variant (constructors (((label nil) (payload ()))))
-                   (loc ((line 5) (column 24)))))
-                 ((Var (id (Anon <opaque>)) (loc ((line 5) (column 41))))
-                  (Variant
-                   (constructors
-                    (((label cons)
-                      (payload
-                       ((Tuple
-                         (elts
-                          ((Var (id ((Id int) <opaque>))
-                            (loc ((line 5) (column 63))))
-                           (Apply
-                            (fn
-                             (Var (id ((Id vec2) <opaque>))
-                              (loc ((line 5) (column 69)))))
-                            (arg
-                             (Apply
-                              (fn
-                               (Var (id ((Binop Sub) <opaque>))
-                                (loc ((line 5) (column 77)))))
-                              (arg
-                               (Make_tuple
-                                (elts
-                                 ((Var (id ((Id n) <opaque>))
-                                   (loc ((line 5) (column 75))))
-                                  (Literal (value (Int 1))
-                                   (loc ((line 5) (column 79))))))
-                                (loc ((line 5) (column 77)))))
-                              (loc ((line 5) (column 77)))))
-                            (loc ((line 5) (column 69))))))
-                         (loc ((line 5) (column 63)))))))))
-                   (loc ((line 5) (column 46)))))))
-               (eliminator Static) (loc ((line 5) (column 2)))))
-             (env <opaque>) (family <opaque>) (uid <opaque>))))
-          (arg (Var (Anon <opaque>)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 (* [join]'s ordered pick inherits leq's full strength: a dynamic conditional

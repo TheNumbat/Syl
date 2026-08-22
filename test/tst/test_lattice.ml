@@ -20,6 +20,43 @@ let modes =
   ]
 ;;
 
+(* Families for suspensions and reducible spines: real binders whose bodies
+   whnf evaluates — identity on its type argument, and a wrapping variant.
+   Distinct uids make same-argument applications generative. *)
+let binder_pool =
+  let loc = Lex.Location.empty in
+  let type_arrow =
+    Value.type_
+      (Ty.Arrow
+         { arg_ty = Value.type_ Type
+         ; arg_mode = Modes.create ~staticity:Static ~erasure:Erased
+         ; ret_ty = Value.type_ Type
+         ; ret_mode = Modes.create ~staticity:Static ~erasure:Erased
+         })
+  in
+  let mk ~stamp ~body =
+    let arg = Ident.create (Ident.Raw.id "t") ~stamp in
+    Value.binder
+      (Binder.const
+         ~arg
+         ~ty:type_arrow
+         ~body_dst:(body arg)
+         ~env:Env.initial
+         ~family:(9000 + stamp))
+  in
+  let identity = mk ~stamp:60 ~body:(fun arg : Dst.Expr.t -> Var { id = arg; loc }) in
+  let wrap =
+    mk ~stamp:61 ~body:(fun arg : Dst.Expr.t ->
+      Variant
+        { constructors =
+            Nonempty_list.singleton
+              { Dst.Expr.label = label_a; payload = Some (Var { id = arg; loc }) }
+        ; loc
+        })
+  in
+  [ identity; wrap ]
+;;
+
 open Quickcheck.Generator
 open Quickcheck.Generator.Let_syntax
 
@@ -102,6 +139,17 @@ let rec ty_value depth =
       ; (let%map payload = sub in
          Value.type_
            (Ty.Variant (Ident.Label.Map.of_alist_exn [ label_a, Some payload; label_b, None ])))
+        (* Ref types: invariant pointees, double indirection, and suspended
+           names over the binder pool — the barrier compares those by spine,
+           and mixed name/literal pairs exercise the roll by unfolding the
+           pool binder for real. *)
+      ; (let%map payload = sub in
+         Value.type_ (Ty.Ref payload))
+      ; (let%map payload = atom in
+         Value.type_ (Ty.Ref (Value.type_ (Ty.Ref payload))))
+      ; (let%map fn = of_list binder_pool
+         and arg = sub in
+         Value.type_ (Ty.Ref (Value.apply ~fn ~arg)))
       ])
 ;;
 
@@ -135,6 +183,14 @@ let rec value depth =
          Value.proj head index)
       ; (let%map head = of_list (Array.to_list spine_vars) in
          Value.payload head ~label:label_a)
+      ; (let%map payload = sub in
+         Value.box payload)
+      ; (let%map head = of_list (Array.to_list spine_vars) in
+         Value.deref head)
+        (* A genuinely reducible spine: whnf evaluates the pool binder. *)
+      ; (let%map fn = of_list binder_pool
+         and arg = ty_value 1 in
+         Value.apply ~fn ~arg)
       ; (let%map cond = bool_value 1
          and then_ = sub
          and else_ = sub in
@@ -334,6 +390,7 @@ let rec generalize (v : Value.t) : Pattern.Canon.t Quickcheck.Generator.t =
         ; map (generalize payload) ~f:(fun payload ->
             Pattern.Canon.Constructor { label; payload = Some payload })
         ]
+    | Box payload -> union [ wild; map (generalize payload) ~f:(fun p -> Pattern.Canon.Ref p) ]
     | _ -> wild
   in
   union [ base; map base ~f:(fun p -> Pattern.Canon.Or (p, Wild)) ]

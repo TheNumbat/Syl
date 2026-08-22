@@ -291,9 +291,9 @@ let x = (variant { none, some : int }).some e;;
 let%expect_test "selection unfolds a family application" =
   go
     {|
-fun boxed (static erased t : type) : erased type = variant { box : t };;
-fun box (static erased t : type) : t -> boxed t = fn (x : t) -> (boxed t).box x;;
-let _ = box int 3 : boxed int;;
+fun boxed (static erased t : type) : erased type = variant { wrap : t };;
+fun wrap (static erased t : type) : t -> boxed t = fn (x : t) -> (boxed t).wrap x;;
+let _ = wrap int 3 : boxed int;;
 |};
   [%expect {| |}]
 ;;
@@ -1340,9 +1340,9 @@ fun f (static o : opt) : static int =
 let%expect_test "static match payload: matching constructor extracts" =
   go
     {|
-let box = variant { boxed : int };;
+let bx = variant { boxed : int };;
 fun sel (static n : int) : erased type = if erased n == 5 then int else bool;;
-let r = match static (box.boxed 5) { .boxed u -> (1 : sel u) };;
+let r = match static (bx.boxed 5) { .boxed u -> (1 : sel u) };;
 |};
   [%expect {| |}]
 ;;

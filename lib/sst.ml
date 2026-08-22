@@ -1,5 +1,5 @@
 open! Core
-module Key = Tst.Value.Concrete
+module Key = Core.Int
 
 module Ty = struct
   type t =
@@ -17,6 +17,7 @@ module Ty = struct
         ; ret_ty : t Key.Map.t
         }
     | Variant of t option Ident.Label.Map.t
+    | Ref
   [@@deriving sexp_of]
 end
 
@@ -158,6 +159,16 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Make_ref of
+        { payload : t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Ref_get of
+        { ref : t
+        ; ty : Ty.t (* the pointee type *)
+        ; loc : Lex.Location.t
+        }
     | If of
         { cond : t
         ; then_ : t
@@ -202,6 +213,8 @@ module Expr = struct
     | Inject { ty; _ }
     | Payload_get { ty; _ }
     | Tag_test { ty; _ }
+    | Make_ref { ty; _ }
+    | Ref_get { ty; _ }
     | Extcall { ty; _ } -> ty
   ;;
 
@@ -223,6 +236,8 @@ module Expr = struct
     | Inject { loc; _ }
     | Payload_get { loc; _ }
     | Tag_test { loc; _ }
+    | Make_ref { loc; _ }
+    | Ref_get { loc; _ }
     | Extcall { loc; _ } -> loc
   ;;
 
@@ -245,6 +260,8 @@ module Expr = struct
     | Inject expr -> Inject { expr with ty }
     | Payload_get expr -> Payload_get { expr with ty }
     | Tag_test expr -> Tag_test { expr with ty }
+    | Make_ref expr -> Make_ref { expr with ty }
+    | Ref_get expr -> Ref_get { expr with ty }
     | Extcall expr -> Extcall { expr with ty }
   ;;
 
@@ -259,6 +276,8 @@ module Expr = struct
     | Apply { fn; arg; _ } | Specialize { fn; arg; _ } -> Set.union (free_vars fn) (free_vars arg)
     | Tuple_get { tuple; _ } -> free_vars tuple
     | Payload_get { variant; _ } | Tag_test { variant; _ } -> free_vars variant
+    | Make_ref { payload; _ } -> free_vars payload
+    | Ref_get { ref; _ } -> free_vars ref
     | If { cond; then_; else_; _ } ->
       Ident.Set.union_list [ free_vars cond; free_vars then_; free_vars else_ ]
     | Match { cases; tree; _ } ->

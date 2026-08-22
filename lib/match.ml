@@ -22,6 +22,10 @@ module Pattern = struct
         { elts : t Nonempty_list.t
         ; loc : Lex.Location.t
         }
+    | Ref of
+        { payload : t
+        ; loc : Lex.Location.t
+        }
     | Or of
         { left : t
         ; right : t
@@ -33,7 +37,7 @@ module Pattern = struct
 
   let is_wild : t -> bool = function
     | Var _ -> true
-    | Literal _ | Constructor _ | Tuple _ -> false
+    | Literal _ | Constructor _ | Tuple _ | Ref _ -> false
     | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]
   ;;
 
@@ -43,6 +47,7 @@ module Pattern = struct
     | Constructor { label; payload = Some payload; loc } ->
       expand payload
       |> List.map ~f:(fun payload -> Constructor { label; payload = Some payload; loc })
+    | Ref { payload; loc } -> expand payload |> List.map ~f:(fun payload -> Ref { payload; loc })
     | Or { left; right; _ } -> expand left @ expand right
     | Tuple { elts; loc } ->
       let rec product acc = function
@@ -66,6 +71,7 @@ module Tree = struct
             { label : Ident.Label.t
             ; payload : bool
             }
+        | Ref
       [@@deriving sexp_of, compare, hash]
     end
 
@@ -77,6 +83,7 @@ module Tree = struct
       | Literal _ -> 0
       | Tuple arity -> arity
       | Constructor { payload; _ } -> if payload then 1 else 0
+      | Ref -> 1
     ;;
 
     let members =
@@ -93,6 +100,7 @@ module Tree = struct
              |> List.map ~f:(fun (label, payload) ->
                Constructor { label; payload = Option.is_some payload })
              |> Vec.of_list)
+        | Type (Ref _) -> Some (Vec.of_array [| Ref |])
         | _ -> None
     ;;
 
@@ -150,6 +158,13 @@ module Tree = struct
                   "Bug: expected payload" (label : Ident.Label.t) (occurrence.ty : Tst.Value.t)])
          | ty ->
            raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (ty : Tst.Value.node)])
+      | Ref ->
+        (match occurrence.ty.node with
+         | Type (Ref payload) ->
+           let path = Vec.copy occurrence.path in
+           Vec.push_back path Tst.Pattern.Step.Deref;
+           [| { path; ty = unfold payload } |]
+         | ty -> raise_s [%message "Bug: expected ref" (ty : Tst.Value.node)])
     ;;
   end
 
@@ -184,6 +199,7 @@ module Result = struct
           { label : Ident.Label.t
           ; payload : t option
           }
+      | Ref of t
       | Or of t Nonempty_list.t
       | Excluding of Literal.t Nonempty_list.t
     [@@deriving sexp_of, compare, hash]
@@ -193,6 +209,7 @@ module Result = struct
       | Literal value -> Literal value
       | Tuple _ -> Tuple args
       | Constructor { label; payload = _ } -> Constructor { label; payload = List.hd args }
+      | Ref -> Ref (Option.value (List.hd args) ~default:Wildcard)
     ;;
 
     let rec refuted_by t ~scrutinee ~unfold =
@@ -216,6 +233,10 @@ module Result = struct
              (match payload, got_payload with
              | Some payload, Some got_payload -> refuted_by payload ~scrutinee:got_payload ~unfold
              | None, (None | Some _) | Some _, None -> false)
+         | _ -> false)
+      | Ref payload ->
+        (match scrutinee.node with
+         | Box value -> refuted_by payload ~scrutinee:value ~unfold
          | _ -> false)
       | Or ts -> Nonempty_list.for_all ts ~f:(fun t -> refuted_by t ~scrutinee ~unfold)
       | Excluding literals ->
@@ -255,6 +276,7 @@ module Row = struct
         | Tuple { elts; _ } -> Some (Tuple (Nonempty_list.length elts))
         | Constructor { label; payload; _ } ->
           Some (Constructor { label; payload = Option.is_some payload })
+        | Ref _ -> Some Ref
         | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]
       in
       Option.iter head ~f:(fun head ->
@@ -278,6 +300,7 @@ module Row = struct
         | Tuple { elts; _ } -> Hash_set.add heads (Tuple (Nonempty_list.length elts))
         | Constructor { label; payload; _ } ->
           Hash_set.add heads (Constructor { label; payload = Option.is_some payload })
+        | Ref _ -> Hash_set.add heads Ref
         | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]);
       (if needed then 1 else 0), !defaults, Hash_set.length heads
     in
@@ -350,7 +373,14 @@ let specialize head occurrence col (rows : Row.t Vec.t) =
           if i = 0 then payload else row.patterns.(skip col (i - 1)))
       in
       Vec.push_back result { row with patterns }
-    | (Literal _ | Tuple _ | Constructor _), _ -> ()
+    | Ref { payload; _ }, Ref ->
+      let rest_len = Array.length row.patterns - 1 in
+      let patterns =
+        Array.init (1 + rest_len) ~f:(fun i ->
+          if i = 0 then payload else row.patterns.(skip col (i - 1)))
+      in
+      Vec.push_back result { row with patterns }
+    | (Literal _ | Tuple _ | Constructor _ | Ref _), _ -> ()
     | Or _, _ -> raise_s [%message "Bug: unexpanded or pattern"]);
   result
 ;;
@@ -365,7 +395,7 @@ let default occurrence col (rows : Row.t Vec.t) =
         Array.init (Array.length row.patterns - 1) ~f:(fun i -> row.patterns.(skip col i))
       in
       Vec.push_back result { row with patterns; bound }
-    | Literal _ | Tuple _ | Constructor _ -> ()
+    | Literal _ | Tuple _ | Constructor _ | Ref _ -> ()
     | Or _ -> raise_s [%message "Bug: unexpanded or pattern"]);
   result
 ;;
@@ -403,19 +433,22 @@ let rec compile_matrix ~unfold reached (occurrences : Tree.Occurrence.t array) (
 ;;
 
 let rec enumerate_missing ~unfold (occ : Tree.Occurrence.t) : Result.Missing.t =
-  match Tree.Head.members occ.ty with
-  | None -> Wildcard
-  | Some heads ->
-    let items =
-      Vec.to_list heads
-      |> List.map ~f:(fun head ->
-        let sub = Tree.Occurrence.deepen ~unfold occ head in
-        Result.Missing.of_head head (Array.to_list sub |> List.map ~f:(enumerate_missing ~unfold)))
-    in
-    (match items with
-     | [] -> Wildcard
-     | [ single ] -> single
-     | items -> Or (Nonempty_list.of_list_exn items))
+  match occ.ty.node with
+  | Type (Ref _) -> Wildcard
+  | _ ->
+    (match Tree.Head.members occ.ty with
+     | None -> Wildcard
+     | Some heads ->
+       let items =
+         Vec.to_list heads
+         |> List.map ~f:(fun head ->
+           let sub = Tree.Occurrence.deepen ~unfold occ head in
+           Result.Missing.of_head head (Array.to_list sub |> List.map ~f:(enumerate_missing ~unfold)))
+       in
+       (match items with
+        | [] -> Wildcard
+        | [ single ] -> single
+        | items -> Or (Nonempty_list.of_list_exn items)))
 
 and missing_matrix ~unfold (occurrences : Tree.Occurrence.t array) (rows : Row.t Vec.t) =
   if Vec.is_empty rows
@@ -443,7 +476,7 @@ and missing_matrix ~unfold (occurrences : Tree.Occurrence.t array) (rows : Row.t
         Vec.fold heads ~init:(Some []) ~f:(fun acc (head : Tree.Head.t) ->
           match acc, head with
           | Some literals, Literal value -> Some (value :: literals)
-          | Some _, (Tuple _ | Constructor _) | None, _ -> None)
+          | Some _, (Tuple _ | Constructor _ | Ref) | None, _ -> None)
         |> Option.map ~f:List.rev
       in
       let residue : Result.Missing.t =

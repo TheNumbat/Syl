@@ -4,7 +4,7 @@ module Path = struct
   module Entry = struct
     type t =
       | Id of Ident.t
-      | Key of Tst.Value.Concrete.t
+      | Key of int
     [@@deriving sexp_of, compare, hash, equal]
   end
 
@@ -36,6 +36,7 @@ module Ty = struct
     | Type
     | Tuple of t Nonempty_list.t
     | Variant of t option Ident.Label.Map.t
+    | Ref
     | Env
     | Closure of
         { arg_ty : t
@@ -57,6 +58,7 @@ module Ty = struct
     | Bool -> 1, 1
     | Int -> 8, 8
     | Env -> 8, 8
+    | Ref -> 8, 8
     | Closure _ -> 16, 8
     | Tuple elts ->
       let elts = Nonempty_list.to_list elts |> List.map ~f:size_align in
@@ -95,7 +97,7 @@ module Ty = struct
   let align_in_mem (t : t) =
     match t with
     | Unit | Type -> raise_s [%message "Bug: undefined alignment"]
-    | Bool | Int | Env | Closure _ | Tuple _ | Variant _ -> snd (size_align t)
+    | Bool | Int | Env | Ref | Closure _ | Tuple _ | Variant _ -> snd (size_align t)
   ;;
 
   let payload_size_in_mem constructors = fst (payload_size_align constructors)
@@ -157,6 +159,17 @@ module Expr = struct
     | Make_variant of
         { label : Ident.Label.t
         ; payload : (Path.t * Ty.t) option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Make_ref of
+        { payload : Path.t
+        ; payload_ty : Ty.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Ref_get of
+        { ref : Path.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -225,6 +238,8 @@ module Expr = struct
     | Scalar { ty; _ }
     | Make_tuple { ty; _ }
     | Make_variant { ty; _ }
+    | Make_ref { ty; _ }
+    | Ref_get { ty; _ }
     | Ident { ty; _ }
     | Tuple_get { ty; _ }
     | Payload_get { ty; _ }
@@ -243,6 +258,8 @@ module Expr = struct
     | Scalar { loc; _ }
     | Make_tuple { loc; _ }
     | Make_variant { loc; _ }
+    | Make_ref { loc; _ }
+    | Ref_get { loc; _ }
     | Ident { loc; _ }
     | Tuple_get { loc; _ }
     | Payload_get { loc; _ }
@@ -262,6 +279,8 @@ module Expr = struct
     | Scalar expr -> Scalar { expr with ty }
     | Make_tuple expr -> Make_tuple { expr with ty }
     | Make_variant expr -> Make_variant { expr with ty }
+    | Make_ref expr -> Make_ref { expr with ty }
+    | Ref_get expr -> Ref_get { expr with ty }
     | Ident expr -> Ident { expr with ty }
     | Tuple_get expr -> Tuple_get { expr with ty }
     | Payload_get expr -> Payload_get { expr with ty }
@@ -280,10 +299,10 @@ module Block = struct
   and tree =
     | Leaf of
         { case : int
-        ; bindings : (Path.t * Expr.t) array
+        ; bindings : (Path.t * t) array
         }
     | Split of
-        { cond : Expr.t
+        { cond : t
         ; then_ : tree
         ; else_ : tree
         }

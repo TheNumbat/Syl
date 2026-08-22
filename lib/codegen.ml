@@ -16,6 +16,7 @@ using syl_tuple_void = void;
 using syl_bool = bool;
 using syl_int = int64_t;
 using syl_env = char*;
+using syl_ref = char*;
 
 template<typename Arg, typename Ret>
 struct syl_closure {
@@ -92,6 +93,24 @@ static Payload syl_project(Variant v) {
   return payload;
 }
 
+static syl_ref syl_ref_empty() {
+  return NULL;
+}
+
+template<typename T>
+static syl_ref syl_ref_make(T payload) {
+  syl_ref p = (syl_ref)malloc(sizeof(T));
+  memcpy(p, &payload, sizeof(T));
+  return p;
+}
+
+template<typename T>
+static T syl_deref(syl_ref p) {
+  T payload;
+  memcpy(&payload, p, sizeof(T));
+  return payload;
+}
+
 static syl_env syl_env_rec(size_t size) {
   return (syl_env)malloc(size);
 }
@@ -141,62 +160,7 @@ module State = struct
   ;;
 end
 
-let print_static (mode : Modes.Staticity.t) =
-  match mode with
-  | Static -> "𝒮"
-  | Parametric | Dynamic -> ""
-;;
-
-let print_erased (mode : Modes.Erasure.t) =
-  match mode with
-  | Erased -> "ℰ"
-  | Unerased -> ""
-;;
-
-let print_mode (mode : Modes.t) = print_static mode.staticity ^ print_erased mode.erasure
-
-let rec print_key (key : Tst.Value.Concrete.t) =
-  match key with
-  | Prim (Type Unit) -> "𝕌"
-  | Prim (Type Bool) -> "𝔹"
-  | Prim (Type Int) -> "𝕀"
-  | Prim (Type Type) -> "𝕋"
-  | Prim (Prim prim) -> "λ" ^ Builtin0.Prim.symbol prim
-  | Unit -> "ø"
-  | Bool true -> "T"
-  | Bool false -> "F"
-  | Int i when Int64.( >= ) i 0L -> Int64.to_string i
-  | Int i -> "N" ^ String.drop_prefix (Int64.to_string i) 1
-  | External symbol -> symbol
-  | Closure hash -> "λ" ^ Int.to_string hash
-  | Tuple elts | Tuple_t elts ->
-    let elts = Nonempty_list.map elts ~f:print_key |> Nonempty_list.to_list in
-    String.concat elts ~sep:"ₓ"
-  | Arrow_t { arg; arg_mode; ret; ret_mode } ->
-    let arg = print_key arg in
-    let ret = print_key ret in
-    let arg_mode = print_mode arg_mode in
-    let ret_mode = print_mode ret_mode in
-    Printf.sprintf "%s%sᐳ%s%s" arg_mode arg ret_mode ret
-  | Variant_t constructors ->
-    Map.to_alist constructors
-    |> List.map ~f:(fun (label, payload) ->
-      Ident.Label.print () label
-      ^
-      match payload with
-      | None -> ""
-      | Some payload -> "ˑ" ^ print_key payload)
-    |> String.concat ~sep:"ǀ"
-    |> ( ^ ) "Ʃ"
-  | Inject { label; ty } -> print_key ty ^ "ᐧ" ^ Ident.Label.print () label
-  | Constructor { label; payload } ->
-    "ᐧ"
-    ^ Ident.Label.print () label
-    ^
-      (match payload with
-      | None -> ""
-      | Some payload -> "ˑ" ^ print_key payload)
-;;
+let print_key (key : int) = "ᵏ" ^ Int.to_string key
 
 let print_path (path : Path.t) =
   List.concat_map path ~f:(function
@@ -227,6 +191,7 @@ let rec print_ty (ty : Ty.t) =
       "syl_variant<%d,%d>"
       (Ty.payload_size_in_mem constructors)
       (Ty.payload_align_in_mem constructors)
+  | Ref -> "syl_ref"
 ;;
 
 let variant_tag (ty : Ty.t) label =
@@ -294,11 +259,17 @@ let print_expr_nonzero (expr : Expr.t) =
     sprintf "syl_project<%s>(%s)" (print_ty ty) (print_path variant)
   | Tag_test { variant; variant_ty; label; _ } ->
     sprintf "%s.tag == %dll" (print_path variant) (variant_tag variant_ty label)
+  | Make_ref { payload; payload_ty; _ } ->
+    if Ty.is_zero_size payload_ty
+    then "syl_ref_empty()"
+    else sprintf "syl_ref_make(%s)" (print_path payload)
+  | Ref_get { ref; ty; _ } -> sprintf "syl_deref<%s>(%s)" (print_ty ty) (print_path ref)
 ;;
 
 let print_expr_zero (expr : Expr.t) =
   match expr with
-  | Scalar { value = Unit | Type; _ } | Ident _ | Make_tuple _ | Tuple_get _ | Payload_get _ -> ""
+  | Scalar { value = Unit | Type; _ }
+  | Ident _ | Make_tuple _ | Tuple_get _ | Payload_get _ | Ref_get _ -> ""
   | Fill_env_rec { env = { length; _ }; _ } when length = 0 -> ""
   | Fill_env_rec { path; env = { entries; _ }; _ } ->
     let paths =
@@ -319,8 +290,13 @@ let print_expr_zero (expr : Expr.t) =
     if Ty.is_zero_size arg_ty
     then Printf.sprintf "%s()" symbol
     else Printf.sprintf "%s(%s)" symbol (print_path arg)
-  | Scalar _ | Make_env _ | Make_env_rec _ | Make_closure _ | Make_variant _ | Tag_test _ ->
-    raise_s [%message "Bug: expected zero-size" (expr : Expr.t)]
+  | Scalar _
+  | Make_env _
+  | Make_env_rec _
+  | Make_closure _
+  | Make_variant _
+  | Make_ref _
+  | Tag_test _ -> raise_s [%message "Bug: expected zero-size" (expr : Expr.t)]
 ;;
 
 let emit_decl state path ty =
@@ -377,10 +353,19 @@ and emit_switch state path (tree : Block.tree) =
   match tree with
   | Leaf { case; bindings } ->
     State.scope state ~f:(fun () ->
-      Array.iter bindings ~f:(fun (path, expr) -> emit_bind state path expr);
+      Array.iter bindings ~f:(fun (path, block) -> emit_block state path block);
       State.line state "goto %s_%d;" (print_path path) case)
   | Split { cond; then_; else_ } ->
     State.scope state ~f:(fun () ->
+      let cond =
+        match cond with
+        | Block.Block { bindings; return } ->
+          Array.iter bindings ~f:(fun (path, block) ->
+            emit_decl state path (Block.ty block);
+            emit_block state path block);
+          return
+        | _ -> raise_s [%message "Bug: expected block condition" (cond : Block.t)]
+      in
       State.line state "if(%s)" (print_expr_nonzero cond);
       emit_switch state path then_;
       State.line state "else";

@@ -1,5 +1,5 @@
 open! Core
-module Key := Tst.Value.Concrete
+module Key := Core.Int
 
 module Path : sig
   module Entry : sig
@@ -29,6 +29,7 @@ module Ty : sig
     | Type
     | Tuple of t Nonempty_list.t
     | Variant of t option Ident.Label.Map.t
+    | Ref
     | Env
     | Closure of
         { arg_ty : t
@@ -105,6 +106,17 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
+    | Make_ref of
+        { payload : Path.t
+        ; payload_ty : Ty.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Ref_get of
+        { ref : Path.t
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
     | Apply_closure of
         { fn : Path.t
         ; arg : Path.t
@@ -174,10 +186,10 @@ module Block : sig
   and tree =
     | Leaf of
         { case : int
-        ; bindings : (Path.t * Expr.t) array
+        ; bindings : (Path.t * t) array
         }
     | Split of
-        { cond : Expr.t
+        { cond : t
         ; then_ : tree
         ; else_ : tree
         }

@@ -87,6 +87,15 @@ let rec fmt_pattern ?(prec = `Tuple) cfg (pat : Cst.Expr.pattern) : Doc.t =
       (match prec with
        | `Or -> group body
        | `Arm | `Tuple -> group (text "(" ^^ body ^^ text ")"))
+    | Ref { payload } ->
+      let doc = fmt_pattern ~prec:`Tuple cfg payload in
+      let doc =
+        (* A nested ref must parenthesize: && lexes as boolean and. *)
+        match payload.node with
+        | Ref _ -> text "(" ^^ doc ^^ text ")"
+        | _ -> doc
+      in
+      text "&" ^^ doc
     | Or { left; right } ->
       (match prec with
        | `Or ->
@@ -162,6 +171,8 @@ and fmt_node ~force_break_if cfg (expr : Cst.Expr.t) =
        ^^ text "}")
   | Unreachable -> text "unreachable"
   | Paren { expr = e } -> group (text "(" ^^ align (fmt_expr cfg e) ^^ text ")")
+  | Ref { arg } -> text "&" ^^ fmt_expr cfg arg
+  | Box { arg } -> group (text "box" ^^ nest ind (line ^^ fmt_expr cfg arg))
   | Unop { op; arg } -> text (Ident.Unop.print () op) ^^ fmt_expr cfg arg
   | Binop { op; lhs; rhs } ->
     group

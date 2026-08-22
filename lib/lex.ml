@@ -35,6 +35,7 @@ module Op = struct
     | Backslash
     | Percent
     | And
+    | Amp
     | Or
     | Not
     | Eq
@@ -78,6 +79,7 @@ module Kind = struct
     | Assert : unit t
     | Unreachable : unit t
     | Variant : unit t
+    | Box : unit t
     | Lbrace : unit t
     | Rbrace : unit t
     | Op : Op.t t
@@ -118,6 +120,7 @@ module Token = struct
     | Assert
     | Unreachable
     | Variant
+    | Box
     | Lbrace
     | Rbrace
     | Op of Op.t
@@ -157,6 +160,7 @@ module Token = struct
     | Assert, Assert -> Some ()
     | Unreachable, Unreachable -> Some ()
     | Variant, Variant -> Some ()
+    | Box, Box -> Some ()
     | Lbrace, Lbrace -> Some ()
     | Rbrace, Rbrace -> Some ()
     | Op op, Op -> Some op
@@ -193,6 +197,7 @@ module Token = struct
         | Assert
         | Unreachable
         | Variant
+        | Box
         | Lbrace
         | Rbrace
         | Op _
@@ -233,6 +238,7 @@ module Token = struct
     | Assert -> "assert"
     | Unreachable -> "unreachable"
     | Variant -> "variant"
+    | Box -> "box"
     | Lbrace -> "{"
     | Rbrace -> "}"
     | Op Arrow -> "->"
@@ -245,6 +251,7 @@ module Token = struct
     | Op Backslash -> "\\"
     | Op Percent -> "%"
     | Op And -> "&&"
+    | Op Amp -> "&"
     | Op Or -> "||"
     | Op Not -> "!"
     | Op Eq -> "=="
@@ -290,6 +297,7 @@ module Token = struct
     | Assert, _
     | Unreachable, _
     | Variant, _
+    | Box, _
     | Lbrace, _
     | Rbrace, _
     | Op _, _
@@ -403,6 +411,7 @@ module Tokenizer = struct
     | "assert" -> Assert
     | "unreachable" -> Unreachable
     | "variant" -> Variant
+    | "box" -> Box
     | "true" -> Bool true
     | "false" -> Bool false
     | _ -> Ident tok
@@ -479,8 +488,7 @@ module Tokenizer = struct
   let op_amp t =
     match current t with
     | Some '&' -> single t (Op And)
-    | Some _ -> Unknown "&"
-    | None -> Eof
+    | Some _ | None -> Op Amp
   ;;
 
   let op_pipe t =

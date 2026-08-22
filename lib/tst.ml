@@ -1,5 +1,4 @@
 open! Core
-open Option.Let_syntax
 
 let seed = 42
 
@@ -10,40 +9,6 @@ let uid =
     Core.Int.incr next;
     uid
 ;;
-
-module Concrete = struct
-  module T = struct
-    type t =
-      | Unit
-      | Bool of bool
-      | Int of int64
-      | Tuple of t Nonempty_list.t
-      | Closure of int
-      | Prim of Builtin0.t
-      | External of string
-      | Inject of
-          { label : Ident.Label.t
-          ; ty : t
-          }
-      | Constructor of
-          { label : Ident.Label.t
-          ; payload : t option
-          }
-      | Arrow_t of
-          { arg : t
-          ; arg_mode : Modes.t
-          ; ret : t
-          ; ret_mode : Modes.t
-          }
-      | Tuple_t of t Nonempty_list.t
-      | Variant_t of t option Map.M(Ident.Label).t
-    [@@deriving sexp, hash, compare]
-  end
-
-  include T
-  include Comparable.Make (T)
-  include Hashable.Make (T)
-end
 
 module Kind = struct
   type t =
@@ -65,6 +30,7 @@ module Canon = struct
         { label : Ident.Label.t
         ; payload : t option
         }
+    | Ref of t
     | Or of t * t
   [@@deriving sexp_of, equal, hash]
 
@@ -75,6 +41,7 @@ module Canon = struct
     | Constructor { label; payload; _ } ->
       Constructor { label; payload = Option.map payload ~f:of_pattern }
     | Or { left; right; _ } -> Or (of_pattern left, of_pattern right)
+    | Ref { payload; _ } -> Ref (of_pattern payload)
   ;;
 end
 
@@ -97,12 +64,13 @@ type ty =
       }
   | Tuple of value Nonempty_list.t
   | Variant of value option Map.M(Ident.Label).t
+  | Ref of value
 [@@deriving sexp_of]
 
 and dependent =
   | T of
       { ty : value
-      ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+      ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
       }
   | Reduce of
       { env : (env[@sexp.opaque])
@@ -110,7 +78,7 @@ and dependent =
       ; arg_ty : value
       ; arg_mode : Modes.t
       ; ret_ty : Dst.Expr.t
-      ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+      ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
       ; uid : (int[@sexp.opaque])
       }
   | Typecheck of
@@ -119,7 +87,7 @@ and dependent =
       ; arg_ty : value
       ; arg_mode : Modes.t
       ; body : Dst.Expr.t
-      ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+      ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
       ; uid : (int[@sexp.opaque])
       }
 [@@deriving sexp_of]
@@ -187,10 +155,10 @@ and node =
       { symbol : string
       ; ty : value
       }
+  | Box of value
+  | Deref of value
   | Prim of Builtin0.Prim.t
 [@@deriving sexp_of]
-
-and concrete = Concrete.t [@@deriving sexp_of]
 
 and closure =
   { arg : Ident.t
@@ -253,7 +221,7 @@ and fun_ =
   | Binder of
       { var : Ident.t
       ; arg : Ident.t
-      ; body : expr Concrete.Map.t
+      ; body : expr Core.Int.Map.t
       ; ty : value
       ; mode : Modes.t
       ; family : (int[@sexp.opaque])
@@ -313,7 +281,7 @@ and expr =
       }
   | Binder of
       { arg : Ident.t
-      ; body : expr Concrete.Map.t
+      ; body : expr Core.Int.Map.t
       ; ty : value
       ; mode : Modes.t
       ; family : (int[@sexp.opaque])
@@ -330,7 +298,7 @@ and expr =
       { fn : expr
       ; arg : expr
       ; target : target
-      ; key : concrete option
+      ; key : value option
       ; ty : value
       ; mode : Modes.t
       ; loc : Lex.Location.t
@@ -366,6 +334,18 @@ and expr =
   | Tag_test of
       { variant : expr
       ; label : Ident.Label.t
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
+      }
+  | Make_ref of
+      { payload : expr
+      ; ty : value
+      ; mode : Modes.t
+      ; loc : Lex.Location.t
+      }
+  | Ref_get of
+      { ref : expr
       ; ty : value
       ; mode : Modes.t
       ; loc : Lex.Location.t
@@ -468,7 +448,8 @@ let equal_ty (x : ty) (y : ty) =
         | `Both (xpayload, ypayload) ->
           if not (Option.equal equal_value xpayload ypayload) then return false);
       true)
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> false
+  | Ref x, Ref y -> equal_value x y
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _ | Ref _), _ -> false
 ;;
 
 let equal_node (x : node) (y : node) =
@@ -493,6 +474,8 @@ let equal_node (x : node) (y : node) =
   | Payload x, Payload y -> equal_value x.variant y.variant && Ident.Label.equal x.label y.label
   | External x, External y -> String.equal x.symbol y.symbol && equal_value x.ty y.ty
   | Prim x, Prim y -> Builtin0.Prim.equal x y
+  | Box x, Box y -> equal_value x y
+  | Deref x, Deref y -> equal_value x y
   | Match x, Match y ->
     equal_value x.scrutinee y.scrutinee
     &&
@@ -517,6 +500,8 @@ let equal_node (x : node) (y : node) =
       | Payload _
       | Match _
       | External _
+      | Box _
+      | Deref _
       | Prim _ )
     , _ ) -> false
 ;;
@@ -581,6 +566,7 @@ let hash_fold_ty s (x : ty) =
          let s = Ident.Label.hash_fold_t s label in
          hash_fold_option (fun s (payload : value) -> hash_fold_value s payload) s payload))
       7
+  | Ref payload -> hash_fold_int (hash_fold_value s payload) 8
 ;;
 
 let hash_fold_node s (x : node) =
@@ -614,9 +600,18 @@ let hash_fold_node s (x : node) =
       15
   | External { symbol; ty } -> hash_fold_int (hash_fold_value (String.hash_fold_t s symbol) ty) 16
   | Prim prim -> hash_fold_int (Builtin0.Prim.hash_fold_t s prim) 17
+  | Box payload -> hash_fold_int (hash_fold_value s payload) 18
+  | Deref ref -> hash_fold_int (hash_fold_value s ref) 19
 ;;
 
 module Value0 = struct
+  module Key = struct
+    type t = value [@@deriving sexp_of]
+
+    let compare = Hashcons.compare
+    let hash = Hashcons.hash
+  end
+
   (* Values are reduced on construction, so every value is interned in normal form. *)
   module Table = Hashcons.Table (struct
       type t = node [@@deriving sexp_of]
@@ -658,7 +653,7 @@ module Value0 = struct
        | Some payload -> payload
        | None -> raise_s [%message "Bug: expected payload" (label : Ident.Label.t) (value : value)])
     | Bottom -> value
-    | Var _ | Constructor _ | Apply _ | Proj _ | Payload _ | Match _ ->
+    | Var _ | Constructor _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ ->
       intern (Payload { variant = value; label })
     | Unit
     | Bool _
@@ -669,6 +664,7 @@ module Value0 = struct
     | Tuple _
     | Inject _
     | External _
+    | Box _
     | Prim _ -> raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (value : value)]
   ;;
 
@@ -681,13 +677,46 @@ module Value0 = struct
     | payload -> intern (Constructor { label; payload })
   ;;
 
+  let box (payload : value) =
+    match payload.node with
+    | Bottom -> bottom
+    | _ -> intern (Box payload)
+  ;;
+
+  let deref (ref : value) =
+    match ref.node with
+    | Bottom -> bottom
+    | Box payload -> payload
+    | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ -> intern (Deref ref)
+    | Unit
+    | Bool _
+    | Int _
+    | Type _
+    | Closure _
+    | Binder _
+    | Tuple _
+    | Inject _
+    | Constructor _
+    | External _
+    | Prim _ -> raise_s [%message "Bug: expected ref" (ref : value)]
+  ;;
+
   let apply ~(fn : value) ~(arg : value) =
     match fn.node, arg.node with
     | Bottom, _ | _, Bottom -> bottom
     | Inject { label; _ }, _ -> constructor ~label ~payload:(Some arg)
-    | ( (Closure _ | Binder _ | Var _ | Apply _ | Proj _ | Payload _ | Match _ | External _ | Prim _)
+    | ( ( Closure _
+        | Binder _
+        | Var _
+        | Apply _
+        | Proj _
+        | Payload _
+        | Match _
+        | External _
+        | Deref _
+        | Prim _ )
       , _ ) -> intern (Apply { fn; arg })
-    | (Unit | Bool _ | Int _ | Type _ | Tuple _ | Constructor _), _ ->
+    | (Unit | Bool _ | Int _ | Type _ | Tuple _ | Constructor _ | Box _), _ ->
       raise_s [%message "Bug: expected function" (fn : value) (arg : value)]
   ;;
 
@@ -695,7 +724,7 @@ module Value0 = struct
     match tuple.node with
     | Tuple elts -> Nonempty_list.nth_exn elts index
     | Bottom -> tuple
-    | Var _ | Apply _ | Proj _ | Payload _ | Match _ -> intern (Proj { tuple; index })
+    | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ -> intern (Proj { tuple; index })
     | Unit
     | Bool _
     | Int _
@@ -705,6 +734,7 @@ module Value0 = struct
     | Inject _
     | Constructor _
     | External _
+    | Box _
     | Prim _ -> raise_s [%message "Bug: expected tuple" (index : int) (tuple : value)]
   ;;
 end
@@ -716,6 +746,7 @@ module Pattern = struct
     type t =
       | Index of int
       | Payload of Ident.Label.t
+      | Deref
     [@@deriving sexp]
   end
 
@@ -747,6 +778,7 @@ module Pattern = struct
       Value0.tuple
         (Nonempty_list.mapi elts ~f:(fun index pattern ->
            specialize pattern ~scrutinee:(Value0.proj scrutinee index)))
+    | Ref pattern -> Value0.box (specialize pattern ~scrutinee:(Value0.deref scrutinee))
 
   and alternatives (pattern : Canon.t) : Canon.t list =
     match pattern with
@@ -764,15 +796,26 @@ module Pattern = struct
          if
            List.for_all rest ~f:(function
              | Canon.Literal literal' -> Dst.Literal.equal literal literal'
-             | Wild | Constructor _ | Tuple _ | Or _ -> false)
+             | Wild | Constructor _ | Tuple _ | Or _ | Ref _ -> false)
          then specialize first ~scrutinee
          else scrutinee
+       | Ref payload ->
+         (match
+            List.map rest ~f:(function
+              | Canon.Ref payload' -> Some payload'
+              | Wild | Literal _ | Constructor _ | Tuple _ | Or _ -> None)
+            |> Option.all
+          with
+          | None -> scrutinee
+          | Some payloads ->
+            Value0.box
+              (specialize_alternatives (payload :: payloads) ~scrutinee:(Value0.deref scrutinee)))
        | Constructor { label; payload } ->
          (match
             List.map rest ~f:(function
               | Canon.Constructor { label = label'; payload = payload' }
                 when Ident.Label.equal label label' -> Some payload'
-              | Wild | Literal _ | Constructor _ | Tuple _ | Or _ -> None)
+              | Wild | Literal _ | Constructor _ | Tuple _ | Or _ | Ref _ -> None)
             |> Option.all
           with
           | None -> scrutinee
@@ -795,7 +838,7 @@ module Pattern = struct
             List.map rest ~f:(function
               | Canon.Tuple elts' when Nonempty_list.length elts' = arity ->
                 Some (Nonempty_list.to_list elts')
-              | Wild | Literal _ | Constructor _ | Tuple _ | Or _ -> None)
+              | Wild | Literal _ | Constructor _ | Tuple _ | Or _ | Ref _ -> None)
             |> Option.all
           with
           | None -> scrutinee
@@ -840,6 +883,10 @@ module Pattern = struct
       (match matches value left with
        | (Match | Unknown) as matched -> matched
        | No_match -> matches value right)
+    | Ref pattern ->
+      (match value.node with
+       | Box payload -> matches payload pattern
+       | _ -> Unknown)
   ;;
 
   (* Binding paths of a source pattern known to match: pure structure, except
@@ -867,6 +914,7 @@ module Pattern = struct
        | Match -> bindings_at path value left
        | No_match -> bindings_at path value right
        | Unknown -> raise_s [%message "Bug: bindings of an undecided or pattern"])
+    | Ref { payload; _ } -> bindings_at (Step.Deref :: path) (Value0.deref value) payload
   ;;
 
   let selects (scrutinee : value) patterns : _ Or_unknown.t =
@@ -884,25 +932,16 @@ module Pattern = struct
   ;;
 
   module World = struct
-    (* One world of a live arm: [positive] is the pattern actually checked —
-       the arm's own, or one synthesized constructor world of a wildcard —
-       and drives the learned fact, the value arms, and the decision tree;
-       the source [pattern] keeps the bindings. An arm whose pattern has
-       several worlds is speculative in each of them. *)
     type 'a t =
       { pattern : Dst.Expr.pattern
       ; positive : Dst.Expr.pattern
       ; speculative : bool
       ; body : 'a
       }
+
+    let anon = Ident.create Ident.Raw.anon ~stamp:0
   end
 
-  (* Synthesized world patterns bind nothing; one shared anon suffices. *)
-  let wildcard_id = Ident.create Ident.Raw.anon ~stamp:0
-
-  (* Finite-domain wildcards made positive: the constructors of a variant or
-     bool scrutinee that earlier patterns have not definitely captured, as
-     the worlds a wildcard arm must be checked under. *)
   let wildcard_worlds ~unfold ~ty ~scrutinee ~earlier ~loc =
     let candidates =
       match (unfold ty : value).node with
@@ -915,7 +954,7 @@ module Pattern = struct
           , (Constructor
                { label
                ; payload =
-                   Option.map payload ~f:(fun _ : Dst.Expr.pattern -> Var { id = wildcard_id; loc })
+                   Option.map payload ~f:(fun _ : Dst.Expr.pattern -> Var { id = World.anon; loc })
                ; loc
                }
              : Dst.Expr.pattern) ))
@@ -940,7 +979,7 @@ module Pattern = struct
       let worlds =
         match pattern with
         | Var { loc; _ } -> wildcard_worlds ~unfold ~ty ~scrutinee ~earlier ~loc
-        | Literal _ | Constructor _ | Tuple _ | Or _ -> []
+        | Literal _ | Constructor _ | Tuple _ | Or _ | Ref _ -> []
       in
       let split =
         match worlds with
@@ -954,8 +993,6 @@ module Pattern = struct
     |> Nonempty_list.of_list_exn
   ;;
 
-  (* The last patterns may differ: match values are exhaustive, so with the earlier
-     patterns equal, each last arm covers the same remainder whatever its spelling. *)
   let arms_agree a_arms b_arms =
     match Nonempty_list.zip a_arms b_arms with
     | Ok zip ->
@@ -1240,8 +1277,16 @@ end
 module Value1 = struct
   include Value0
 
-  let rec rewrite_value (value : value) ~target ~replacement =
-    let rewrite value = rewrite_value value ~target ~replacement in
+  let rec rewrite_value memo (value : value) ~target ~replacement =
+    match Hashtbl.find memo value with
+    | Some result -> result
+    | None ->
+      let result = rewrite_value' memo value ~target ~replacement in
+      Hashtbl.set memo ~key:value ~data:result;
+      result
+
+  and rewrite_value' memo (value : value) ~target ~replacement =
+    let rewrite value = rewrite_value memo value ~target ~replacement in
     if equal_value value target
     then replacement
     else (
@@ -1276,7 +1321,7 @@ module Value1 = struct
             | Int (T n) when Int64.(n <= 0L) -> value
             | _ -> Int.mod_ (rewrite a) (rewrite b))
          | Neg a -> Int.neg (rewrite a))
-      | Type ty -> Value0.type_ (rewrite_ty ty ~target ~replacement)
+      | Type ty -> Value0.type_ (rewrite_ty memo ty ~target ~replacement)
       | Tuple elts -> Value0.tuple (Nonempty_list.map elts ~f:rewrite)
       | Inject { label; ty } -> Value0.inject ~ty:(rewrite ty) ~label
       | Constructor { label; payload } ->
@@ -1287,10 +1332,12 @@ module Value1 = struct
       | Match { scrutinee = match_scrutinee; arms } ->
         match_
           ~scrutinee:(rewrite match_scrutinee)
-          ~arms:(Nonempty_list.map arms ~f:(fun (pattern, leaf) -> pattern, rewrite leaf)))
+          ~arms:(Nonempty_list.map arms ~f:(fun (pattern, leaf) -> pattern, rewrite leaf))
+      | Box payload -> Value0.box (rewrite payload)
+      | Deref ref -> Value0.deref (rewrite ref))
 
-  and rewrite_ty (ty : ty) ~target ~replacement =
-    let rewrite value = rewrite_value value ~target ~replacement in
+  and rewrite_ty memo (ty : ty) ~target ~replacement =
+    let rewrite value = rewrite_value memo value ~target ~replacement in
     match ty with
     | Unit | Bool | Int | Type -> ty
     | Arrow { arg_ty; arg_mode; ret_ty; ret_mode } ->
@@ -1300,9 +1347,12 @@ module Value1 = struct
       Pi { arg_ty = rewrite arg_ty; arg_mode; ret_ty; ret_mode }
     | Tuple elts -> Tuple (Nonempty_list.map elts ~f:rewrite)
     | Variant constructors -> Variant (Map.map constructors ~f:(Option.map ~f:rewrite))
+    | Ref payload -> Ref (rewrite payload)
 
   and rewrite value ~target ~replacement =
-    if equal_value replacement target then value else rewrite_value value ~target ~replacement
+    if equal_value replacement target
+    then value
+    else rewrite_value (Hashtbl.create (module Value0.Key)) value ~target ~replacement
 
   and match_ ~(scrutinee : value) ~arms =
     match scrutinee.node with
@@ -1377,6 +1427,7 @@ module Ty = struct
         }
     | Tuple of value Nonempty_list.t
     | Variant of value option Map.M(Ident.Label).t
+    | Ref of value
   [@@deriving sexp_of]
 
   let equal = equal_ty
@@ -1403,8 +1454,8 @@ module Ty = struct
 
   let ret_mode (v : value) =
     match v.node with
-    | Type (Arrow { ret_mode; _ }) -> ret_mode
-    | _ -> raise_s [%message "Bug: expected arrow type"]
+    | Type (Arrow { ret_mode; _ } | Pi { ret_mode; _ }) -> ret_mode
+    | _ -> raise_s [%message "Bug: expected function type"]
   ;;
 
   let of_literal : Dst.Literal.t -> t = function
@@ -1429,57 +1480,6 @@ module Ty = struct
 end
 
 module Value = struct
-  module Concrete = struct
-    include Concrete
-
-    let rec of_value (v : value) : t option =
-      match v.node with
-      | Unit -> Some Unit
-      | Bool (T b) -> Some (Bool b)
-      | Int (T i) -> Some (Int i)
-      | Tuple elts ->
-        Nonempty_list.map elts ~f:of_value
-        |> Nonempty_list.to_list
-        |> Option.all
-        |> Option.map ~f:(fun elts -> Concrete.Tuple (Nonempty_list.of_list_exn elts))
-      | Closure closure -> Some (Closure closure.uid)
-      | Binder binder -> Some (Closure binder.uid)
-      | Prim prim -> Some (Prim (Prim prim))
-      | Type Unit -> Some (Prim (Type Unit))
-      | Type Bool -> Some (Prim (Type Bool))
-      | Type Int -> Some (Prim (Type Int))
-      | Type Type -> Some (Prim (Type Type))
-      | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
-      | Type (Pi { arg_ty; arg_mode; ret_ty = T { ty = ret_ty; _ }; ret_mode }) ->
-        let%bind arg = of_value arg_ty in
-        let%map ret = of_value ret_ty in
-        Concrete.Arrow_t { arg; arg_mode; ret; ret_mode }
-      | Type (Tuple elts) ->
-        let%map elts = Nonempty_list.map elts ~f:of_value |> Nonempty_list.to_list |> Option.all in
-        Concrete.Tuple_t (Nonempty_list.of_list_exn elts)
-      | Type (Variant constructors) ->
-        with_return (fun { return } ->
-          Some
-            (Concrete.Variant_t
-               (Core.Map.map constructors ~f:(fun payload ->
-                  Option.map payload ~f:(fun payload ->
-                    match of_value payload with
-                    | Some payload -> payload
-                    | None -> return None)))))
-      | External { symbol; _ } -> Some (External symbol)
-      | Inject { label; ty } ->
-        let%map ty = of_value ty in
-        Concrete.Inject { label; ty }
-      | Constructor { label; payload = None } ->
-        Some (Concrete.Constructor { label; payload = None })
-      | Constructor { label; payload = Some payload } ->
-        let%map payload = of_value payload in
-        Concrete.Constructor { label; payload = Some payload }
-      | Bottom | Bool _ | Int _ | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Type (Pi _) ->
-        None
-    ;;
-  end
-
   type t = value [@@deriving sexp_of]
 
   type nonrec node = node =
@@ -1520,10 +1520,13 @@ module Value = struct
         { symbol : string
         ; ty : t
         }
+    | Box of t
+    | Deref of t
     | Prim of Builtin0.Prim.t
   [@@deriving sexp_of]
 
   include Value1
+  include Comparable.Make_plain (Key)
 
   let equal = equal_value
   let equal_node = equal_node
@@ -1531,6 +1534,12 @@ module Value = struct
   let hash_fold_node = hash_fold_node
   let hash = Hash.run ~seed hash_fold_t
   let hash_node = Hash.run ~seed hash_fold_node
+
+  let is_fn_type (value : t) =
+    match value.node with
+    | Type (Arrow _ | Pi _) -> true
+    | _ -> false
+  ;;
 
   let ty_exn (value : t) =
     match value.node with
@@ -1549,12 +1558,14 @@ module Value = struct
       | Apply of value
       | Proj of int
       | Payload of Ident.Label.t
+      | Deref
 
     let rec peel (value : value) frames =
       match value.node with
       | Apply { fn; arg } -> peel fn (Apply arg :: frames)
       | Proj { tuple; index } -> peel tuple (Proj index :: frames)
       | Payload { variant; label } -> peel variant (Payload label :: frames)
+      | Deref ref -> peel ref (Deref :: frames)
       | Bottom
       | Unit
       | Bool _
@@ -1568,6 +1579,7 @@ module Value = struct
       | Constructor _
       | Match _
       | External _
+      | Box _
       | Prim _ -> value, frames
     ;;
 
@@ -1576,7 +1588,8 @@ module Value = struct
         match frame with
         | Apply arg -> apply ~fn:value ~arg
         | Proj index -> proj value index
-        | Payload label -> payload value ~label)
+        | Payload label -> payload value ~label
+        | Deref -> deref value)
     ;;
   end
 end
@@ -1585,7 +1598,7 @@ module Dependent = struct
   type t = dependent =
     | T of
         { ty : value
-        ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+        ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
         }
     | Reduce of
         { env : (env[@sexp.opaque])
@@ -1593,7 +1606,7 @@ module Dependent = struct
         ; arg_ty : value
         ; arg_mode : Modes.t
         ; ret_ty : Dst.Expr.t
-        ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+        ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
         ; uid : (int[@sexp.opaque])
         }
     | Typecheck of
@@ -1602,7 +1615,7 @@ module Dependent = struct
         ; arg_ty : value
         ; arg_mode : Modes.t
         ; body : Dst.Expr.t
-        ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+        ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
         ; uid : (int[@sexp.opaque])
         }
   [@@deriving sexp_of]
@@ -1610,18 +1623,27 @@ module Dependent = struct
   let equal = equal_dependent
   let hash_fold_t = hash_fold_dependent
   let hash = Hash.run ~seed hash_fold_t
-  let mono ty : t = T { ty; memo = Hashtbl.create (module Concrete) }
+  let mono ty : t = T { ty; memo = Hashtbl.create (module Value) }
 
-  let rec is_concrete_value (v : value) =
+  let rec is_concrete_value seen (v : value) =
+    match Hashtbl.find seen v with
+    | Some r -> r
+    | None ->
+      let r = is_concrete_value' seen v in
+      Hashtbl.set seen ~key:v ~data:r;
+      r
+
+  and is_concrete_value' seen (v : value) =
     match v.node with
     | Unit | Closure _ | Binder _ | External _ | Prim _ -> true
     | Bool b -> is_concrete_bool b
     | Int i -> is_concrete_int i
-    | Type ty -> is_concrete_ty ty
-    | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
-    | Inject { ty; _ } -> is_concrete_value ty
-    | Constructor { payload; _ } -> Option.for_all payload ~f:is_concrete_value
-    | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ -> false
+    | Type ty -> is_concrete_ty seen ty
+    | Tuple elts -> Nonempty_list.for_all elts ~f:(is_concrete_value seen)
+    | Inject { ty; _ } -> is_concrete_value seen ty
+    | Constructor { payload; _ } -> Option.for_all payload ~f:(is_concrete_value seen)
+    | Box payload -> is_concrete_value seen payload
+    | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ -> false
 
   and is_concrete_bool : vbool -> _ = function
     | T _ -> true
@@ -1631,47 +1653,42 @@ module Dependent = struct
     | T _ -> true
     | _ -> false
 
-  and is_concrete_ty : ty -> _ = function
+  and is_concrete_ty seen : ty -> _ = function
     | Unit | Bool | Int | Type -> true
-    | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
-    | Arrow { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_value ret_ty
-    | Pi { arg_ty; ret_ty; _ } -> is_concrete_value arg_ty && is_concrete_dependent ret_ty
+    | Tuple elts -> Nonempty_list.for_all elts ~f:(is_concrete_value seen)
+    | Arrow { arg_ty; ret_ty; _ } -> is_concrete_value seen arg_ty && is_concrete_value seen ret_ty
+    | Pi { arg_ty; ret_ty; _ } -> is_concrete_value seen arg_ty && is_concrete_dependent seen ret_ty
     | Variant constructors ->
-      Map.for_all constructors ~f:(fun payload -> Option.for_all payload ~f:is_concrete_value)
+      Map.for_all constructors ~f:(fun payload ->
+        Option.for_all payload ~f:(is_concrete_value seen))
+    | Ref payload -> is_concrete_ref_payload seen payload
 
-  and is_concrete_dependent : dependent -> _ = function
-    | T { ty; _ } -> is_concrete_value ty
+  and is_concrete_ref_payload seen (v : value) =
+    match v.node with
+    | Apply { fn; arg } -> is_concrete_ref_payload seen fn && is_concrete_value seen arg
+    | _ -> is_concrete_value seen v
+
+  and is_concrete_dependent seen : dependent -> _ = function
+    | T { ty; _ } -> is_concrete_value seen ty
     | Reduce _ | Typecheck _ -> false
   ;;
 
+  let is_concrete v = is_concrete_value (Hashtbl.create (module Value)) v
+
   let typecheck ty ~env ~arg ~arg_ty ~arg_mode ~body =
-    if is_concrete_value ty
+    if is_concrete ty
     then mono ty
     else
       Typecheck
-        { env
-        ; arg
-        ; arg_ty
-        ; arg_mode
-        ; body
-        ; memo = Hashtbl.create (module Value.Concrete)
-        ; uid = uid ()
-        }
+        { env; arg; arg_ty; arg_mode; body; memo = Hashtbl.create (module Value); uid = uid () }
   ;;
 
   let reduce ty ~env ~arg ~arg_ty ~arg_mode ~ret_ty =
-    if is_concrete_value ty
+    if is_concrete ty
     then mono ty
     else
       Reduce
-        { env
-        ; arg
-        ; arg_ty
-        ; arg_mode
-        ; ret_ty
-        ; memo = Hashtbl.create (module Value.Concrete)
-        ; uid = uid ()
-        }
+        { env; arg; arg_ty; arg_mode; ret_ty; memo = Hashtbl.create (module Value); uid = uid () }
   ;;
 end
 
@@ -1689,7 +1706,7 @@ module Expr = struct
     | Binder of
         { var : Ident.t
         ; arg : Ident.t
-        ; body : expr Concrete.Map.t
+        ; body : expr Core.Int.Map.t
         ; ty : value
         ; mode : Modes.t
         ; family : (int[@sexp.opaque])
@@ -1749,7 +1766,7 @@ module Expr = struct
         }
     | Binder of
         { arg : Ident.t
-        ; body : expr Concrete.Map.t
+        ; body : expr Core.Int.Map.t
         ; ty : value
         ; mode : Modes.t
         ; family : (int[@sexp.opaque])
@@ -1766,7 +1783,7 @@ module Expr = struct
         { fn : expr
         ; arg : expr
         ; target : target
-        ; key : concrete option
+        ; key : value option
         ; ty : value
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -1802,6 +1819,18 @@ module Expr = struct
     | Tag_test of
         { variant : t
         ; label : Ident.Label.t
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Make_ref of
+        { payload : t
+        ; ty : value
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Ref_get of
+        { ref : t
         ; ty : value
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -1848,6 +1877,8 @@ module Expr = struct
     | Extcall { arg; _ } -> free_vars ?monos arg
     | Tuple_get { tuple; _ } -> free_vars ?monos tuple
     | Payload_get { variant; _ } | Tag_test { variant; _ } -> free_vars ?monos variant
+    | Make_ref { payload; _ } -> free_vars ?monos payload
+    | Ref_get { ref; _ } -> free_vars ?monos ref
     | Var { id; _ } -> Ident.Set.singleton id
     | Tuple { elts; _ } ->
       Nonempty_list.map elts ~f:(free_vars ?monos) |> Nonempty_list.to_list |> Ident.Set.union_list
@@ -1922,6 +1953,8 @@ module Expr = struct
     | Tuple_get { ty; _ }
     | Payload_get { ty; _ }
     | Tag_test { ty; _ }
+    | Make_ref { ty; _ }
+    | Ref_get { ty; _ }
     | Extcall { ty; _ } -> ty
   ;;
 
@@ -1941,6 +1974,8 @@ module Expr = struct
     | Builtin { mode; _ }
     | Tuple_get { mode; _ }
     | Payload_get { mode; _ }
+    | Make_ref { mode; _ }
+    | Ref_get { mode; _ }
     | Tag_test { mode; _ }
     | Extcall { mode; _ } -> mode
   ;;
@@ -1961,6 +1996,8 @@ module Expr = struct
     | Builtin { loc; _ }
     | Tuple_get { loc; _ }
     | Payload_get { loc; _ }
+    | Make_ref { loc; _ }
+    | Ref_get { loc; _ }
     | Tag_test { loc; _ }
     | Extcall { loc; _ } -> loc
   ;;
@@ -1984,6 +2021,8 @@ module Expr = struct
     | Builtin t -> Builtin { t with ty; mode }
     | Tuple_get t -> Tuple_get { t with ty; mode }
     | Payload_get t -> Payload_get { t with ty; mode }
+    | Make_ref t -> Make_ref { t with ty; mode }
+    | Ref_get t -> Ref_get { t with ty; mode }
     | Tag_test t -> Tag_test { t with ty; mode }
     | Extcall t -> Extcall { t with ty; mode }
   ;;
@@ -2005,6 +2044,8 @@ module Expr = struct
     | Builtin t -> Builtin { t with ty }
     | Tuple_get t -> Tuple_get { t with ty }
     | Payload_get t -> Payload_get { t with ty }
+    | Make_ref t -> Make_ref { t with ty }
+    | Ref_get t -> Ref_get { t with ty }
     | Tag_test t -> Tag_test { t with ty }
     | Extcall t -> Extcall { t with ty }
   ;;
@@ -2026,6 +2067,8 @@ module Expr = struct
     | Builtin t -> Builtin { t with mode }
     | Tuple_get t -> Tuple_get { t with mode }
     | Payload_get t -> Payload_get { t with mode }
+    | Make_ref t -> Make_ref { t with mode }
+    | Ref_get t -> Ref_get { t with mode }
     | Tag_test t -> Tag_test { t with mode }
     | Extcall t -> Extcall { t with mode }
   ;;

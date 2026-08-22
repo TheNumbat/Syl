@@ -20,6 +20,7 @@ module rec Ty : sig
         }
     | Tuple of Value.t Nonempty_list.t
     | Variant of Value.t option Ident.Label.Map.t
+    | Ref of Value.t
   [@@deriving sexp_of, hash, equal]
 
   val arg : Value.t -> Value.t
@@ -39,7 +40,7 @@ and Dependent : sig
   type t = private
     | T of
         { ty : Value.t
-        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
+        ; memo : (Value.t, Value.t) Hashtbl.t
         }
     | Reduce of
         { env : Env.t
@@ -47,7 +48,7 @@ and Dependent : sig
         ; arg_ty : Value.t
         ; arg_mode : Modes.t
         ; ret_ty : Dst.Expr.t
-        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
+        ; memo : (Value.t, Value.t) Hashtbl.t
         ; uid : int
         }
     | Typecheck of
@@ -56,7 +57,7 @@ and Dependent : sig
         ; arg_ty : Value.t
         ; arg_mode : Modes.t
         ; body : Dst.Expr.t
-        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
+        ; memo : (Value.t, Value.t) Hashtbl.t
         ; uid : int
         }
   [@@deriving sexp_of, hash, equal]
@@ -80,6 +81,8 @@ and Dependent : sig
     -> arg_mode:Modes.t
     -> body:Dst.Expr.t
     -> t
+
+  val is_concrete : Value.t -> bool
 end
 
 and Bool : sig
@@ -168,40 +171,6 @@ and Binder : sig
 end
 
 and Value : sig
-  module Concrete : sig
-    type t =
-      | Unit
-      | Bool of bool
-      | Int of int64
-      | Tuple of t Nonempty_list.t
-      | Closure of int
-      | Prim of Builtin0.t
-      | External of string
-      | Inject of
-          { label : Ident.Label.t
-          ; ty : t
-          }
-      | Constructor of
-          { label : Ident.Label.t
-          ; payload : t option
-          }
-      | Arrow_t of
-          { arg : t
-          ; arg_mode : Modes.t
-          ; ret : t
-          ; ret_mode : Modes.t
-          }
-      | Tuple_t of t Nonempty_list.t
-      | Variant_t of t option Ident.Label.Map.t
-    [@@deriving sexp_of, compare, hash]
-
-    include Comparable.S with type t := t
-    include Hashable.S with type t := t
-
-    (* [None] when the value contains anything symbolic. *)
-    val of_value : Value.t -> t option
-  end
-
   type t = node Hashcons.t [@@deriving sexp_of, equal, hash]
 
   and node = private
@@ -242,8 +211,12 @@ and Value : sig
         { symbol : string
         ; ty : t
         }
+    | Box of t
+    | Deref of t
     | Prim of Builtin0.Prim.t
   [@@deriving sexp_of, equal, hash]
+
+  include Comparable.S_plain with type t := t
 
   val bottom : t
   val unit : t
@@ -257,6 +230,8 @@ and Value : sig
   val tuple : t Nonempty_list.t -> t
   val proj : t -> int -> t
   val payload : t -> label:Ident.Label.t -> t
+  val box : t -> t
+  val deref : t -> t
   val inject : ty:t -> label:Ident.Label.t -> t
   val constructor : label:Ident.Label.t -> payload:t option -> t
   val apply : fn:t -> arg:t -> t
@@ -269,11 +244,14 @@ and Value : sig
       | Apply of t
       | Proj of int
       | Payload of Ident.Label.t
+      | Deref
 
     (* [peel] strips a value's eliminator spine, [unpeel] rebuilds it. *)
     val peel : Value.t -> t list -> Value.t * t list
     val unpeel : Value.t -> t list -> Value.t
   end
+
+  val is_fn_type : t -> bool
 
   (* Assuming [t] is [Type ty], returns [ty]. *)
   val ty_exn : t -> Ty.t
@@ -335,7 +313,7 @@ and Expr : sig
     | Binder of
         { var : Ident.t
         ; arg : Ident.t
-        ; body : t Value.Concrete.Map.t
+        ; body : t Core.Int.Map.t
         ; ty : Value.t
         ; mode : Modes.t
         ; family : int
@@ -395,7 +373,7 @@ and Expr : sig
         }
     | Binder of
         { arg : Ident.t
-        ; body : t Value.Concrete.Map.t
+        ; body : t Core.Int.Map.t
         ; ty : Value.t
         ; mode : Modes.t
         ; family : int
@@ -412,7 +390,7 @@ and Expr : sig
         { fn : t
         ; arg : t
         ; target : target
-        ; key : Value.Concrete.t option
+        ; key : Value.t option
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -448,6 +426,18 @@ and Expr : sig
     | Tag_test of
         { variant : t
         ; label : Ident.Label.t
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Make_ref of
+        { payload : t
+        ; ty : Value.t
+        ; mode : Modes.t
+        ; loc : Lex.Location.t
+        }
+    | Ref_get of
+        { ref : t
         ; ty : Value.t
         ; mode : Modes.t
         ; loc : Lex.Location.t
@@ -498,7 +488,7 @@ and Expr : sig
 
   (* [monos] overrides what a [Binder] node binds: pre-reify nodes carry
      empty bodies, so supply the family's monos from the store. *)
-  val free_vars : ?monos:(int -> t Value.Concrete.Map.t) -> t -> Ident.Set.t
+  val free_vars : ?monos:(int -> t Core.Int.Map.t) -> t -> Ident.Set.t
   val ty : t -> Value.t
   val mode : t -> Modes.t
   val loc : t -> Lex.Location.t
@@ -518,6 +508,7 @@ and Pattern : sig
           { label : Ident.Label.t
           ; payload : t option
           }
+      | Ref of t
       | Or of t * t
     [@@deriving sexp_of, equal, hash]
 
@@ -528,6 +519,7 @@ and Pattern : sig
     type t =
       | Index of int
       | Payload of Ident.Label.t
+      | Deref
     [@@deriving sexp_of]
   end
 

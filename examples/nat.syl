@@ -1,0 +1,159 @@
+(* TODO maybe we do want to support let rec *)
+fun nat (erased _ : unit) : erased type =
+  variant {
+    z,
+    s : &(nat ()),
+  }
+;;
+
+let nat = nat ();;
+
+(* TODO constructors need erasure polymorphism *)
+fun add (static nm : nat ^ nat) : static nat =
+  match static nm {
+    (.z, n) -> n,
+    (.s &m, n) -> nat.s box (add (m, n)),
+  }
+;;
+
+fun mk_nat (static n : int) : nat =
+  if erased n < 0
+  then unreachable
+  else
+    match static n {
+      0 -> nat.z,
+      n -> nat.s box (mk_nat (n - 1)),
+    }
+;;
+
+let zero = mk_nat 0;;
+
+let one = mk_nat 1;;
+
+let two = mk_nat 2;;
+
+let three = mk_nat 3;;
+
+fun eq (erased nm : nat ^ nat) : bool =
+  match erased nm {
+    (.z, .z) -> true,
+    (.s &m, .s &n) -> eq (m, n),
+    _ -> false,
+  }
+;;
+
+let _ = assert erased (eq (add (zero, one), one));;
+
+let _ = assert erased (eq (add (one, add (one, one)), three));;
+
+fun vec (erased t : type) : erased (static nat -> erased type) =
+  fn (static n : nat) ->
+    match static n {
+      .z -> variant { nil },
+      .s &m -> variant { cons : t ^ vec t m },
+    }
+;;
+
+fun mk_vec (erased t : type) : (static nat \ n -> t -> vec t n) =
+  fn (static n : nat) ->
+    fn (x : t) ->
+      match static n {
+        .z -> (vec t n).nil,
+        .s &m -> (vec t n).cons (x, mk_vec t m x),
+      }
+;;
+
+let _ =
+  let v = mk_vec int (mk_nat 2) 42 in
+  match v { .cons (x, .cons (y, .nil)) -> let _ = print_int x in let _ = print_int y in () }
+;;
+
+fun append
+  (erased t : type) : (static nat \ n
+                         -> static nat \ m
+                         -> vec t n
+                         -> vec t m
+                         -> vec t (add (n, m))) =
+  fn (static n : nat) ->
+    fn (static m : nat) ->
+      fn (v1 : vec t n) ->
+        fn (v2 : vec t m) ->
+          match static n {
+            .z -> v2,
+            .s &n_minus_1 ->
+              match v1 {
+                .cons (x, xs) -> (vec t (add (n, m))).cons (x, append t n_minus_1 m xs v2),
+              },
+          }
+;;
+
+let _ =
+  let x = mk_vec int (mk_nat 2) 42 in
+  let y = mk_vec int (mk_nat 3) 43 in
+  let z = append int (mk_nat 2) (mk_nat 3) x y in
+  let _ = z : vec int (mk_nat 5) in
+  match z {
+    .cons (a, .cons (b, .cons (c, .cons (d, .cons (e, .nil))))) ->
+      let _ = print_int a in
+      let _ = print_int b in
+      let _ = print_int c in
+      let _ = print_int d in
+      let _ = print_int e in
+      (),
+  }
+;;
+
+(* This compiles to:
+
+main:
+    push    r14
+    push    rbx
+    push    rax
+    lea     rbx, [rip + .L.str.4]
+    mov     esi, 42
+    mov     rdi, rbx
+    xor     eax, eax
+    call    printf@PLT
+    mov     esi, 42
+    mov     rdi, rbx
+    xor     eax, eax
+    call    printf@PLT
+    mov     edi, 80
+    call    malloc@PLT
+    mov     r14, rax
+    mov     qword ptr [rax + 56], 0
+    mov     qword ptr [rax + 64], 42
+    mov     qword ptr [rax + 72], 0
+    mov     edi, 64
+    call    malloc@PLT
+    movups  xmm0, xmmword ptr [r14 + 56]
+    movups  xmmword ptr [rax + 40], xmm0
+    mov     rcx, qword ptr [r14 + 72]
+    mov     qword ptr [rax + 56], rcx
+    mov     r14, qword ptr [rax + 48]
+    mov     esi, 42
+    mov     rdi, rbx
+    xor     eax, eax
+    call    printf@PLT
+    mov     rdi, rbx
+    mov     rsi, r14
+    xor     eax, eax
+    call    printf@PLT
+    mov     esi, 43
+    mov     rdi, rbx
+    xor     eax, eax
+    call    printf@PLT
+    mov     esi, 43
+    mov     rdi, rbx
+    xor     eax, eax
+    call    printf@PLT
+    mov     esi, 43
+    mov     rdi, rbx
+    xor     eax, eax
+    call    printf@PLT
+    xor     eax, eax
+    add     rsp, 8
+    pop     rbx
+    pop     r14
+    ret
+*)

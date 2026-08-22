@@ -33,6 +33,10 @@ module Expr = struct
         { elts : pattern Nonempty_list.t
         ; loc : Lex.Location.t
         }
+    | Ref of
+        { payload : pattern
+        ; loc : Lex.Location.t
+        }
     | Or of
         { left : pattern
         ; right : pattern
@@ -104,6 +108,14 @@ module Expr = struct
         { constructors : constructor Nonempty_list.t
         ; loc : Lex.Location.t
         }
+    | Ref of
+        { arg : t
+        ; loc : Lex.Location.t
+        }
+    | Box of
+        { arg : t
+        ; loc : Lex.Location.t
+        }
     | Arrow of
         { arg : t
         ; arg_id : Ident.t
@@ -151,6 +163,8 @@ module Expr = struct
     | Constructor _
     | Select _
     | Variant _
+    | Ref _
+    | Box _
     | Arrow _
     | Tuple _
     | Make_tuple _
@@ -163,7 +177,10 @@ module Expr = struct
     | Tuple { elts; _ } | Make_tuple { elts; _ } ->
       Nonempty_list.map elts ~f:free_vars |> Nonempty_list.to_list |> Ident.Set.union_list
     | Var { id; _ } -> Ident.Set.singleton id
-    | Mode_annotation { expr; _ } | Select { expr; _ } -> free_vars expr
+    | Mode_annotation { expr; _ }
+    | Select { expr; _ }
+    | Ref { arg = expr; _ }
+    | Box { arg = expr; _ } -> free_vars expr
     | Type_annotation { expr; ty; _ } -> Set.union (free_vars expr) (free_vars ty)
     | Unreachable _ | Literal _ | Builtin _ | Constructor _ -> Ident.Set.empty
     | Variant { constructors; _ } ->
@@ -210,6 +227,7 @@ module Expr = struct
       Option.value_map payload ~default:Ident.Set.empty ~f:free_vars_pattern
     | Tuple { elts; _ } ->
       Nonempty_list.map elts ~f:free_vars_pattern |> Nonempty_list.to_list |> Ident.Set.union_list
+    | Ref { payload; _ } -> free_vars_pattern payload
     | Or { left; right; _ } -> Set.union (free_vars_pattern left) (free_vars_pattern right)
   ;;
 
@@ -225,6 +243,8 @@ module Expr = struct
     | Constructor { loc; _ }
     | Select { loc; _ }
     | Variant { loc; _ }
+    | Ref { loc; _ }
+    | Box { loc; _ }
     | Arrow { loc; _ }
     | Tuple { loc; _ }
     | Unreachable { loc; _ }
@@ -239,6 +259,7 @@ module Expr = struct
     | Literal { loc; _ }
     | Constructor { loc; _ }
     | Tuple { loc; _ }
+    | Ref { loc; _ }
     | Or { loc; _ } -> loc
   ;;
 end
