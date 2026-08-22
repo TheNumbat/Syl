@@ -63,7 +63,7 @@ module State = struct
 end
 
 module Env = struct
-  type t = (Path.t * Ty.t) Ident.Map.t [@@deriving sexp]
+  type t = (Path.t * Ty.t) Ident.Map.t [@@deriving sexp_of]
 
   let empty = Ident.Map.empty
   let bind t id path ty = Map.set t ~key:id ~data:(path, ty)

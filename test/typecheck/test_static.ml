@@ -1696,3 +1696,90 @@ let _ = pick false;;
 |};
   [%expect {| ((loc ((line 2) (column 59))) (reason Unreachable_reached)) |}]
 ;;
+
+(* -------------------------------------------------------------------------------------
+   A stuck static match can progress by reducing its scrutinee: [try_unfold] rebuilds
+   through [Value.match_], whose construction re-runs selection. The demand shape is a
+   family applied to a computed index — [fam (choose p)] — inside an arm that has
+   refined [p]: the index application is suspended (its key is symbolic), but one beta
+   step decides it, which decides the family's match, which the selection/leq demand
+   then consumes. leq/join/meet admit [Match] into their unfold fallbacks to keep
+   admission/reducibility parity.
+   ------------------------------------------------------------------------------------- *)
+
+let%expect_test "selection reduces a stuck match's scrutinee" =
+  go
+    {|
+fun fam (static k : int) : erased type =
+  match static k { 0 -> variant { zero }, _ -> variant { other : int } };;
+fun choose (static bn : bool ^ int) : static int =
+  match static bn { (true, n) -> 1, (false, n) -> 0 };;
+fun g (static p : bool ^ int) : static int =
+  match static p {
+    (true, n) -> (let erased v = (fam (choose p)).other n in n),
+    (false, n) -> (let erased v = (fam (choose p)).zero in n),
+  }
+;;
+let _ = assert erased (g (true, 4) == 4);;
+let _ = assert erased (g (false, 5) == 5);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "leq reduces a stuck match's scrutinee" =
+  (* The same shape demanded through an annotation: the value's variant type
+     checks against the stuck-match type via the unfold fallback. *)
+  go
+    {|
+fun fam (static k : int) : erased type =
+  match static k { 0 -> variant { zero }, _ -> variant { other : int } };;
+fun choose (static bn : bool ^ int) : static int =
+  match static bn { (true, n) -> 1, (false, n) -> 0 };;
+fun h (static p : bool ^ int) : static int =
+  match static p {
+    (true, n) -> (let erased v = ((fam (choose p)).other n : fam (choose p)) in n),
+    (false, n) -> n,
+  }
+;;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "a match on a truly opaque scrutinee stays stuck" =
+  (* No refinement decides [k], so the family's variant set is unknowable and
+     selection still fails — predictably, in the abstract pass. *)
+  go
+    {|
+fun fam (static k : int) : erased type =
+  match static k { 0 -> variant { zero }, _ -> variant { other : int } };;
+fun g (static k : int) : static int = (let erased v = (fam k).zero in k);;
+|};
+  [%expect
+    {|
+    ((loc ((line 4) (column 54)))
+     (reason
+      (Expected_variant
+       (got
+        (Match (scrutinee (Var (Anon <opaque>)))
+         (arms
+          (((Literal (Int 0)) (Type (Variant ((zero ())))))
+           (Wild (Type (Variant ((other ((Type Int)))))))))))
+       (label zero))))
+    |}]
+;;
+
+let%expect_test "unjoinable arm types fall back to the conditional type" =
+  (* The arms' types have no flat join, so the match's type is the stuck
+     conditional over the scrutinee; the declared dependent return reduces to
+     the same conditional and the two align structurally. *)
+  go
+    {|
+fun pick (static b : bool) : erased type =
+  match static b { true -> variant { a }, false -> variant { b : int } };;
+fun f (static b : bool) : static (pick b) =
+  match static b { true -> (pick b).a, false -> (pick b).b 3 };;
+let _ = f true;;
+let _ = f false;;
+|};
+  [%expect {| |}]
+;;

@@ -24,7 +24,7 @@ module Result = struct
       | Ok of 'a
       | Parse_error of Parse.Error.t Loc.t
       | Type_error of Typecheck.Error.t Loc.t
-    [@@deriving sexp]
+    [@@deriving sexp_of]
 
     let parsed (x : (Cst.Program.t, Parse.Error.t Loc.t) result) =
       match x with

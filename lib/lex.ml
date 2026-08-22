@@ -309,7 +309,7 @@ module Location = struct
     { line : int
     ; column : int
     }
-  [@@deriving sexp, compare, hash]
+  [@@deriving sexp, compare, equal, hash]
 
   let empty = { line = 1; column = 0 }
 end

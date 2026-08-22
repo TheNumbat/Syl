@@ -713,6 +713,31 @@ let _ = print_int (h 0 3);;
     |}]
 ;;
 
+let%expect_test "matching an or-pattern implies the structure the alternatives agree on" =
+  go
+    {|
+let opt_t = variant { none, some : int };;
+
+fun tysel (erased o : opt_t) : erased type =
+  match erased o { .none -> bool, .some k -> int }
+;;
+
+fun h (static o : opt_t) : int =
+  match static o {
+    .some 1 | .some 2 -> (fn (v : tysel o) -> v) 9,
+    _ -> 0,
+  }
+;;
+let _ = print_int (h (opt_t.some 2));;
+let _ = print_int (h (opt_t.none));;
+|};
+  [%expect
+    {|
+    9
+    0
+    |}]
+;;
+
 let%expect_test "mode-annotated scrutinee still refines" =
   go
     {|

@@ -2175,10 +2175,8 @@ let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : int;;
        (got
         (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 2) (column 32))))
-            (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 2) (column 32))))
-            (Type Bool))))))
+          (((Literal (Bool true)) (Type Int))
+           ((Literal (Bool false)) (Type Bool))))))
        (need (Type Int)))))
     |}]
 ;;
@@ -2250,10 +2248,8 @@ let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : (if erased 
        (got
         (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 2) (column 70))))
-            (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 2) (column 70))))
-            (Type Type))))))
+          (((Literal (Bool true)) (Type Int))
+           ((Literal (Bool false)) (Type Type))))))
        (need (Type Type)))))
     |}]
 ;;

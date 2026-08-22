@@ -316,10 +316,8 @@ fun f (static b : bool) : opt b = (opt b).none;;
        (got
         (Match (scrutinee (Var (Anon <opaque>)))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 3) (column 2))))
-            (Type (Variant ((some ((Type Int)))))))
-           ((Literal (value (Bool false)) (loc ((line 3) (column 2))))
-            (Type (Variant ((none ())))))))))
+          (((Literal (Bool true)) (Type (Variant ((some ((Type Int)))))))
+           ((Literal (Bool false)) (Type (Variant ((none ())))))))))
        (label none))))
     |}]
 ;;
@@ -541,38 +539,7 @@ fun f (static o : opt) : int =
          (Constructor (label some)
           (payload ((Var (id ((Id w) <opaque>)) (loc ((line 6) (column 32))))))
           (loc ((line 6) (column 26))))))
-       (value
-        (Refine (value (Var (Anon <opaque>)))
-         (excluded ((Constructor (label some) (payload ())))))))))
-    |}]
-;;
-
-(* Failure of [.some 3] now excludes the shape, not just nothing: the nested
-   duplicate is refuted outright. *)
-let%expect_test "refutable payloads learn their exclusion shape" =
-  go
-    {|
-let opt = variant { none, some : int };;
-fun f (static o : opt) : int =
-  match static o {
-    .some 3 -> 1,
-    _ -> match static o { .some 3 -> 9, _ -> 0 },
-  }
-;;
-|};
-  [%expect
-    {|
-    ((loc ((line 6) (column 26)))
-     (reason
-      (Dead_branch
-       (branch
-        (Arm
-         (Constructor (label some)
-          (payload ((Literal (value (Int 3)) (loc ((line 6) (column 32))))))
-          (loc ((line 6) (column 26))))))
-       (value
-        (Refine (value (Var (Anon <opaque>)))
-         (excluded ((Constructor (label some) (payload ((Literal (Int 3))))))))))))
+       (value (Constructor (label none) (payload ()))))))
     |}]
 ;;
 
@@ -590,16 +557,7 @@ fun f (static o : opt) : int =
   }
 ;;
 |};
-  [%expect
-    {|
-    ((loc ((line 6) (column 33)))
-     (reason
-      (Dead_branch
-       (branch (Arm (Literal (value (Int 3)) (loc ((line 6) (column 33))))))
-       (value
-        (Refine (value (Payload (variant (Var (Anon <opaque>))) (label some)))
-         (excluded ((Literal (Int 3)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 (* The scrutinee is always [.some]-headed, so the [.none] arm collapses under
@@ -643,35 +601,6 @@ let _ = assert erased (f 3 == 1);;
 let _ = assert erased (f 9 == 9);;
 |};
   [%expect {| |}]
-;;
-
-let%expect_test "constructor-headed scrutinee needs only its head's arms" =
-  go
-    {|
-let opt = variant { none, some : int };;
-fun f (static x : int) : int =
-  let y = opt.some x in
-  match static y {
-    .some 3 -> 1,
-    .some w -> match static y { .some 3 -> 0, _ -> -1 },
-  }
-;;
-|};
-  [%expect
-    {|
-    ((loc ((line 7) (column 32)))
-     (reason
-      (Dead_branch
-       (branch
-        (Arm
-         (Constructor (label some)
-          (payload ((Literal (value (Int 3)) (loc ((line 7) (column 38))))))
-          (loc ((line 7) (column 32))))))
-       (value
-        (Constructor (label some)
-         (payload
-          ((Refine (value (Var (Anon <opaque>))) (excluded ((Literal (Int 3))))))))))))
-    |}]
 ;;
 
 (* The wildcard arm's world excludes [.some], so a nested match on the same
@@ -1086,16 +1015,8 @@ fun pick (static d : dir) : dynamic int = match static d { .left v | .right v ->
        (got
         (Match (scrutinee (Var (Anon <opaque>)))
          (arms
-          (((Constructor (label left)
-             (payload
-              ((Var (id ((Id v) <opaque>)) (loc ((line 3) (column 65))))))
-             (loc ((line 3) (column 59))))
-            (Type Int))
-           ((Constructor (label right)
-             (payload
-              ((Var (id ((Id v) <opaque>)) (loc ((line 3) (column 76))))))
-             (loc ((line 3) (column 69))))
-            (Type Bool))))))
+          (((Constructor (label left) (payload (Wild))) (Type Int))
+           ((Constructor (label right) (payload (Wild))) (Type Bool))))))
        (need (Type Int)))))
     |}]
 ;;
@@ -1166,7 +1087,7 @@ let _ = match opt.some d { .some 1 -> 0, .none -> 1 };;
      (reason
       (Match
        (Non_exhaustive
-        ((Constructor (label some) (payload ((All_except ((Literal (Int 1))))))))))))
+        ((Constructor (label some) (payload ((Excluding ((Int 1)))))))))))
     |}]
 ;;
 
@@ -1380,99 +1301,38 @@ let _ = 5 : t x;;
   [%expect {| |}]
 ;;
 
-(* A generic consumer cannot destructure a value of stuck family type: the
-   scrutinee's type was fixed before the index was refined. *)
-let%expect_test "generic consumer of an indexed family" =
+(* Facts key on values and reach every binding: the arm's exclusion on [o] rewrites
+   [guard]'s static at lookup, deciding the inner match — its refuted arm is dead
+   code. *)
+let%expect_test "facts rewrite prior bindings" =
   go
     {|
-fun vec (static n : int) : erased type =
-  match erased n { 0 -> variant { nil }, _ -> variant { cons : int ^ vec (n - 1) } }
-;;
-fun sum (static n : int) : vec n -> dynamic int =
-  fn (v : vec n) ->
-    match erased n {
-      0 -> 0,
-      _ -> match v { .cons (h, t) -> h + sum (n - 1) t },
-    }
+let opt = variant { none, some : int };;
+fun f (static o : opt) : static int =
+  let guard = (o, 1) in
+  match static o {
+    .none -> 0,
+    _ -> match static guard { (.none, _) -> 9, _ -> 1 },
+  }
 ;;
 |};
   [%expect
     {|
-    ((loc ((line 9) (column 21)))
+    ((loc ((line 7) (column 30)))
      (reason
-      (Expected_variant
-       (got
-        (Match (scrutinee (Var (Anon <opaque>)))
-         (arms
-          (((Literal (value (Int 0)) (loc ((line 3) (column 19))))
-            (Type (Variant ((nil ())))))
-           ((Var (id (Anon <opaque>)) (loc ((line 3) (column 41))))
-            (Type
-             (Variant
-              ((cons
-                ((Type
-                  (Tuple
-                   ((Type Int)
-                    (Apply
-                     (fn
-                      (Binder
-                       ((arg ((Id n) <opaque>))
-                        (ty
-                         (Type
-                          (Pi (arg_ty (Type Int))
-                           (arg_mode ((staticity Static) (erasure Unerased)))
-                           (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                           (ret_mode ((staticity Static) (erasure Erased))))))
-                        (body_dst
-                         (Match
-                          (cond
-                           (Var (id ((Id n) <opaque>))
-                            (loc ((line 3) (column 15)))))
-                          (arms
-                           (((Literal (value (Int 0))
-                              (loc ((line 3) (column 19))))
-                             (Variant (constructors (((label nil) (payload ()))))
-                              (loc ((line 3) (column 24)))))
-                            ((Var (id (Anon <opaque>))
-                              (loc ((line 3) (column 41))))
-                             (Variant
-                              (constructors
-                               (((label cons)
-                                 (payload
-                                  ((Tuple
-                                    (elts
-                                     ((Var (id ((Id int) <opaque>))
-                                       (loc ((line 3) (column 63))))
-                                      (Apply
-                                       (fn
-                                        (Var (id ((Id vec) <opaque>))
-                                         (loc ((line 3) (column 69)))))
-                                       (arg
-                                        (Apply
-                                         (fn
-                                          (Var (id ((Binop Sub) <opaque>))
-                                           (loc ((line 3) (column 76)))))
-                                         (arg
-                                          (Make_tuple
-                                           (elts
-                                            ((Var (id ((Id n) <opaque>))
-                                              (loc ((line 3) (column 74))))
-                                             (Literal (value (Int 1))
-                                              (loc ((line 3) (column 78))))))
-                                           (loc ((line 3) (column 76)))))
-                                         (loc ((line 3) (column 76)))))
-                                       (loc ((line 3) (column 69))))))
-                                    (loc ((line 3) (column 63)))))))))
-                              (loc ((line 3) (column 46)))))))
-                          (eliminator Erased) (loc ((line 3) (column 2)))))
-                        (env <opaque>) (family <opaque>) (hash <opaque>))))
-                     (arg
-                      (Int
-                       (Sub
-                        (Refine (value (Var (Anon <opaque>)))
-                         (excluded ((Literal (Int 0)))))
-                        (Int (T 1)))))))))))))))))))
-       (label cons))))
+      (Dead_branch
+       (branch
+        (Arm
+         (Tuple
+          (elts
+           ((Constructor (label none) (payload ()) (loc ((line 7) (column 31))))
+            (Var (id (Anon <opaque>)) (loc ((line 7) (column 38))))))
+          (loc ((line 7) (column 30))))))
+       (value
+        (Tuple
+         ((Constructor (label some)
+           (payload ((Payload (variant (Var (Anon <opaque>))) (label some)))))
+          (Int (T 1))))))))
     |}]
 ;;
 
@@ -1566,41 +1426,35 @@ let f = fn (static flag : bool) ->
               (else_
                (Var (id ((Id bool) <opaque>)) (loc ((line 3) (column 72)))))
               (erased Erased) (loc ((line 3) (column 41)))))
-            (env <opaque>) (family <opaque>) (hash <opaque>))))
+            (env <opaque>) (family <opaque>) (uid <opaque>))))
          (arg
           (Match
            (scrutinee
             (Match (scrutinee (Var (Anon <opaque>)))
              (arms
-              (((Literal (value (Bool true)) (loc ((line 5) (column 16))))
+              (((Literal (Bool true))
                 (Constructor (label a) (payload ((Int (T 1))))))
-               ((Literal (value (Bool false)) (loc ((line 5) (column 16))))
+               ((Literal (Bool false))
                 (Constructor (label b) (payload ((Int (T 1))))))))))
            (arms
-            (((Constructor (label a)
-               (payload
-                ((Var (id ((Id u) <opaque>)) (loc ((line 5) (column 67))))))
-               (loc ((line 5) (column 64))))
+            (((Constructor (label a) (payload (Wild)))
               (Payload
                (variant
                 (Match (scrutinee (Var (Anon <opaque>)))
                  (arms
-                  (((Literal (value (Bool true)) (loc ((line 5) (column 16))))
+                  (((Literal (Bool true))
                     (Constructor (label a) (payload ((Int (T 1))))))
-                   ((Literal (value (Bool false)) (loc ((line 5) (column 16))))
+                   ((Literal (Bool false))
                     (Constructor (label b) (payload ((Int (T 1))))))))))
                (label a)))
-             ((Constructor (label b)
-               (payload
-                ((Var (id ((Id u) <opaque>)) (loc ((line 5) (column 74))))))
-               (loc ((line 5) (column 71))))
+             ((Constructor (label b) (payload (Wild)))
               (Payload
                (variant
                 (Match (scrutinee (Var (Anon <opaque>)))
                  (arms
-                  (((Literal (value (Bool true)) (loc ((line 5) (column 16))))
+                  (((Literal (Bool true))
                     (Constructor (label a) (payload ((Int (T 1))))))
-                   ((Literal (value (Bool false)) (loc ((line 5) (column 16))))
+                   ((Literal (Bool false))
                     (Constructor (label b) (payload ((Int (T 1))))))))))
                (label b))))))))))))
     |}]

@@ -13,6 +13,7 @@ module Expr : sig
     ; body : t
     ; loc : Lex.Location.t
     }
+  [@@deriving sexp]
 
   and pattern =
     | Var of
@@ -37,11 +38,13 @@ module Expr : sig
         ; right : pattern
         ; loc : Lex.Location.t
         }
+  [@@deriving sexp, equal, hash]
 
   and constructor =
     { label : Ident.Label.t
     ; payload : t option
     }
+  [@@deriving sexp]
 
   and t =
     | If of

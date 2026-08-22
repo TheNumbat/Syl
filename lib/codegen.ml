@@ -172,7 +172,7 @@ let rec print_key (key : Tst.Value.Concrete.t) =
   | Tuple elts | Tuple_t elts ->
     let elts = Nonempty_list.map elts ~f:print_key |> Nonempty_list.to_list in
     String.concat elts ~sep:"ₓ"
-  | Arrow { arg; arg_mode; ret; ret_mode } ->
+  | Arrow_t { arg; arg_mode; ret; ret_mode } ->
     let arg = print_key arg in
     let ret = print_key ret in
     let arg_mode = print_mode arg_mode in

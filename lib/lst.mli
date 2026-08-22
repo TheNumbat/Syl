@@ -6,10 +6,10 @@ module Path : sig
     type t =
       | Id of Ident.t
       | Key of Key.t
-    [@@deriving sexp, compare, equal, hash]
+    [@@deriving sexp_of, compare, equal, hash]
   end
 
-  type t = Entry.t list [@@deriving sexp, compare, equal, hash]
+  type t = Entry.t list [@@deriving sexp_of, compare, equal, hash]
 
   val empty : t
   val id : Ident.t -> t
@@ -17,8 +17,8 @@ module Path : sig
   val with_id : t -> Ident.t -> t
   val with_key : t -> Key.t -> t
 
-  include Hashable.S with type t := t
-  include Comparable.S with type t := t
+  include Hashable.S_plain with type t := t
+  include Comparable.S_plain with type t := t
 end
 
 module Ty : sig
@@ -34,7 +34,7 @@ module Ty : sig
         { arg_ty : t
         ; ret_ty : t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   (* TODO these will change once we switch to an llvm backend. *)
 
@@ -54,13 +54,13 @@ module Env : sig
     ; ty : Ty.t
     ; offset : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type t =
     { entries : entry array
     ; length : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   val empty : t
 end
@@ -157,7 +157,7 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   val ty : t -> Ty.t
   val loc : t -> Lex.Location.t
@@ -169,7 +169,7 @@ module Block : sig
     { bindings : (Path.t * Ty.t) array
     ; block : t
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and tree =
     | Leaf of
@@ -181,7 +181,7 @@ module Block : sig
         ; then_ : tree
         ; else_ : tree
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and t =
     | Block of
@@ -201,7 +201,7 @@ module Block : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   val ty : t -> Ty.t
   val loc : t -> Lex.Location.t
@@ -230,7 +230,7 @@ module Proc : sig
         ; ret_ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Program : sig
@@ -238,5 +238,5 @@ module Program : sig
     { procs : Proc.t array
     ; bindings : (Path.t * Block.t) array
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end

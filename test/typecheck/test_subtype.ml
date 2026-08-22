@@ -476,13 +476,14 @@ let _ = id : static type \ t -> erased t -> t;;
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
            (Typecheck (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
-            (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
+            (arg_mode ((staticity Static) (erasure Unerased)))
             (body
              (Lambda (arg ((Id x) <opaque>))
               (arg_mode ((staticity ()) (erasure ())))
               (arg_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 41)))))
               (body (Var (id ((Id x) <opaque>)) (loc ((line 2) (column 47)))))
-              (loc ((line 2) (column 33)))))))
+              (loc ((line 2) (column 33)))))
+            (memo <opaque>) (uid <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (need
         (Type
@@ -490,7 +491,7 @@ let _ = id : static type \ t -> erased t -> t;;
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
            (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
-            (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
+            (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty
              (Arrow
               (arg (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 39)))))
@@ -498,7 +499,8 @@ let _ = id : static type \ t -> erased t -> t;;
               (arg_mode ((staticity ()) (erasure (Erased))))
               (ret (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 44)))))
               (ret_mode ((staticity ()) (erasure ())))
-              (loc ((line 3) (column 20)))))))
+              (loc ((line 3) (column 20)))))
+            (memo <opaque>) (uid <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
@@ -580,8 +582,9 @@ let _ = f : static (static erased type \ t -> dynamic t) -> unit;;
              (arg_mode ((staticity Static) (erasure Unerased)))
              (ret_ty
               (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
-               (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
-               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 49)))))))
+               (arg_mode ((staticity Static) (erasure Unerased)))
+               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 49)))))
+               (memo <opaque>) (uid <opaque>)))
              (ret_mode ((staticity Static) (erasure Erased))))))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
@@ -595,8 +598,9 @@ let _ = f : static (static erased type \ t -> dynamic t) -> unit;;
              (arg_mode ((staticity Static) (erasure Erased)))
              (ret_ty
               (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
-               (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
-               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 54)))))))
+               (arg_mode ((staticity Static) (erasure Erased)))
+               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 54)))))
+               (memo <opaque>) (uid <opaque>)))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
@@ -917,7 +921,7 @@ let coerce =
   [%expect {| |}]
 ;;
 
-(* [refine]: decomposing a stuck match assumes the arm's pattern for both sides, so
+(* Decomposing a stuck match assumes the arm's pattern for both sides, so
    correlated conditionals compare arm-by-arm even when structurally misaligned. *)
 let%expect_test "leq refines correlated conditionals across an arrow" =
   go

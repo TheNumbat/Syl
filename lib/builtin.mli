@@ -17,7 +17,7 @@ module Error : sig
         { idx : int64
         ; len : int64
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 exception Error of Error.t

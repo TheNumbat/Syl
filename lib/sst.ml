@@ -17,7 +17,7 @@ module Ty = struct
         ; ret_ty : t Key.Map.t
         }
     | Variant of t option Ident.Label.Map.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Scalar = struct
@@ -26,14 +26,14 @@ module Scalar = struct
     | Type
     | Bool of bool
     | Int of int64
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Expr = struct
   type target =
     | Family of (int[@sexp.opaque])
     | Prim of Builtin0.Prim.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type fun_ =
     | Lambda of
@@ -52,13 +52,13 @@ module Expr = struct
         ; family : (int[@sexp.opaque])
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and case =
     { body : t
     ; bindings : Ty.t Ident.Map.t
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and tree =
     | Leaf of
@@ -70,7 +70,7 @@ module Expr = struct
         ; then_ : tree
         ; else_ : tree
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and t =
     | Scalar of
@@ -182,7 +182,7 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let ty : t -> Ty.t = function
     | Scalar { ty; _ }
@@ -316,7 +316,7 @@ module Top_level = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Program = struct
@@ -324,5 +324,5 @@ module Program = struct
     { top_levels : Top_level.t list
     ; stamp : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end

@@ -17,7 +17,7 @@ module Ty : sig
         ; ret_ty : t Key.Map.t
         }
     | Variant of t option Ident.Label.Map.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Scalar : sig
@@ -26,14 +26,14 @@ module Scalar : sig
     | Type
     | Bool of bool
     | Int of int64
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Expr : sig
   type target =
     | Family of int
     | Prim of Builtin0.Prim.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type fun_ =
     | Lambda of
@@ -52,13 +52,13 @@ module Expr : sig
         ; family : int
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and case =
     { body : t
     ; bindings : Ty.t Ident.Map.t
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and tree =
     | Leaf of
@@ -70,7 +70,7 @@ module Expr : sig
         ; then_ : tree
         ; else_ : tree
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and t =
     | Scalar of
@@ -182,7 +182,7 @@ module Expr : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   val ty : t -> Ty.t
   val with_ty : t -> Ty.t -> t
@@ -208,7 +208,7 @@ module Top_level : sig
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Program : sig
@@ -216,5 +216,5 @@ module Program : sig
     { top_levels : Top_level.t list
     ; stamp : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end

@@ -29,9 +29,8 @@ let compile patterns ~scrutinee_ty =
   let patterns =
     Nonempty_list.of_list_exn (List.map patterns ~f:(fun (pattern, _bindings) -> pattern))
   in
-  let scrutinee = Tst.Value.var (id "scrutinee" 0) in
   let { Match.Result.tree; redundant; missing } =
-    Syl.Match.compile ~scrutinee ~ty:scrutinee_ty ~unfold:Fn.id patterns
+    Syl.Match.compile ~ty:scrutinee_ty ~unfold:Fn.id patterns
   in
   print_s
     [%message
@@ -201,7 +200,7 @@ let%expect_test "int literal without wildcard - non-exhaustive" =
       (Switch (occurrence ((path ()) (ty (Type Int))))
        (cases (((Literal (Int 42)) (Leaf (case 0) (bindings ())))))
        (default (Fail))))
-     (redundant ()) (missing ((All_except ((Literal (Int 42)))))))
+     (redundant ()) (missing ((Excluding ((Int 42))))))
     |}]
 ;;
 
@@ -235,8 +234,7 @@ let%expect_test "two int literals without wildcard - non-exhaustive" =
         (((Literal (Int 0)) (Leaf (case 0) (bindings ())))
          ((Literal (Int 1)) (Leaf (case 1) (bindings ())))))
        (default (Fail))))
-     (redundant ())
-     (missing ((All_except ((Literal (Int 0)) (Literal (Int 1)))))))
+     (redundant ()) (missing ((Excluding ((Int 0) (Int 1))))))
     |}]
 ;;
 
@@ -444,7 +442,7 @@ let%expect_test "tuple (int, bool) - int column needs default" =
      (redundant ())
      (missing
       ((Tuple
-        ((All_except ((Literal (Int 0))))
+        ((Excluding ((Int 0)))
          (Or ((Literal (Bool true)) (Literal (Bool false)))))))))
     |}]
 ;;
@@ -612,7 +610,7 @@ let%expect_test "int overlapping literals - second redundant" =
        (cases (((Literal (Int 42)) (Leaf (case 0) (bindings ())))))
        (default (Fail))))
      (redundant ((Literal (value (Int 42)) (loc ((line 1) (column 0))))))
-     (missing ((All_except ((Literal (Int 42)))))))
+     (missing ((Excluding ((Int 42))))))
     |}]
 ;;
 
@@ -990,8 +988,8 @@ let%expect_test "tuple (bool, int) - column selection prefers bool" =
        (default ())))
      (redundant ())
      (missing
-      ((Tuple ((Literal (Bool true)) (All_except ((Literal (Int 0))))))
-       (Tuple ((Literal (Bool false)) (All_except ((Literal (Int 1)))))))))
+      ((Tuple ((Literal (Bool true)) (Excluding ((Int 0)))))
+       (Tuple ((Literal (Bool false)) (Excluding ((Int 1))))))))
     |}]
 ;;
 
@@ -1403,8 +1401,7 @@ let%expect_test "variant payload literal - payload non-exhaustive" =
           (Leaf (case 1) (bindings ())))))
        (default ())))
      (redundant ())
-     (missing
-      ((Constructor (label some) (payload ((All_except ((Literal (Int 0))))))))))
+     (missing ((Constructor (label some) (payload ((Excluding ((Int 0)))))))))
     |}]
 ;;
 

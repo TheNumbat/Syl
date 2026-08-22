@@ -2,40 +2,8 @@ open! Core
 open Sst
 module Key = Tst.Value.Concrete
 
-let rec merge_ty (ty1 : Ty.t) (ty2 : Ty.t) : Ty.t =
-  match ty1, ty2 with
-  | Unit, Unit -> Unit
-  | Bool, Bool -> Bool
-  | Int, Int -> Int
-  | Type, Type -> Type
-  | Arrow a, Arrow b ->
-    Arrow { arg_ty = merge_ty a.arg_ty b.arg_ty; ret_ty = merge_ty a.ret_ty b.ret_ty }
-  | Pi a, Pi b -> Pi { arg_ty = merge_ty a.arg_ty b.arg_ty; ret_ty = merge_map a.ret_ty b.ret_ty }
-  | Arrow a, Pi b ->
-    Pi
-      { arg_ty = merge_ty a.arg_ty b.arg_ty
-      ; ret_ty = Map.map b.ret_ty ~f:(fun ty -> merge_ty a.ret_ty ty)
-      }
-  | Pi a, Arrow b ->
-    Pi
-      { arg_ty = merge_ty a.arg_ty b.arg_ty
-      ; ret_ty = Map.map a.ret_ty ~f:(fun ty -> merge_ty b.ret_ty ty)
-      }
-  | Tuple a, Tuple b -> Tuple (Nonempty_list.map2_exn a b ~f:merge_ty)
-  | Variant a_ctors, Variant b_ctors ->
-    Variant
-      (Map.merge a_ctors b_ctors ~f:(fun ~key:_ -> function
-         | `Both (None, None) -> Some None
-         | `Both (Some a, Some b) -> Some (Some (merge_ty a b))
-         | `Both (Some _, None) | `Both (None, Some _) | `Left _ | `Right _ ->
-           raise_s [%message "Bug: cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]))
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ ->
-    raise_s [%message "Bug: cannot merge types" (ty1 : Ty.t) (ty2 : Ty.t)]
-
-and merge_map = Map.merge_skewed ~combine:(fun ~key:_ -> merge_ty)
-
 let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
-  match ty with
+  match ty.node with
   | Type Unit -> Unit
   | Type Bool -> Bool
   | Type Int -> Int
@@ -56,7 +24,6 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Proj _
   | Payload _
   | Match _
-  | Refine _
   | External _
   | Prim _
   | Tuple _
@@ -68,20 +35,16 @@ and simplify_dependent (ty : Tst.Dependent.t) =
   match ty with
   | T { memo; _ } | Typecheck { memo; _ } | Reduce { memo; _ } ->
     Key.Map.of_hashtbl_exn memo |> Map.map ~f:simplify_ty
-  | Meet (a, b) | Join (a, b) ->
-    let a = simplify_dependent a in
-    let b = simplify_dependent b in
-    merge_map a b
 ;;
 
 let simplify_arrow (ty : Tst.Value.t) : Ty.t * Ty.t =
-  match ty with
+  match ty.node with
   | Type (Arrow { arg_ty; ret_ty; _ }) -> simplify_ty arg_ty, simplify_ty ret_ty
   | _ -> raise_s [%message "Bug: expected arrow" (ty : Tst.Value.t)]
 ;;
 
 let simplify_pi (ty : Tst.Value.t) : Ty.t * _ =
-  match ty with
+  match ty.node with
   | Type (Pi { arg_ty; ret_ty; _ }) -> simplify_ty arg_ty, simplify_dependent ret_ty
   | _ -> raise_s [%message "Bug: expected arrow" (ty : Tst.Value.t)]
 ;;
@@ -124,7 +87,7 @@ let rec to_value (expr : Expr.t) : Tst.Value.t option =
 ;;
 
 let of_value ~loc (value : Tst.Value.t) : Expr.t option =
-  match value with
+  match value.node with
   | Unit -> Some (Scalar { value = Unit; ty = Unit; loc })
   | Bool (T b) -> Some (Scalar { value = Bool b; ty = Bool; loc })
   | Int (T i) -> Some (Scalar { value = Int i; ty = Int; loc })
@@ -186,7 +149,7 @@ let make_let ~loc var ~bind ~rest : Expr.t =
 ;;
 
 let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
-  match value with
+  match value.node with
   | Unit -> Scalar { value = Unit; ty = Unit; loc }
   | Bool b -> Scalar { value = Bool (simplify_bool ~loc b); ty = Bool; loc }
   | Int i -> Scalar { value = Int (simplify_int ~loc i); ty = Int; loc }
@@ -198,7 +161,7 @@ let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
     External { symbol = Builtin.Prim.symbol prim; ty = simplify_ty desc.ty; loc }
   | External { symbol; ty; _ } -> External { symbol; ty = simplify_ty ty; loc }
   | Tuple elts ->
-    (match ty with
+    (match ty.node with
      | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = Nonempty_list.length elts ->
        let elts =
          Nonempty_list.map2_exn elts elt_tys ~f:(fun elt ty -> simplify_value ~loc ~ty elt)
@@ -207,7 +170,7 @@ let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
      | _ -> raise_s [%message "Bug: expected tuple type" (ty : Tst.Value.t) (loc : Lex.Location.t)])
   | Inject { label; ty = _ } -> Inject { label; ty = simplify_ty ty; loc }
   | Constructor { label; payload } ->
-    (match ty with
+    (match ty.node with
      | Type (Variant constructors) ->
        let payload =
          match payload, Map.find constructors label with
@@ -225,7 +188,7 @@ let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
      | _ ->
        raise_s [%message "Bug: expected variant type" (ty : Tst.Value.t) (loc : Lex.Location.t)])
   | Bottom -> raise_s [%message "Bug: emitted unreachable branch" (loc : Lex.Location.t)]
-  | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Refine _ ->
+  | Var _ | Apply _ | Proj _ | Payload _ | Match _ ->
     raise_s [%message "Bug: expected runtime value" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
 and simplify_expr env (expr : Tst.Expr.t) : Expr.t =

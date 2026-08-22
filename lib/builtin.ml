@@ -14,7 +14,7 @@ module Error = struct
         { idx : int64
         ; len : int64
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 exception Error of Error.t
@@ -30,7 +30,7 @@ module Fail = struct
 end
 
 let pair (value : Value.t) : Value.t * Value.t =
-  match value with
+  match value.node with
   | Tuple [ a; b ] -> a, b
   | _ -> raise_s [%message "Bug: expected pair"]
 ;;
@@ -205,58 +205,58 @@ module Prim = struct
     let eval (prim : t) (value : Value.t) : Value.t =
       match prim with
       | Is_unit ->
-        (match value with
+        (match value.node with
          | Type Unit -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_unit)) ~arg:value)
       | Is_bool ->
-        (match value with
+        (match value.node with
          | Type Bool -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_bool)) ~arg:value)
       | Is_int ->
-        (match value with
+        (match value.node with
          | Type Int -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_int)) ~arg:value)
       | Is_type ->
-        (match value with
+        (match value.node with
          | Type Type -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_type)) ~arg:value)
       | Is_tuple ->
-        (match value with
+        (match value.node with
          | Type (Tuple _) -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_tuple)) ~arg:value)
       | Is_arrow ->
-        (match value with
+        (match value.node with
          | Type (Arrow _) -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_arrow)) ~arg:value)
       | Is_pi ->
-        (match value with
+        (match value.node with
          | Type (Pi _) -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_pi)) ~arg:value)
       | Arrow_arg ->
-        (match value with
+        (match value.node with
          | Type (Arrow { arg_ty; _ }) -> arg_ty
          | Type _ -> Fail.expected_arrow value
          | _ -> Value.apply ~fn:(Value.prim (Type Arrow_arg)) ~arg:value)
       | Arrow_ret ->
-        (match value with
+        (match value.node with
          | Type (Arrow { ret_ty; _ }) -> ret_ty
          | Type _ -> Fail.expected_arrow value
          | _ -> Value.apply ~fn:(Value.prim (Type Arrow_ret)) ~arg:value)
       | Pi_arg ->
-        (match value with
+        (match value.node with
          | Type (Pi { arg_ty; _ }) -> arg_ty
          | Type _ -> Fail.expected_pi value
          | _ -> Value.apply ~fn:(Value.prim (Type Pi_arg)) ~arg:value)
       | Tuple_get ->
         let tuple, idx = pair value in
-        (match tuple, idx with
+        (match tuple.node, idx.node with
          | Type (Tuple elts), Int (T idx) ->
            let n = Int64.of_int (Nonempty_list.length elts) in
            if Int64.(idx >= 0L && idx < n)
@@ -265,7 +265,7 @@ module Prim = struct
          | Type (Tuple _), _ -> Value.apply ~fn:(Value.prim (Type Tuple_get)) ~arg:value
          | _ -> Fail.expected_tuple tuple)
       | Tuple_length ->
-        (match value with
+        (match value.node with
          | Type (Tuple elts) -> Tst.Int.const (Int64.of_int (Nonempty_list.length elts))
          | Type _ -> Fail.expected_tuple value
          | _ -> Value.apply ~fn:(Value.prim (Type Tuple_length)) ~arg:value)
@@ -340,7 +340,7 @@ let desc : t -> Desc.t = function
 ;;
 
 let eval_assert (value : Value.t) : Value.t =
-  match value with
+  match value.node with
   (* An unreachable assertion never reports. *)
   | Bottom -> Value.bottom
   | Bool (T true) -> Value.unit
@@ -348,10 +348,10 @@ let eval_assert (value : Value.t) : Value.t =
 ;;
 
 let eval (prim : Prim.t) (value : Value.t) : Value.t =
-  match value with
+  match value.node with
   (* A primitive applied to an unreachable argument is unreachable. *)
   | Bottom -> Value.bottom
-  | value ->
+  | _ ->
     (match prim with
      | Assert | Assert_erased -> eval_assert value
      | Int i -> Prim.Int.eval i value

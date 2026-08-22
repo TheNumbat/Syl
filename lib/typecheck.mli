@@ -7,7 +7,7 @@ module Error : sig
       | Then
       | Else
       | Arm of Dst.Expr.pattern
-    [@@deriving sexp]
+    [@@deriving sexp_of]
   end
 
   module Misplaced : sig
@@ -16,7 +16,7 @@ module Error : sig
       | Not_in_tail_position
       | Not_in_head_position
       | All_paths_unreachable
-    [@@deriving sexp]
+    [@@deriving sexp_of]
   end
 
   module Match : sig
@@ -30,7 +30,7 @@ module Error : sig
           { label : Ident.Label.t
           ; required : bool
           }
-    [@@deriving sexp]
+    [@@deriving sexp_of]
   end
 
   type t =
@@ -64,7 +64,6 @@ module Error : sig
     | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
     | Static_failure of Builtin.Error.t
-    | Static_cycle
     | Erased_application of
         { fn : Value.t
         ; result : Modes.t
@@ -76,7 +75,8 @@ module Error : sig
         }
     | Unreachable_reached
     | Misplaced_unreachable of Misplaced.t
-  [@@deriving sexp]
+    | Gave_up of t
+  [@@deriving sexp_of]
 end
 
 val typecheck : Dst.Program.t -> (Tst.Program.t, Error.t Loc.t) Result.t
@@ -85,8 +85,11 @@ val typecheck_exn : Dst.Program.t -> Tst.Program.t
 module For_testing : sig
   type state
 
+  exception Gave_up
+
   val create_state : unit -> state
   val leq_value : state -> Value.t -> Value.t -> bool
   val join_value : state -> Value.t -> Value.t -> Value.t option
   val meet_value : state -> Value.t -> Value.t -> Value.t option
+  val unfold : state -> Value.t -> Value.t
 end

@@ -38,11 +38,13 @@ module Expr = struct
         ; right : pattern
         ; loc : Lex.Location.t
         }
+  [@@deriving sexp, equal, hash]
 
   and constructor =
     { label : Ident.Label.t
     ; payload : t option
     }
+  [@@deriving sexp]
 
   and t =
     | If of

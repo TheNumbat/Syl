@@ -393,7 +393,7 @@ fun f (x : int) : static int = h (f 0)
 and h (static z : int) : int = z;;
 let _ = f 0;;
 |};
-  [%expect {| |}]
+  [%expect {| ((loc ((line 2) (column 34))) (reason (Recursion_limit 1000))) |}]
 ;;
 
 let%expect_test "erased fn" =
@@ -455,7 +455,7 @@ let%expect_test "erased-if on a recursive static errors" =
 fun f (x : int) : static int = if erased (f 0 == 0) then 0 else 1;;
 let _ = f 0;;
 |};
-  [%expect {| ((loc ((line 2) (column 31))) (reason Static_cycle)) |}]
+  [%expect {| ((loc ((line 2) (column 42))) (reason (Recursion_limit 1000))) |}]
 ;;
 
 let%expect_test "cyclic type function in an annotation hits the limit" =

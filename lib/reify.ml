@@ -10,11 +10,8 @@ type t =
 let family_monos t family = Map.find t.monos family |> Option.value ~default:Key.Map.empty
 let free_vars t expr = Expr.free_vars ~monos:(family_monos t) expr
 
-(* All instances in the same family have the same lexical environment *)
-let merge_envs = Map.merge_skewed ~combine:(fun ~key:_ existing _env -> existing)
-
-let tuple_elt_tys ~loc ty elts =
-  match ty with
+let tuple_elt_tys ~loc (ty : Value.t) elts =
+  match ty.node with
   | Value.Type (Tuple elt_tys) when Nonempty_list.length elt_tys = Nonempty_list.length elts ->
     elt_tys
   | _ ->
@@ -26,7 +23,7 @@ let tuple_elt_tys ~loc ty elts =
 ;;
 
 let payload_ty ~loc (desc : Tst.Desc.t) label =
-  match desc.ty with
+  match desc.ty.node with
   | Type (Variant constructors) ->
     (match Map.find constructors label with
      | Some (Some payload_ty) -> payload_ty
@@ -45,7 +42,7 @@ module Func = struct
     | Binder of Binder.t
 
   let of_val desc =
-    match force_static desc with
+    match (force_static desc).node with
     | Closure closure -> Some (Closure closure)
     | Binder binder -> Some (Binder binder)
     | _ -> None
@@ -56,26 +53,25 @@ module Func = struct
     | Binder binder -> binder.env
   ;;
 
-  let hash = function
-    | Closure closure -> closure.hash
-    | Binder binder -> binder.hash
+  let uid = function
+    | Closure closure -> closure.uid
+    | Binder binder -> binder.uid
   ;;
 
   let is_bound bound id fn =
-    match Map.find bound (hash fn) with
+    match Map.find bound (uid fn) with
     | Some bound_id -> Ident.equal bound_id id
     | None -> false
   ;;
 end
 
 let rec value_needs_reify (value : Value.t) =
-  match value with
+  match value.node with
   | Closure _ | Binder _ -> true
   | Tuple elts -> Nonempty_list.exists elts ~f:value_needs_reify
   | Apply { fn; arg } -> value_needs_reify fn || value_needs_reify arg
   | Proj { tuple; _ } -> value_needs_reify tuple
   | Payload { variant; _ } -> value_needs_reify variant
-  | Refine { value; _ } -> value_needs_reify value
   | Constructor { payload; _ } -> Option.exists payload ~f:value_needs_reify
   | Match { scrutinee; arms } ->
     value_needs_reify scrutinee
@@ -140,7 +136,7 @@ and reify_fun t bound (fun_ : Expr.fun_) : Expr.fun_ =
 and reify_monos t bound monos = Map.map monos ~f:(reify_expr t bound)
 
 and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
-  match value with
+  match value.node with
   | Bottom
   | Unit
   | Bool _
@@ -152,7 +148,7 @@ and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
   | Proj _
   | Payload _
   | Inject _ -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
-  | (Apply _ | Match _ | Refine _) as value ->
+  | Apply _ | Match _ ->
     if value_needs_reify value
     then raise_s [%message "Bug: stuck value cannot be reified" (value : Value.t)]
     else Literal { value; ty = desc.ty; mode = desc.mode; loc }
@@ -191,22 +187,22 @@ and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
     in
     Tuple { elts; ty = desc.ty; mode = desc.mode; loc }
   | Closure closure ->
-    quote_function t bound ~loc desc ~hash:closure.hash ~env:closure.env ~quote:(fun bound ->
+    quote_function t bound ~loc desc ~uid:closure.uid ~env:closure.env ~quote:(fun bound ->
       quote_closure t bound ~loc ~mode:desc.mode closure)
   | Binder binder ->
-    quote_function t bound ~loc desc ~hash:binder.hash ~env:binder.env ~quote:(fun bound ->
+    quote_function t bound ~loc desc ~uid:binder.uid ~env:binder.env ~quote:(fun bound ->
       quote_binder t bound ~loc ~mode:desc.mode binder)
 
-and quote_function t bound ~loc (desc : Desc.t) ~hash ~env ~quote =
-  match Map.find bound hash with
+and quote_function t bound ~loc (desc : Desc.t) ~uid ~env ~quote =
+  match Map.find bound uid with
   | Some id -> Var { id; ty = desc.ty; mode = desc.mode; loc }
   | None ->
-    (match Map.find t.groups hash with
+    (match Map.find t.groups uid with
      | Some id -> quote_fun_group t bound env ~loc id
      | None -> quote bound)
 
 and quote_closure t bound ~loc ~mode (closure : Closure.t) : Expr.t =
-  let body = reify_expr t bound closure.body in
+  let body = reify_expr t bound (Lazy.force closure.body) in
   let expr : Expr.t =
     Lambda { arg = closure.arg; body; ty = closure.ty; mode; family = closure.family; loc }
   in
@@ -224,13 +220,13 @@ and quote_fun_group t bound env ~loc root : Expr.t =
   let env =
     Map.fold members ~init:env ~f:(fun ~key:_ ~data:desc env ->
       match Func.of_val desc with
-      | Some fn -> merge_envs env (Func.env fn)
+      | Some fn -> Env.merge env (Func.env fn)
       | None -> env)
   in
   let bound =
     Map.fold members ~init:bound ~f:(fun ~key:id ~data:desc bound ->
       match Func.of_val desc with
-      | Some fn -> Map.set bound ~key:(Func.hash fn) ~data:id
+      | Some fn -> Map.set bound ~key:(Func.uid fn) ~data:id
       | None -> bound)
   in
   let funs =
@@ -242,7 +238,7 @@ and quote_fun_group t bound env ~loc root : Expr.t =
           (Lambda
              { var
              ; arg = closure.arg
-             ; body = reify_expr t bound closure.body
+             ; body = reify_expr t bound (Lazy.force closure.body)
              ; ty = closure.ty
              ; mode = desc.mode
              ; family = closure.family
@@ -327,7 +323,7 @@ and collect_fun_group t bound env root =
   loop Ident.Map.empty [ root, env ]
 
 and function_deps t = function
-  | Closure (closure : Closure.t) -> Set.remove (free_vars t closure.body) closure.arg
+  | Closure (closure : Closure.t) -> Set.remove (free_vars t (Lazy.force closure.body)) closure.arg
   | Binder (binder : Binder.t) ->
     Map.fold (family_monos t binder.family) ~init:Ident.Set.empty ~f:(fun ~key:_ ~data:body acc ->
       Set.union acc (free_vars t body))

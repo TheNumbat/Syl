@@ -25,7 +25,7 @@ module Pattern : sig
         ; right : t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Tree : sig
@@ -34,7 +34,7 @@ module Tree : sig
       { path : Tst.Pattern.Step.t Vec.t
       ; ty : Tst.Value.t
       }
-    [@@deriving sexp]
+    [@@deriving sexp_of]
   end
 
   module Head : sig
@@ -45,7 +45,7 @@ module Tree : sig
           { label : Ident.Label.t
           ; payload : bool
           }
-    [@@deriving sexp]
+    [@@deriving sexp_of]
   end
 
   type t =
@@ -59,21 +59,24 @@ module Tree : sig
         ; cases : (Head.t * t) array
         ; default : t option
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Result : sig
   module Missing : sig
     type t =
-      | All_except of Tst.Pattern.Excluded.t list
+      | Wildcard
       | Literal of Literal.t
       | Tuple of t list
       | Constructor of
           { label : Ident.Label.t
           ; payload : t option
           }
-      | Or of t list
-    [@@deriving sexp]
+      | Or of t Nonempty_list.t
+      | Excluding of Literal.t Nonempty_list.t
+    [@@deriving sexp_of]
+
+    val refuted_by : t -> scrutinee:Tst.Value.t -> unfold:(Tst.Value.t -> Tst.Value.t) -> bool
   end
 
   type t =
@@ -81,14 +84,12 @@ module Result : sig
     ; redundant : Pattern.t list
     ; missing : Missing.t list
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
-(** [unfold] head-normalizes a type for syntactic inspection; it must be the identity
-    where no reduction applies. *)
+(* [unfold] weak-head-normalizes a type for syntactic inspection *)
 val compile
-  :  scrutinee:Tst.Value.t
-  -> ty:Tst.Value.t
+  :  ty:Tst.Value.t
   -> unfold:(Tst.Value.t -> Tst.Value.t)
   -> Pattern.t Nonempty_list.t
   -> Result.t

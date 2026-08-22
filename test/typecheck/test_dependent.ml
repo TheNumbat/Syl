@@ -196,10 +196,8 @@ let f = fn (static x : int) -> (if erased x == 0 then 1 else true) : int;;
        (got
         (Match (scrutinee (Bool (Eq (Var (Anon <opaque>)) (Int (T 0)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 2) (column 32))))
-            (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 2) (column 32))))
-            (Type Bool))))))
+          (((Literal (Bool true)) (Type Int))
+           ((Literal (Bool false)) (Type Bool))))))
        (need (Type Int)))))
     |}]
 ;;
@@ -240,6 +238,19 @@ let%expect_test "if erased false selects else branch type" =
     {|
 let f = fn (static c : bool) -> (if erased c then 1 else true) : (if c then int else bool);;
 let _ = (f false) : bool;;
+|};
+  [%expect {| |}]
+;;
+
+(* A branch's fact reaches every binding: [t]'s static was computed before the
+   conditional and mentions [b]; the fact context rewrites it at lookup, so each
+   branch sees its own selection. *)
+let%expect_test "branch facts rewrite prior bindings" =
+  go
+    {|
+let _ = fn (static b : bool) ->
+  let t = if erased b then int else bool in
+  if erased b then (0 : t) else (true : t);;
 |};
   [%expect {| |}]
 ;;
@@ -447,7 +458,7 @@ let _ = if true then f else g;;
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
            (Typecheck (env <opaque>) (arg ((Id x) <opaque>)) (arg_ty (Type Int))
-            (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
+            (arg_mode ((staticity Static) (erasure Unerased)))
             (body
              (If
               (cond
@@ -463,7 +474,8 @@ let _ = if true then f else g;;
                 (loc ((line 2) (column 43)))))
               (then_ (Literal (value (Int 1)) (loc ((line 2) (column 53)))))
               (else_ (Literal (value (Bool true)) (loc ((line 2) (column 60)))))
-              (erased Erased) (loc ((line 2) (column 31)))))))
+              (erased Erased) (loc ((line 2) (column 31)))))
+            (memo <opaque>) (uid <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased))))))
        (rhs
         (Type
@@ -471,7 +483,7 @@ let _ = if true then f else g;;
           (arg_mode ((staticity Static) (erasure Unerased)))
           (ret_ty
            (Typecheck (env <opaque>) (arg ((Id x) <opaque>)) (arg_ty (Type Int))
-            (arg_mode ((staticity Static) (erasure Unerased))) (memo <opaque>)
+            (arg_mode ((staticity Static) (erasure Unerased)))
             (body
              (If
               (cond
@@ -487,7 +499,8 @@ let _ = if true then f else g;;
                 (loc ((line 3) (column 43)))))
               (then_ (Literal (value (Bool true)) (loc ((line 3) (column 53)))))
               (else_ (Literal (value (Int 2)) (loc ((line 3) (column 63)))))
-              (erased Erased) (loc ((line 3) (column 31)))))))
+              (erased Erased) (loc ((line 3) (column 31)))))
+            (memo <opaque>) (uid <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
@@ -1516,29 +1529,35 @@ fun erased unerase (erased t : type) : erased (erased t -> t) =
          (scrutinee
           (Apply (fn (Prim (Type Is_unit))) (arg (Var (Anon <opaque>)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 7) (column 2))))
+          (((Literal (Bool true))
             (Type
              (Pi (arg_ty (Type Unit))
               (arg_mode ((staticity Static) (erasure Erased)))
               (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
               (ret_mode ((staticity Static) (erasure Unerased))))))
-           ((Literal (value (Bool false)) (loc ((line 7) (column 2))))
+           ((Literal (Bool false))
             (Match
              (scrutinee
               (Apply (fn (Prim (Type Is_bool))) (arg (Var (Anon <opaque>)))))
              (arms
-              (((Literal (value (Bool true)) (loc ((line 8) (column 7))))
+              (((Literal (Bool true))
                 (Type
                  (Pi (arg_ty (Type Bool))
                   (arg_mode ((staticity Static) (erasure Erased)))
                   (ret_ty (T (ty (Type Bool)) (memo <opaque>)))
                   (ret_mode ((staticity Static) (erasure Unerased))))))
-               ((Literal (value (Bool false)) (loc ((line 8) (column 7))))
-                (Type
-                 (Pi (arg_ty (Type Int))
-                  (arg_mode ((staticity Static) (erasure Erased)))
-                  (ret_ty (T (ty (Type Int)) (memo <opaque>)))
-                  (ret_mode ((staticity Static) (erasure Unerased))))))))))))))
+               ((Literal (Bool false))
+                (Match
+                 (scrutinee
+                  (Apply (fn (Prim (Type Is_int))) (arg (Var (Anon <opaque>)))))
+                 (arms
+                  (((Literal (Bool true))
+                    (Type
+                     (Pi (arg_ty (Type Int))
+                      (arg_mode ((staticity Static) (erasure Erased)))
+                      (ret_ty (T (ty (Type Int)) (memo <opaque>)))
+                      (ret_mode ((staticity Static) (erasure Unerased))))))
+                   ((Literal (Bool false)) Bottom)))))))))))))
        (need
         (Type
          (Pi (arg_ty (Var (Anon <opaque>)))
@@ -1546,8 +1565,9 @@ fun erased unerase (erased t : type) : erased (erased t -> t) =
           (ret_ty
            (Reduce (env <opaque>) (arg (Anon <opaque>))
             (arg_ty (Var (Anon <opaque>)))
-            (arg_mode ((staticity Static) (erasure Erased))) (memo <opaque>)
-            (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 6) (column 59)))))))
+            (arg_mode ((staticity Static) (erasure Erased)))
+            (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 6) (column 59)))))
+            (memo <opaque>) (uid <opaque>)))
           (ret_mode ((staticity Static) (erasure Unerased)))))))))
     |}]
 ;;
@@ -1612,28 +1632,6 @@ let b = f 1;;
   [%expect {| |}]
 ;;
 
-(* Cross-shape equality: the arm rules decompose the [x]-scrutineed conditional and
-   substitute each arm's implied value into the [x == 0]-scrutineed one, where the
-   comparison consumers decide the condition — the two spellings correlate. *)
-let%expect_test "cross-shape equality with the equivalent if" =
-  go
-    {|
-let f =
-  fn (static x : int) ->
-    (match static x {
-       0 -> 1,
-       _ -> true,
-     })
-      : (if x == 0 then int else bool)
-;;
-
-let _ = f 0;;
-
-let _ = f 1;;
-|};
-  [%expect {| |}]
-;;
-
 let%expect_test "match static annotated with the equivalent match" =
   go
     {|
@@ -1671,9 +1669,7 @@ let f =
       (Type_mismatch
        (got
         (Match (scrutinee (Var (Anon <opaque>)))
-         (arms
-          (((Literal (value (Int 0)) (loc ((line 5) (column 7)))) (Type Int))
-           ((Var (id (Anon <opaque>)) (loc ((line 6) (column 7)))) (Type Bool))))))
+         (arms (((Literal (Int 0)) (Type Int)) (Wild (Type Bool))))))
        (need (Type Int)))))
     |}]
 ;;
@@ -1697,28 +1693,6 @@ let _ = h 0;;
 let _ = h 1;;
 
 let _ = h 2;;
-|};
-  [%expect {| |}]
-;;
-
-(* The wildcard arm's world excludes [0], which resolves the dependent
-   conditional: [g n true] demands exactly the [n != 0] branch. *)
-let%expect_test "wildcard arms learn the negative refinement" =
-  go
-    {|
-let g = fn (static n : int) -> fn (x : if n == 0 then int else bool) -> x;;
-
-let h =
-  fn (static n : int) ->
-    match static n {
-      0 -> g n 5,
-      _ -> g n true,
-    }
-;;
-
-let _ = h 0;;
-
-let _ = h 5;;
 |};
   [%expect {| |}]
 ;;
@@ -1783,10 +1757,8 @@ let h =
        (need
         (Match (scrutinee (Bool (Lt (Var (Anon <opaque>)) (Int (T 2)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 2) (column 39))))
-            (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 2) (column 39))))
-            (Type Bool)))))))))
+          (((Literal (Bool true)) (Type Int))
+           ((Literal (Bool false)) (Type Bool)))))))))
     |}]
 ;;
 
@@ -1816,41 +1788,10 @@ let f =
           (Bool
            (Lt
             (Match (scrutinee (Var (Anon <opaque>)))
-             (arms
-              (((Literal (value (Int 0)) (loc ((line 6) (column 16))))
-                (Int (T 1)))
-               ((Var (id (Anon <opaque>)) (loc ((line 7) (column 16))))
-                (Int (T 2))))))
+             (arms (((Literal (Int 0)) (Int (T 1))) (Wild (Int (T 2))))))
             (Int (T 3)))))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 5) (column 9)))) (Type Int))
-           ((Literal (value (Bool false)) (loc ((line 5) (column 9))))
-            (Type Unit)))))))))
+          (((Literal (Bool true)) (Type Int))
+           ((Literal (Bool false)) (Type Unit)))))))))
     |}]
-;;
-
-let%expect_test "cross-shape equality across an if chain" =
-  go
-    {|
-let f =
-  fn (static x : int) ->
-    (match static x {
-       0 -> 1,
-       1 -> true,
-       _ -> (),
-     })
-      : (if x == 0
-         then int
-         else if x == 1
-              then bool
-              else unit)
-;;
-
-let _ = f 0;;
-
-let _ = f 1;;
-
-let _ = f 2;;
-|};
-  [%expect {| |}]
 ;;

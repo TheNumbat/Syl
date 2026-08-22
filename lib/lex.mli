@@ -115,7 +115,7 @@ module Location : sig
     { line : int
     ; column : int
     }
-  [@@deriving sexp, compare, hash]
+  [@@deriving sexp, compare, equal, hash]
 
   val empty : t
 end

@@ -1,6 +1,16 @@
 open! Core
 open Option.Let_syntax
 
+let seed = 42
+
+let uid =
+  let next = ref 0 in
+  fun () ->
+    let uid = !next in
+    Core.Int.incr next;
+    uid
+;;
+
 module Concrete = struct
   module T = struct
     type t =
@@ -11,14 +21,6 @@ module Concrete = struct
       | Closure of int
       | Prim of Builtin0.t
       | External of string
-      | Arrow of
-          { arg : t
-          ; arg_mode : Modes.t
-          ; ret : t
-          ; ret_mode : Modes.t
-          }
-      | Tuple_t of t Nonempty_list.t
-      | Variant_t of t option Map.M(Ident.Label).t
       | Inject of
           { label : Ident.Label.t
           ; ty : t
@@ -27,6 +29,14 @@ module Concrete = struct
           { label : Ident.Label.t
           ; payload : t option
           }
+      | Arrow_t of
+          { arg : t
+          ; arg_mode : Modes.t
+          ; ret : t
+          ; ret_mode : Modes.t
+          }
+      | Tuple_t of t Nonempty_list.t
+      | Variant_t of t option Map.M(Ident.Label).t
     [@@deriving sexp, hash, compare]
   end
 
@@ -35,19 +45,37 @@ module Concrete = struct
   include Hashable.Make (T)
 end
 
-module Excluded0 = struct
-  module T = struct
-    type t =
-      | Literal of Dst.Literal.t
-      | Constructor of
-          { label : Ident.Label.t
-          ; payload : t option
-          }
-    [@@deriving sexp, compare, equal, hash]
-  end
+module Kind = struct
+  type t =
+    | Abstract
+    | Speculative
+    | Reducing
+    | Instancing
+  [@@deriving sexp_of, compare]
 
-  include T
-  include Comparable.Make (T)
+  let join a b = if compare a b >= 0 then a else b
+end
+
+module Canon = struct
+  type t =
+    | Wild
+    | Literal of Dst.Literal.t
+    | Tuple of t Nonempty_list.t
+    | Constructor of
+        { label : Ident.Label.t
+        ; payload : t option
+        }
+    | Or of t * t
+  [@@deriving sexp_of, equal, hash]
+
+  let rec of_pattern : Dst.Expr.pattern -> t = function
+    | Var _ -> Wild
+    | Literal { value; _ } -> Literal value
+    | Tuple { elts; _ } -> Tuple (Nonempty_list.map elts ~f:of_pattern)
+    | Constructor { label; payload; _ } ->
+      Constructor { label; payload = Option.map payload ~f:of_pattern }
+    | Or { left; right; _ } -> Or (of_pattern left, of_pattern right)
+  ;;
 end
 
 type ty =
@@ -69,32 +97,32 @@ type ty =
       }
   | Tuple of value Nonempty_list.t
   | Variant of value option Map.M(Ident.Label).t
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and dependent =
   | T of
       { ty : value
       ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
       }
-  | Meet of dependent * dependent
-  | Join of dependent * dependent
   | Reduce of
       { env : (env[@sexp.opaque])
       ; arg : Ident.t
       ; arg_ty : value
       ; arg_mode : Modes.t
-      ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
       ; ret_ty : Dst.Expr.t
+      ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+      ; uid : (int[@sexp.opaque])
       }
   | Typecheck of
       { env : (env[@sexp.opaque])
       ; arg : Ident.t
       ; arg_ty : value
       ; arg_mode : Modes.t
-      ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
       ; body : Dst.Expr.t
+      ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+      ; uid : (int[@sexp.opaque])
       }
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and vbool =
   | T of bool
@@ -107,7 +135,7 @@ and vbool =
   | Gt of value * value
   | Gte of value * value
   | Not of value
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and vint =
   | T of int64
@@ -117,9 +145,11 @@ and vint =
   | Div of value * value
   | Mod of value * value
   | Neg of value
-[@@deriving sexp]
+[@@deriving sexp_of]
 
-and value =
+and value = node Hashcons.t
+
+and node =
   | Bottom
   | Unit
   | Bool of vbool
@@ -151,31 +181,27 @@ and value =
       }
   | Match of
       { scrutinee : value
-      ; arms : (Dst.Expr.pattern * value) Nonempty_list.t
-      }
-  | Refine of
-      { value : value
-      ; excluded : Set.M(Excluded0).t
+      ; arms : (Canon.t * value) Nonempty_list.t
       }
   | External of
       { symbol : string
       ; ty : value
       }
   | Prim of Builtin0.Prim.t
-[@@deriving sexp]
+[@@deriving sexp_of]
 
-and concrete = Concrete.t [@@deriving sexp]
+and concrete = Concrete.t [@@deriving sexp_of]
 
 and closure =
   { arg : Ident.t
   ; ty : value
-  ; body : expr
+  ; body : (expr Lazy.t[@sexp.opaque])
   ; body_dst : Dst.Expr.t
   ; env : (env[@sexp.opaque])
   ; family : (int[@sexp.opaque])
-  ; hash : (int[@sexp.opaque])
+  ; uid : (int[@sexp.opaque])
   }
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and binder =
   { arg : Ident.t
@@ -183,18 +209,36 @@ and binder =
   ; body_dst : Dst.Expr.t
   ; env : (env[@sexp.opaque])
   ; family : (int[@sexp.opaque])
-  ; hash : (int[@sexp.opaque])
+  ; uid : (int[@sexp.opaque])
   }
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and desc =
   { ty : value
   ; mode : Modes.t
   ; static : value Lazy.t
   }
-[@@deriving sexp]
+[@@deriving sexp_of]
 
-and env = desc Ident.Map.t
+and fact =
+  { target : value
+  ; replacement : value
+  }
+[@@deriving sexp_of]
+
+and binding =
+  { desc : desc
+  ; level : int (* Only newer facts apply *)
+  ; mutable cache : ((fact list * desc) option[@sexp.opaque])
+  }
+[@@deriving sexp_of]
+
+and env =
+  { bindings : binding Ident.Map.t
+  ; facts : fact list
+  ; level : int
+  ; kind : Kind.t
+  }
 
 and fun_ =
   | Lambda of
@@ -215,13 +259,13 @@ and fun_ =
       ; family : (int[@sexp.opaque])
       ; loc : Lex.Location.t
       }
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and case =
   { bindings : value Ident.Map.t
   ; body : expr
   }
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and tree =
   | Leaf of
@@ -233,12 +277,12 @@ and tree =
       ; then_ : tree
       ; else_ : tree
       }
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and target =
   | Family of (int[@sexp.opaque])
   | Prim of Builtin0.Prim.t
-[@@deriving sexp]
+[@@deriving sexp_of]
 
 and expr =
   | Erased of
@@ -360,373 +404,554 @@ and expr =
       ; mode : Modes.t
       ; loc : Lex.Location.t
       }
-[@@deriving sexp]
+[@@deriving sexp_of]
+
+let equal_value = Hashcons.equal
+
+let equal_vbool (x : vbool) (y : vbool) =
+  match x, y with
+  | T x, T y -> Bool.equal x y
+  | And (xa, xb), And (ya, yb)
+  | Or (xa, xb), Or (ya, yb)
+  | Eq (xa, xb), Eq (ya, yb)
+  | Neq (xa, xb), Neq (ya, yb)
+  | Lt (xa, xb), Lt (ya, yb)
+  | Lte (xa, xb), Lte (ya, yb)
+  | Gt (xa, xb), Gt (ya, yb)
+  | Gte (xa, xb), Gte (ya, yb) -> equal_value xa ya && equal_value xb yb
+  | Not x, Not y -> equal_value x y
+  | (T _ | And _ | Or _ | Eq _ | Neq _ | Lt _ | Lte _ | Gt _ | Gte _ | Not _), _ -> false
+;;
+
+let equal_vint (x : vint) (y : vint) =
+  match x, y with
+  | T x, T y -> Int64.equal x y
+  | Add (xa, xb), Add (ya, yb)
+  | Sub (xa, xb), Sub (ya, yb)
+  | Mul (xa, xb), Mul (ya, yb)
+  | Div (xa, xb), Div (ya, yb)
+  | Mod (xa, xb), Mod (ya, yb) -> equal_value xa ya && equal_value xb yb
+  | Neg x, Neg y -> equal_value x y
+  | (T _ | Add _ | Sub _ | Mul _ | Div _ | Mod _ | Neg _), _ -> false
+;;
+
+let equal_dependent (x : dependent) (y : dependent) =
+  match x, y with
+  | T { ty = xty; _ }, T { ty = yty; _ } -> equal_value xty yty
+  | Reduce { uid = xuid; _ }, Reduce { uid = yuid; _ }
+  | Typecheck { uid = xuid; _ }, Typecheck { uid = yuid; _ } -> xuid = yuid
+  | (T _ | Reduce _ | Typecheck _), _ -> false
+;;
+
+let equal_ty (x : ty) (y : ty) =
+  match x, y with
+  | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
+  | Arrow x, Arrow y ->
+    equal_value x.arg_ty y.arg_ty
+    && Modes.equal x.arg_mode y.arg_mode
+    && equal_value x.ret_ty y.ret_ty
+    && Modes.equal x.ret_mode y.ret_mode
+  | Pi x, Pi y ->
+    equal_value x.arg_ty y.arg_ty
+    && Modes.equal x.arg_mode y.arg_mode
+    && equal_dependent x.ret_ty y.ret_ty
+    && Modes.equal x.ret_mode y.ret_mode
+  | Tuple x, Tuple y ->
+    (match Nonempty_list.zip x y with
+     | Ok elts -> Nonempty_list.for_all elts ~f:(fun (x, y) -> equal_value x y)
+     | Unequal_lengths -> false)
+  | Variant x, Variant y ->
+    with_return (fun { return } ->
+      Map.iter2 x y ~f:(fun ~key:_ ~data:payload ->
+        match payload with
+        | `Left _ | `Right _ -> return false
+        | `Both (xpayload, ypayload) ->
+          if not (Option.equal equal_value xpayload ypayload) then return false);
+      true)
+  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> false
+;;
+
+let equal_node (x : node) (y : node) =
+  match x, y with
+  | Bottom, Bottom -> true
+  | Unit, Unit -> true
+  | Bool x, Bool y -> equal_vbool x y
+  | Int x, Int y -> equal_vint x y
+  | Type x, Type y -> equal_ty x y
+  | Closure x, Closure y -> x.uid = y.uid
+  | Binder x, Binder y -> x.uid = y.uid
+  | Var x, Var y -> Ident.equal x y
+  | Tuple x, Tuple y ->
+    (match Nonempty_list.zip x y with
+     | Ok elts -> Nonempty_list.for_all elts ~f:(fun (x, y) -> equal_value x y)
+     | Unequal_lengths -> false)
+  | Inject x, Inject y -> Ident.Label.equal x.label y.label && equal_value x.ty y.ty
+  | Constructor x, Constructor y ->
+    Ident.Label.equal x.label y.label && Option.equal equal_value x.payload y.payload
+  | Apply x, Apply y -> equal_value x.fn y.fn && equal_value x.arg y.arg
+  | Proj x, Proj y -> equal_value x.tuple y.tuple && x.index = y.index
+  | Payload x, Payload y -> equal_value x.variant y.variant && Ident.Label.equal x.label y.label
+  | External x, External y -> String.equal x.symbol y.symbol && equal_value x.ty y.ty
+  | Prim x, Prim y -> Builtin0.Prim.equal x y
+  | Match x, Match y ->
+    equal_value x.scrutinee y.scrutinee
+    &&
+      (match Nonempty_list.zip x.arms y.arms with
+      | Ok arms ->
+        Nonempty_list.for_all arms ~f:(fun ((xpattern, x), (ypattern, y)) ->
+          Canon.equal xpattern ypattern && equal_value x y)
+      | Unequal_lengths -> false)
+  | ( ( Bottom
+      | Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Var _
+      | Tuple _
+      | Inject _
+      | Constructor _
+      | Apply _
+      | Proj _
+      | Payload _
+      | Match _
+      | External _
+      | Prim _ )
+    , _ ) -> false
+;;
+
+let hash_fold_value = Hashcons.hash_fold_t
+
+let hash_fold_vbool s (x : vbool) =
+  match x with
+  | T b -> hash_fold_int (hash_fold_bool s b) 0
+  | And (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 1
+  | Or (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 2
+  | Eq (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 3
+  | Neq (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 4
+  | Lt (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 5
+  | Lte (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 6
+  | Gt (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 7
+  | Gte (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 8
+  | Not a -> hash_fold_int (hash_fold_value s a) 9
+;;
+
+let hash_fold_vint s (x : vint) =
+  match x with
+  | T i -> hash_fold_int (hash_fold_int64 s i) 0
+  | Add (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 1
+  | Sub (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 2
+  | Mul (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 3
+  | Div (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 4
+  | Mod (a, b) -> hash_fold_int (hash_fold_value (hash_fold_value s a) b) 5
+  | Neg a -> hash_fold_int (hash_fold_value s a) 6
+;;
+
+let hash_fold_dependent s (x : dependent) =
+  match x with
+  | T { ty; _ } -> hash_fold_int (hash_fold_value s ty) 0
+  | Reduce { uid; _ } -> hash_fold_int (hash_fold_int s uid) 1
+  | Typecheck { uid; _ } -> hash_fold_int (hash_fold_int s uid) 2
+;;
+
+let hash_fold_ty s (x : ty) =
+  match x with
+  | Unit -> hash_fold_int s 0
+  | Bool -> hash_fold_int s 1
+  | Int -> hash_fold_int s 2
+  | Type -> hash_fold_int s 3
+  | Arrow { arg_ty; arg_mode; ret_ty; ret_mode } ->
+    hash_fold_int
+      (Modes.hash_fold_t
+         (hash_fold_value (Modes.hash_fold_t (hash_fold_value s arg_ty) arg_mode) ret_ty)
+         ret_mode)
+      4
+  | Pi { arg_ty; arg_mode; ret_ty; ret_mode } ->
+    hash_fold_int
+      (Modes.hash_fold_t
+         (hash_fold_dependent (Modes.hash_fold_t (hash_fold_value s arg_ty) arg_mode) ret_ty)
+         ret_mode)
+      5
+  | Tuple elts ->
+    hash_fold_int (Nonempty_list.fold elts ~init:s ~f:(fun s elt -> hash_fold_value s elt)) 6
+  | Variant variants ->
+    hash_fold_int
+      (Map.fold variants ~init:s ~f:(fun ~key:label ~data:payload s ->
+         let s = Ident.Label.hash_fold_t s label in
+         hash_fold_option (fun s (payload : value) -> hash_fold_value s payload) s payload))
+      7
+;;
+
+let hash_fold_node s (x : node) =
+  match x with
+  | Bottom -> hash_fold_int s 1
+  | Unit -> hash_fold_int s 2
+  | Bool b -> hash_fold_int (hash_fold_vbool s b) 3
+  | Int i -> hash_fold_int (hash_fold_vint s i) 4
+  | Type ty -> hash_fold_int (hash_fold_ty s ty) 5
+  | Closure closure -> hash_fold_int (hash_fold_int s closure.uid) 6
+  | Binder binder -> hash_fold_int (hash_fold_int s binder.uid) 7
+  | Var id -> hash_fold_int (Ident.hash_fold_t s id) 8
+  | Tuple elts ->
+    hash_fold_int (Nonempty_list.fold elts ~init:s ~f:(fun s elt -> hash_fold_value s elt)) 9
+  | Inject { label; ty } -> hash_fold_int (hash_fold_value (Ident.Label.hash_fold_t s label) ty) 10
+  | Constructor { label; payload } ->
+    hash_fold_int
+      (hash_fold_option
+         (fun s (payload : value) -> hash_fold_value s payload)
+         (Ident.Label.hash_fold_t s label)
+         payload)
+      11
+  | Apply { fn; arg } -> hash_fold_int (hash_fold_value (hash_fold_value s fn) arg) 12
+  | Proj { tuple; index } -> hash_fold_int (hash_fold_int (hash_fold_value s tuple) index) 13
+  | Payload { variant; label } ->
+    hash_fold_int (hash_fold_value (Ident.Label.hash_fold_t s label) variant) 14
+  | Match { scrutinee; arms } ->
+    hash_fold_int
+      (Nonempty_list.fold arms ~init:(hash_fold_value s scrutinee) ~f:(fun s (pattern, leaf) ->
+         hash_fold_value (Canon.hash_fold_t s pattern) leaf))
+      15
+  | External { symbol; ty } -> hash_fold_int (hash_fold_value (String.hash_fold_t s symbol) ty) 16
+  | Prim prim -> hash_fold_int (Builtin0.Prim.hash_fold_t s prim) 17
+;;
 
 module Value0 = struct
-  (* Values are reduced on construction, so every value is in normal form. *)
+  (* Values are reduced on construction, so every value is interned in normal form. *)
+  module Table = Hashcons.Table (struct
+      type t = node [@@deriving sexp_of]
 
-  let bottom : value = Bottom
-  let unit : value = Unit
-  let type_ ty : value = Type ty
-  let closure closure = Closure closure
-  let binder binder = Binder binder
-  let var id = Var id
-  let prim prim = Prim prim
-  let external_ ~symbol ~ty = External { symbol; ty }
+      let equal = equal_node
+      let hash_fold_t = hash_fold_node
+      let hash = Hash.run ~seed hash_fold_t
+    end)
 
-  let tuple elts =
+  let intern =
+    let table = Table.create () in
+    fun node -> Table.intern table node
+  ;;
+
+  let bottom : value = intern Bottom
+  let unit : value = intern Unit
+  let type_ ty : value = intern (Type ty)
+  let closure closure = intern (Closure closure)
+  let binder binder = intern (Binder binder)
+  let var id = intern (Var id)
+  let prim prim = intern (Prim prim)
+  let external_ ~symbol ~ty = intern (External { symbol; ty })
+
+  let tuple (elts : value Nonempty_list.t) =
     (* A tuple with an unreachable component is unreachable. *)
     if
-      Nonempty_list.exists elts ~f:(function
+      Nonempty_list.exists elts ~f:(fun elt ->
+        match elt.node with
         | Bottom -> true
         | _ -> false)
-    then Bottom
-    else Tuple elts
+    then bottom
+    else intern (Tuple elts)
   ;;
 
-  let collapse value ~excluded : value =
-    let excludes b = Set.mem excluded (Excluded0.Literal (Bool b)) in
-    match excludes true, excludes false with
-    | true, true -> Bottom
-    | true, false -> Bool (T false)
-    | false, true -> Bool (T true)
-    | false, false -> Refine { value; excluded }
-  ;;
-
-  let rec payload value ~label =
-    match value with
+  let payload (value : value) ~label =
+    match value.node with
     | Constructor { label = got; payload = got_payload } when Ident.Label.equal got label ->
       (match got_payload with
        | Some payload -> payload
        | None -> raise_s [%message "Bug: expected payload" (label : Ident.Label.t) (value : value)])
-    | Bottom -> Bottom
-    | Refine { value; excluded } ->
-      if Set.mem excluded (Constructor { label; payload = None })
-      then Bottom
-      else (
-        let payload_excluded =
-          Set.fold excluded ~init:Excluded0.Set.empty ~f:(fun acc excluded ->
-            match excluded with
-            | Constructor { label = l; payload = Some shape } when Ident.Label.equal l label ->
-              Set.add acc shape
-            | Literal _ | Constructor _ -> acc)
-        in
-        let extracted = payload value ~label in
-        if Set.is_empty payload_excluded
-        then extracted
-        else collapse extracted ~excluded:payload_excluded)
-    | (Var _ | Constructor _ | Apply _ | Proj _ | Payload _ | Match _) as value ->
-      Payload { variant = value; label }
-    | ( Unit
-      | Bool _
-      | Int _
-      | Type _
-      | Closure _
-      | Binder _
-      | Tuple _
-      | Inject _
-      | External _
-      | Prim _ ) as value ->
-      raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (value : value)]
+    | Bottom -> value
+    | Var _ | Constructor _ | Apply _ | Proj _ | Payload _ | Match _ ->
+      intern (Payload { variant = value; label })
+    | Unit
+    | Bool _
+    | Int _
+    | Type _
+    | Closure _
+    | Binder _
+    | Tuple _
+    | Inject _
+    | External _
+    | Prim _ -> raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (value : value)]
   ;;
 
-  let inject ~ty ~label = Inject { ty; label }
+  let inject ~ty ~label = intern (Inject { ty; label })
 
-  let constructor ~label ~payload =
+  let constructor ~label ~(payload : value option) =
     (* A constructor with an unreachable payload is unreachable. *)
     match payload with
-    | Some Bottom -> Bottom
-    | payload -> Constructor { label; payload }
+    | Some { node = Bottom; _ } -> bottom
+    | payload -> intern (Constructor { label; payload })
   ;;
 
-  let apply ~fn ~arg =
-    match fn, arg with
-    | Bottom, _ | _, Bottom -> Bottom
-    | Inject { label; _ }, arg -> constructor ~label ~payload:(Some arg)
-    | ( (( Closure _
-         | Binder _
-         | Var _
-         | Apply _
-         | Proj _
-         | Payload _
-         | Match _
-         | External _
-         | Prim _ ) as fn)
-      , arg ) -> Apply { fn; arg }
-    | ((Unit | Bool _ | Int _ | Type _ | Tuple _ | Constructor _ | Refine _) as fn), arg ->
-      (* [Refine] never has arrow type: exclusions are literals and tags. *)
+  let apply ~(fn : value) ~(arg : value) =
+    match fn.node, arg.node with
+    | Bottom, _ | _, Bottom -> bottom
+    | Inject { label; _ }, _ -> constructor ~label ~payload:(Some arg)
+    | ( (Closure _ | Binder _ | Var _ | Apply _ | Proj _ | Payload _ | Match _ | External _ | Prim _)
+      , _ ) -> intern (Apply { fn; arg })
+    | (Unit | Bool _ | Int _ | Type _ | Tuple _ | Constructor _), _ ->
       raise_s [%message "Bug: expected function" (fn : value) (arg : value)]
   ;;
 
   let proj (tuple : value) index =
-    match tuple with
+    match tuple.node with
     | Tuple elts -> Nonempty_list.nth_exn elts index
-    | Bottom -> Bottom
-    | (Var _ | Apply _ | Proj _ | Payload _ | Match _ | Refine _) as tuple -> Proj { tuple; index }
-    | ( Unit
-      | Bool _
-      | Int _
-      | Type _
-      | Closure _
-      | Binder _
-      | Inject _
-      | Constructor _
-      | External _
-      | Prim _ ) as tuple -> raise_s [%message "Bug: expected tuple" (index : int) (tuple : value)]
+    | Bottom -> tuple
+    | Var _ | Apply _ | Proj _ | Payload _ | Match _ -> intern (Proj { tuple; index })
+    | Unit
+    | Bool _
+    | Int _
+    | Type _
+    | Closure _
+    | Binder _
+    | Inject _
+    | Constructor _
+    | External _
+    | Prim _ -> raise_s [%message "Bug: expected tuple" (index : int) (tuple : value)]
   ;;
 end
 
 module Pattern = struct
-  module Excluded = struct
-    include Excluded0
-
-    let rec is_excluded t (value : value) : bool Or_unknown.t =
-      match value with
-      | Int value ->
-        (match t with
-         | Literal (Int m) ->
-           (match value with
-            | T n -> Known (Int64.equal n m)
-            | _ -> Unknown)
-         | Literal (Unit | Bool _) | Constructor _ -> Known false)
-      | Bool value ->
-        (match t with
-         | Literal (Bool c) ->
-           (match value with
-            | T b -> Known (Core.Bool.equal b c)
-            | _ -> Unknown)
-         | Literal (Unit | Int _) | Constructor _ -> Known false)
-      | Unit ->
-        (match t with
-         | Literal Unit -> Known true
-         | Literal (Bool _ | Int _) | Constructor _ -> Known false)
-      | Constructor { label; payload } ->
-        (match t with
-         | Constructor { label = t_label; payload = t_payload } ->
-           if not (Ident.Label.equal label t_label)
-           then Known false
-           else (
-             match t_payload, payload with
-             | None, _ -> Known true
-             | Some t_payload, Some payload -> is_excluded t_payload payload
-             | Some _, None -> Known false)
-         | Literal _ -> Known false)
-      | Refine { value; excluded } ->
-        if Core.Set.mem excluded t then Known false else is_excluded t value
-      | Match { scrutinee = _; arms } ->
-        (match
-           Nonempty_list.to_list arms
-           |> List.map ~f:(fun (_, leaf) -> is_excluded t leaf)
-           |> List.all_equal ~equal:(Or_unknown.equal Bool.equal)
-         with
-         | Some verdict -> verdict
-         | None -> Unknown)
-      | Bottom | Tuple _ | Closure _ | Binder _ | External _ | Prim _ | Inject _ | Type _ ->
-        Known false
-      | Var _ | Apply _ | Proj _ | Payload _ -> Unknown
-    ;;
-
-    let rec covers t (pattern : Dst.Expr.pattern) : bool =
-      match t, pattern with
-      | Literal t, Literal { value; _ } -> Dst.Literal.equal t value
-      | Constructor { label = t_label; payload = None }, Constructor { label; _ } ->
-        Ident.Label.equal t_label label
-      | ( Constructor { label = t_label; payload = Some t_payload }
-        , Constructor { label; payload = Some payload; _ } ) ->
-        Ident.Label.equal t_label label && covers t_payload payload
-      | t, Or { left; right; _ } -> covers t left && covers t right
-      | (Literal _ | Constructor _), (Var _ | Literal _ | Constructor _ | Tuple _) -> false
-    ;;
-  end
+  module Canon = Canon
 
   module Step = struct
     type t =
       | Index of int
       | Payload of Ident.Label.t
-    [@@deriving sexp, compare, equal, hash]
+    [@@deriving sexp]
   end
 
   module Matched = struct
     type t =
-      | Match of (Ident.t * Step.t list) list
+      | Match
       | No_match
       | Unknown
-    [@@deriving sexp, compare, equal, hash]
+    [@@deriving sexp]
   end
 
-  let rec is_irrefutable (pattern : Dst.Expr.pattern) =
+  let rec specialize (pattern : Canon.t) ~scrutinee : value =
     match pattern with
-    | Var _ -> true
-    | Literal { value = Unit; _ } -> true
-    | Literal { value = Bool _ | Int _; _ } -> false
-    | Tuple { elts; _ } -> Nonempty_list.for_all elts ~f:is_irrefutable
-    | Constructor _ -> false
-    | Or { left; right; _ } -> is_irrefutable left || is_irrefutable right
-  ;;
-
-  let rec shape (pattern : Dst.Expr.pattern) : Excluded.t option =
-    match pattern with
-    | Var _ | Literal { value = Unit; _ } -> None
-    | Literal { value = (Bool _ | Int _) as literal; _ } -> Some (Literal literal)
-    | Constructor { label; payload = None; _ } -> Some (Constructor { label; payload = None })
-    | Constructor { label; payload = Some payload; _ } ->
-      if is_irrefutable payload
-      then Some (Constructor { label; payload = None })
-      else
-        Option.map (shape payload) ~f:(fun payload ->
-          Excluded.Constructor { label; payload = Some payload })
-    | Tuple _ | Or _ -> None
-  ;;
-
-  let rec excludes (pattern : Dst.Expr.pattern) : Excluded.Set.t =
-    match pattern with
-    | Var _ | Literal _ | Constructor _ | Tuple _ ->
-      (match shape pattern with
-       | Some shape -> Excluded.Set.singleton shape
-       | None -> Excluded.Set.empty)
-    | Or { left; right; _ } -> Set.union (excludes left) (excludes right)
-  ;;
-
-  let all_excludes refuted = List.map refuted ~f:excludes |> Excluded.Set.union_list
-
-  let rec specialize (pattern : Dst.Expr.pattern) ~scrutinee : value =
-    match pattern with
-    | Var _ -> scrutinee
-    | Or _ -> scrutinee (* Would need a disjunction *)
-    | Literal { value = Unit; _ } -> Unit
-    | Literal { value = Bool b; _ } -> Bool (T b)
-    | Literal { value = Int i; _ } -> Int (T i)
-    | Constructor { label; payload = payload_pattern; _ } ->
+    | Wild -> scrutinee
+    | Or _ ->
+      (* Matching any alternative still implies the structure they all agree on;
+         positions they disagree on stay the bare scrutinee position. *)
+      specialize_alternatives (alternatives pattern) ~scrutinee
+    | Literal Unit -> Value0.unit
+    | Literal (Bool b) -> Value0.intern (Bool (T b))
+    | Literal (Int i) -> Value0.intern (Int (T i))
+    | Constructor { label; payload = payload_pattern } ->
       Value0.constructor
         ~label
         ~payload:
           (Option.map payload_pattern ~f:(fun pattern ->
              specialize pattern ~scrutinee:(Value0.payload scrutinee ~label)))
-    | Tuple { elts; _ } ->
+    | Tuple elts ->
       Value0.tuple
         (Nonempty_list.mapi elts ~f:(fun index pattern ->
            specialize pattern ~scrutinee:(Value0.proj scrutinee index)))
+
+  and alternatives (pattern : Canon.t) : Canon.t list =
+    match pattern with
+    | Or (left, right) -> alternatives left @ alternatives right
+    | pattern -> [ pattern ]
+
+  and specialize_alternatives (patterns : Canon.t list) ~scrutinee : value =
+    match List.concat_map patterns ~f:alternatives with
+    | [] -> scrutinee
+    | [ pattern ] -> specialize pattern ~scrutinee
+    | first :: rest ->
+      (match first with
+       | Wild | Or _ -> scrutinee
+       | Literal literal ->
+         if
+           List.for_all rest ~f:(function
+             | Canon.Literal literal' -> Dst.Literal.equal literal literal'
+             | Wild | Constructor _ | Tuple _ | Or _ -> false)
+         then specialize first ~scrutinee
+         else scrutinee
+       | Constructor { label; payload } ->
+         (match
+            List.map rest ~f:(function
+              | Canon.Constructor { label = label'; payload = payload' }
+                when Ident.Label.equal label label' -> Some payload'
+              | Wild | Literal _ | Constructor _ | Tuple _ | Or _ -> None)
+            |> Option.all
+          with
+          | None -> scrutinee
+          | Some payloads ->
+            (match payload, Option.all payloads with
+             | Some payload, Some payloads ->
+               Value0.constructor
+                 ~label
+                 ~payload:
+                   (Some
+                      (specialize_alternatives
+                         (payload :: payloads)
+                         ~scrutinee:(Value0.payload scrutinee ~label)))
+             | None, _ when List.for_all payloads ~f:Option.is_none ->
+               Value0.constructor ~label ~payload:None
+             | (None | Some _), _ -> scrutinee))
+       | Tuple elts ->
+         let arity = Nonempty_list.length elts in
+         (match
+            List.map rest ~f:(function
+              | Canon.Tuple elts' when Nonempty_list.length elts' = arity ->
+                Some (Nonempty_list.to_list elts')
+              | Wild | Literal _ | Constructor _ | Tuple _ | Or _ -> None)
+            |> Option.all
+          with
+          | None -> scrutinee
+          | Some rest_elts ->
+            Value0.tuple
+              (Nonempty_list.mapi elts ~f:(fun index elt ->
+                 specialize_alternatives
+                   (elt :: List.map rest_elts ~f:(fun elts -> List.nth_exn elts index))
+                   ~scrutinee:(Value0.proj scrutinee index)))))
   ;;
 
-  let rec matches (value : value) pattern : Matched.t = match_at [] value pattern
-
-  and match_at path (value : value) (pattern : Dst.Expr.pattern) : Matched.t =
+  (* Whether a value definitely matches a canonical pattern. *)
+  let rec matches (value : value) (pattern : Canon.t) : Matched.t =
     match pattern with
-    | Var { id; _ } -> Match (if Ident.is_anon id then [] else [ id, List.rev path ])
-    | Literal { value = literal; _ } ->
-      (match literal, value with
-       | Unit, _ -> (* Unit's one value always matches. *) Match []
-       | Bool want, Bool (T got) -> if Core.Bool.equal got want then Match [] else No_match
-       | Int want, Int (T got) -> if Int64.equal got want then Match [] else No_match
-       | (Bool _ | Int _), Refine { value; excluded } ->
-         if Set.exists excluded ~f:(fun t -> Excluded.covers t pattern)
-         then No_match
-         else match_at path value pattern
+    | Wild -> Match
+    | Literal literal ->
+      (match literal, value.node with
+       | Unit, _ -> Match
+       | Bool want, Bool (T got) -> if Core.Bool.equal got want then Match else No_match
+       | Int want, Int (T got) -> if Int64.equal got want then Match else No_match
        | (Bool _ | Int _), _ -> Unknown)
-    | Tuple { elts; _ } ->
+    | Tuple elts ->
       Nonempty_list.to_list elts
-      |> List.foldi ~init:(Matched.Match []) ~f:(fun index acc elt ->
-        let matched = match_at (Step.Index index :: path) (Value0.proj value index) elt in
-        match acc, matched with
+      |> List.foldi ~init:Matched.Match ~f:(fun index acc elt ->
+        match acc, matches (Value0.proj value index) elt with
         | No_match, _ | _, No_match -> Matched.No_match
         | Unknown, _ | _, Unknown -> Unknown
-        | Match bindings, Match elt_bindings -> Match (bindings @ elt_bindings))
-    | Constructor { label; payload; _ } ->
-      (match value with
+        | Match, Match -> Match)
+    | Constructor { label; payload } ->
+      (match value.node with
        | Constructor { label = got; payload = got_payload } ->
          if not (Ident.Label.equal got label)
          then No_match
          else (
            match payload, got_payload with
-           | None, None -> Match []
-           | Some payload, Some got_payload ->
-             match_at (Step.Payload label :: path) got_payload payload
+           | None, None -> Match
+           | Some payload, Some got_payload -> matches got_payload payload
            | Some _, None | None, Some _ ->
              raise_s [%message "Bug: constructor payload mismatch" (label : Ident.Label.t)])
-       | Refine { value; excluded } ->
-         if Set.exists excluded ~f:(fun t -> Excluded.covers t pattern)
-         then No_match
-         else match_at path value pattern
        | _ -> Unknown)
+    | Or (left, right) ->
+      (match matches value left with
+       | (Match | Unknown) as matched -> matched
+       | No_match -> matches value right)
+  ;;
+
+  (* Binding paths of a source pattern known to match: pure structure, except
+     an or-pattern's paths follow the alternative the value selects. *)
+  let rec bindings_at path (value : value) (pattern : Dst.Expr.pattern) =
+    match pattern with
+    | Var { id; _ } -> if Ident.is_anon id then [] else [ id, List.rev path ]
+    | Literal _ -> []
+    | Tuple { elts; _ } ->
+      Nonempty_list.to_list elts
+      |> List.concat_mapi ~f:(fun index elt ->
+        bindings_at (Step.Index index :: path) (Value0.proj value index) elt)
+    | Constructor { label; payload; _ } ->
+      (match payload with
+       | None -> []
+       | Some payload ->
+         let got =
+           match value.node with
+           | Constructor { payload = Some got; _ } -> got
+           | _ -> Value0.payload value ~label
+         in
+         bindings_at (Step.Payload label :: path) got payload)
     | Or { left; right; _ } ->
-      (match match_at path value left with
-       | (Match _ | Unknown) as matched -> matched
-       | No_match -> match_at path value right)
+      (match matches value (Canon.of_pattern left) with
+       | Match -> bindings_at path value left
+       | No_match -> bindings_at path value right
+       | Unknown -> raise_s [%message "Bug: bindings of an undecided or pattern"])
   ;;
 
   let selects (scrutinee : value) patterns : _ Or_unknown.t =
     let rec aux index : _ -> _ Or_unknown.t = function
       | [] -> Unknown
       | pattern :: rest ->
-        (match matches scrutinee pattern with
-         | Match bindings -> Known (index, bindings)
+        (match matches scrutinee (Canon.of_pattern pattern) with
+         | Match -> Known (index, bindings_at [] scrutinee pattern)
          | No_match -> aux (index + 1) rest
          | Unknown -> Unknown)
     in
-    match scrutinee with
+    match scrutinee.node with
     | Bottom -> Unknown
     | _ -> aux 0 (Nonempty_list.to_list patterns)
   ;;
 
-  let rec implies (fact : Dst.Expr.pattern) (pattern : Dst.Expr.pattern) : bool Or_unknown.t =
-    match fact, pattern with
-    | _, Var _ -> Known true
-    | Or { left; right; _ }, _ ->
-      let%bind.Or_unknown left = implies left pattern in
-      let%bind.Or_unknown right = implies right pattern in
-      if Core.Bool.equal left right then Known left else Unknown
-    | _, Or { left; right; _ } ->
-      (match implies fact left, implies fact right with
-       | Known true, _ | _, Known true -> Known true
-       | Known false, Known false -> Known false
-       | _, _ -> Unknown)
-    | Var _, _ -> Unknown
-    | Literal { value = fact; _ }, Literal { value = pattern; _ } ->
-      Known (Dst.Literal.equal fact pattern)
-    | ( Constructor { label = fact_label; payload = fact_payload; _ }
-      , Constructor { label; payload; _ } ) ->
-      if not (Ident.Label.equal fact_label label)
-      then Known false
-      else (
-        match fact_payload, payload with
-        | None, None -> Known true
-        | Some fact_payload, Some payload -> implies fact_payload payload
-        | None, Some _ | Some _, None -> Unknown)
-    | Tuple { elts = fact_elts; _ }, Tuple { elts; _ } ->
-      (match Nonempty_list.zip fact_elts elts with
-       | Unequal_lengths -> Unknown
-       | Ok pairs ->
-         Nonempty_list.fold pairs ~init:(Or_unknown.Known true) ~f:(fun acc (fact, pattern) ->
-           match acc, implies fact pattern with
-           | Known false, _ | _, Known false -> Known false
-           | Known true, Known true -> Known true
-           | _, _ -> Unknown))
-    | Literal _, (Constructor _ | Tuple _)
-    | Constructor _, (Literal _ | Tuple _)
-    | Tuple _, (Literal _ | Constructor _) -> Unknown
+  module World = struct
+    (* One world of a live arm: [positive] is the pattern actually checked —
+       the arm's own, or one synthesized constructor world of a wildcard —
+       and drives the learned fact, the value arms, and the decision tree;
+       the source [pattern] keeps the bindings. An arm whose pattern has
+       several worlds is speculative in each of them. *)
+    type 'a t =
+      { pattern : Dst.Expr.pattern
+      ; positive : Dst.Expr.pattern
+      ; speculative : bool
+      ; body : 'a
+      }
+  end
+
+  (* Synthesized world patterns bind nothing; one shared anon suffices. *)
+  let wildcard_id = Ident.create Ident.Raw.anon ~stamp:0
+
+  (* Finite-domain wildcards made positive: the constructors of a variant or
+     bool scrutinee that earlier patterns have not definitely captured, as
+     the worlds a wildcard arm must be checked under. *)
+  let wildcard_worlds ~unfold ~ty ~scrutinee ~earlier ~loc =
+    let candidates =
+      match (unfold ty : value).node with
+      | Type (Variant constructors) ->
+        Map.to_alist constructors
+        |> List.map ~f:(fun (label, payload) ->
+          ( Value0.constructor
+              ~label
+              ~payload:(Option.map payload ~f:(fun _ -> Value0.payload scrutinee ~label))
+          , (Constructor
+               { label
+               ; payload =
+                   Option.map payload ~f:(fun _ : Dst.Expr.pattern -> Var { id = wildcard_id; loc })
+               ; loc
+               }
+             : Dst.Expr.pattern) ))
+      | Type Bool ->
+        List.map [ true; false ] ~f:(fun b ->
+          Value0.intern (Bool (T b)), (Literal { value = Bool b; loc } : Dst.Expr.pattern))
+      | _ -> []
+    in
+    List.filter_map candidates ~f:(fun (candidate, world) ->
+      let captured =
+        List.exists earlier ~f:(fun earlier ->
+          match matches candidate (Canon.of_pattern earlier) with
+          | Match -> true
+          | No_match | Unknown -> false)
+      in
+      Option.some_if (not captured) world)
   ;;
 
-  let rec patterns_agree (a : Dst.Expr.pattern) (b : Dst.Expr.pattern) =
-    match a, b with
-    | Var _, Var _ ->
-      (* Arm leaves are closed, so binder names are irrelevant. *)
-      true
-    | Literal { value = a; _ }, Literal { value = b; _ } -> Dst.Literal.equal a b
-    | Tuple { elts = a; _ }, Tuple { elts = b; _ } ->
-      (match Nonempty_list.zip a b with
-       | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> patterns_agree a b)
-       | Unequal_lengths -> false)
-    | ( Constructor { label = a; payload = a_payload; _ }
-      , Constructor { label = b; payload = b_payload; _ } ) ->
-      Ident.Label.equal a b
-      &&
-        (match a_payload, b_payload with
-        | None, None -> true
-        | Some a, Some b -> patterns_agree a b
-        | None, Some _ | Some _, None -> false)
-    | Or { left = a_left; right = a_right; _ }, Or { left = b_left; right = b_right; _ } ->
-      patterns_agree a_left b_left && patterns_agree a_right b_right
-    | (Var _ | Literal _ | Constructor _ | Tuple _ | Or _), _ -> false
+  let worlds ~unfold ~ty ~scrutinee arms : _ World.t Nonempty_list.t =
+    Nonempty_list.to_list arms
+    |> List.folding_map ~init:[] ~f:(fun earlier ((pattern : Dst.Expr.pattern), body) ->
+      let worlds =
+        match pattern with
+        | Var { loc; _ } -> wildcard_worlds ~unfold ~ty ~scrutinee ~earlier ~loc
+        | Literal _ | Constructor _ | Tuple _ | Or _ -> []
+      in
+      let split =
+        match worlds with
+        | [] -> [ { World.pattern; positive = pattern; speculative = false; body } ]
+        | worlds ->
+          let speculative = List.length worlds > 1 in
+          List.map worlds ~f:(fun positive -> { World.pattern; positive; speculative; body })
+      in
+      earlier @ [ pattern ], split)
+    |> List.concat
+    |> Nonempty_list.of_list_exn
   ;;
 
   (* The last patterns may differ: match values are exhaustive, so with the earlier
@@ -737,7 +962,7 @@ module Pattern = struct
       let zip = Nonempty_list.to_list zip in
       let last = List.length zip - 1 in
       List.for_alli zip ~f:(fun i ((a_pattern, _), (b_pattern, _)) ->
-        i = last || patterns_agree a_pattern b_pattern)
+        i = last || Canon.equal a_pattern b_pattern)
     | Unequal_lengths -> false
   ;;
 
@@ -752,137 +977,45 @@ module Pattern = struct
       |> Option.map ~f:Nonempty_list.of_list_exn
     else None
   ;;
-
-  let with_refuted arms =
-    let patterns = Nonempty_list.map arms ~f:fst |> Nonempty_list.to_list in
-    Nonempty_list.to_list arms
-    |> List.mapi ~f:(fun index (pattern, leaf) -> List.take patterns index, pattern, leaf)
-  ;;
 end
 
 module Closure = struct
   type t = closure =
-    { arg : (Ident.t[@compare.ignore] [@hash.ignore])
-    ; ty : (value[@compare.ignore] [@hash.ignore])
-    ; body : (expr[@compare.ignore] [@hash.ignore])
-    ; body_dst : (Dst.Expr.t[@compare.ignore] [@hash.ignore])
-    ; env : (env[@compare.ignore] [@hash.ignore] [@sexp.opaque])
-    ; family : (int[@compare.ignore] [@hash.ignore] [@sexp.opaque])
-    ; hash : (int[@sexp.opaque])
+    { arg : Ident.t
+    ; ty : value
+    ; body : (expr Lazy.t[@sexp.opaque])
+    ; body_dst : Dst.Expr.t
+    ; env : (env[@sexp.opaque])
+    ; family : (int[@sexp.opaque])
+    ; uid : (int[@sexp.opaque])
     }
-  [@@deriving sexp, compare, hash]
+  [@@deriving sexp_of]
 
-  let equal = [%compare.equal: t]
+  let equal x y = x.uid = y.uid
+  let hash t = t.uid
+  let hash_fold_t s t = hash_fold_int s t.uid
+
+  let const ~arg ~ty ~body ~body_dst ~env ~family =
+    { arg; ty; body; body_dst; env; family; uid = uid () }
+  ;;
 end
 
 module Binder = struct
   type t = binder =
-    { arg : (Ident.t[@compare.ignore] [@hash.ignore])
-    ; ty : (value[@compare.ignore] [@hash.ignore])
-    ; body_dst : (Dst.Expr.t[@compare.ignore] [@hash.ignore])
-    ; env : (env[@compare.ignore] [@hash.ignore] [@sexp.opaque])
-    ; family : (int[@compare.ignore] [@hash.ignore] [@sexp.opaque])
-    ; hash : (int[@sexp.opaque])
+    { arg : Ident.t
+    ; ty : value
+    ; body_dst : Dst.Expr.t
+    ; env : (env[@sexp.opaque])
+    ; family : (int[@sexp.opaque])
+    ; uid : (int[@sexp.opaque])
     }
-  [@@deriving sexp, compare, hash]
+  [@@deriving sexp_of]
 
-  let equal = [%compare.equal: t]
+  let equal x y = x.uid = y.uid
+  let hash t = t.uid
+  let hash_fold_t s t = hash_fold_int s t.uid
+  let const ~arg ~ty ~body_dst ~env ~family = { arg; ty; body_dst; env; family; uid = uid () }
 end
-
-(* TODO replace with some kind of hash cons *)
-let rec identical (a : value) (b : value) =
-  phys_equal a b
-  ||
-  match a, b with
-  | Bottom, Bottom | Unit, Unit -> true
-  | Var a, Var b -> Ident.equal a b
-  | Bool a, Bool b -> identical_bool a b
-  | Int a, Int b -> identical_int a b
-  | Type a, Type b -> identical_ty a b
-  | Closure a, Closure b -> a.hash = b.hash
-  | Binder a, Binder b -> a.hash = b.hash
-  | External a, External b -> String.equal a.symbol b.symbol
-  | Prim a, Prim b -> Builtin0.Prim.equal a b
-  | Tuple a, Tuple b -> identical_list a b
-  | Inject a, Inject b -> Ident.Label.equal a.label b.label && identical a.ty b.ty
-  | Constructor a, Constructor b ->
-    Ident.Label.equal a.label b.label && Option.equal identical a.payload b.payload
-  | Apply a, Apply b -> identical a.fn b.fn && identical a.arg b.arg
-  | Proj a, Proj b -> a.index = b.index && identical a.tuple b.tuple
-  | Payload a, Payload b -> Ident.Label.equal a.label b.label && identical a.variant b.variant
-  | Refine a, Refine b -> identical a.value b.value && Set.equal a.excluded b.excluded
-  | Match a, Match b ->
-    identical a.scrutinee b.scrutinee
-    &&
-      (match Nonempty_list.zip a.arms b.arms with
-      | Ok zip ->
-        Nonempty_list.for_all zip ~f:(fun ((a_pattern, a_leaf), (b_pattern, b_leaf)) ->
-          Pattern.patterns_agree a_pattern b_pattern && identical a_leaf b_leaf)
-      | Unequal_lengths -> false)
-  | ( ( Bottom
-      | Unit
-      | Var _
-      | Bool _
-      | Int _
-      | Type _
-      | Closure _
-      | Binder _
-      | External _
-      | Prim _
-      | Tuple _
-      | Inject _
-      | Constructor _
-      | Apply _
-      | Proj _
-      | Payload _
-      | Refine _
-      | Match _ )
-    , _ ) -> false
-
-and identical_list a b =
-  match Nonempty_list.zip a b with
-  | Ok zip -> Nonempty_list.for_all zip ~f:(fun (a, b) -> identical a b)
-  | Unequal_lengths -> false
-
-and identical_bool (a : vbool) (b : vbool) =
-  match a, b with
-  | T a, T b -> Core.Bool.equal a b
-  | And (a0, a1), And (b0, b1)
-  | Or (a0, a1), Or (b0, b1)
-  | Eq (a0, a1), Eq (b0, b1)
-  | Neq (a0, a1), Neq (b0, b1)
-  | Lt (a0, a1), Lt (b0, b1)
-  | Lte (a0, a1), Lte (b0, b1)
-  | Gt (a0, a1), Gt (b0, b1)
-  | Gte (a0, a1), Gte (b0, b1) -> identical a0 b0 && identical a1 b1
-  | Not a, Not b -> identical a b
-  | (T _ | And _ | Or _ | Eq _ | Neq _ | Lt _ | Lte _ | Gt _ | Gte _ | Not _), _ -> false
-
-and identical_int (a : vint) (b : vint) =
-  match a, b with
-  | T a, T b -> Int64.equal a b
-  | Add (a0, a1), Add (b0, b1)
-  | Sub (a0, a1), Sub (b0, b1)
-  | Mul (a0, a1), Mul (b0, b1)
-  | Div (a0, a1), Div (b0, b1)
-  | Mod (a0, a1), Mod (b0, b1) -> identical a0 b0 && identical a1 b1
-  | Neg a, Neg b -> identical a b
-  | (T _ | Add _ | Sub _ | Mul _ | Div _ | Mod _ | Neg _), _ -> false
-
-and identical_ty (a : ty) (b : ty) =
-  match a, b with
-  | Unit, Unit | Bool, Bool | Int, Int | Type, Type -> true
-  | Arrow a, Arrow b ->
-    Modes.equal a.arg_mode b.arg_mode
-    && Modes.equal a.ret_mode b.ret_mode
-    && identical a.arg_ty b.arg_ty
-    && identical a.ret_ty b.ret_ty
-  (* Dependent returns carry envs and memos; stay conservative. *)
-  | Pi _, Pi _ -> false
-  | Tuple a, Tuple b -> identical_list a b
-  | Variant a, Variant b -> Map.equal (Option.equal identical) a b
-  | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> false
-;;
 
 module Bool = struct
   open Int64.O
@@ -898,104 +1031,102 @@ module Bool = struct
     | Gt of value * value
     | Gte of value * value
     | Not of value
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
-  let const b : value = Bool (T b)
+  let equal = equal_vbool
+  let hash_fold_t = hash_fold_vbool
+  let hash = Hash.run ~seed hash_fold_t
+  let const b : value = Value0.intern (Bool (T b))
 
-  let is_literal : value -> bool = function
+  let is_literal (v : value) =
+    match v.node with
     | Bool (T _) | Int (T _) -> true
     | _ -> false
   ;;
 
-  let base : value -> value = function
-    | Refine { value; _ } -> value
-    | value -> value
-  ;;
-
   (* Normalize variable comparisons by comparison order. *)
-  let reorder_vars a b =
-    match base a, base b with
+  let reorder_vars (a : value) (b : value) =
+    match a.node, b.node with
     | Var x, Var y -> Core.Int.( > ) (Ident.compare x y) 0
     | _ -> false
   ;;
 
-  let same_var a b =
-    match base a, base b with
-    | Var x, Var y -> Ident.equal x y
-    | _ -> false
+  (* [shift o c] rewrites the comparison [o == c] into [v == c'] over the
+     compound's variable side. *)
+  let shift (o : value) (c : int64) =
+    match o.node with
+    | Int (Add (v, { node = Int (T k); _ })) | Int (Add ({ node = Int (T k); _ }, v)) ->
+      Some (v, c - k)
+    | Int (Sub (v, { node = Int (T k); _ })) -> Some (v, c + k)
+    | Int (Sub ({ node = Int (T k); _ }, v)) -> Some (v, k - c)
+    | Int (Neg v) -> Some (v, neg c)
+    | _ -> None
   ;;
 
   (* Only does rewrites that remove terms. *)
   let rec reduce : t -> value = function
-    | And (Bottom, _)
-    | And (_, Bottom)
-    | Or (Bottom, _)
-    | Or (_, Bottom)
-    | Eq (Bottom, _)
-    | Eq (_, Bottom)
-    | Neq (Bottom, _)
-    | Neq (_, Bottom)
-    | Lt (Bottom, _)
-    | Lt (_, Bottom)
-    | Lte (Bottom, _)
-    | Lte (_, Bottom)
-    | Gt (Bottom, _)
-    | Gt (_, Bottom)
-    | Gte (Bottom, _)
-    | Gte (_, Bottom)
-    | Not Bottom -> Bottom
-    | And (Bool (T x), Bool (T y)) -> const (x && y)
-    | And (Bool (T false), _) | And (_, Bool (T false)) -> const false
-    | (And (Var x, Bool (Not (Var y))) | And (Bool (Not (Var x)), Var y)) when Ident.equal x y ->
-      const false
-    | And (Bool (T true), Bool b) | And (Bool b, Bool (T true)) -> reduce b
-    | And (Bool (T true), v) | And (v, Bool (T true)) -> v
-    | Or (Bool (T x), Bool (T y)) -> const (x || y)
-    | Or (Bool (T true), _) | Or (_, Bool (T true)) -> const true
-    | (Or (Var x, Bool (Not (Var y))) | Or (Bool (Not (Var x)), Var y)) when Ident.equal x y ->
-      const true
-    | Or (Bool (T false), Bool b) | Or (Bool b, Bool (T false)) -> reduce b
-    | Or (Bool (T false), v) | Or (v, Bool (T false)) -> v
-    | Not (Bool (T x)) -> const (not x)
-    | Not (Bool (Not (Bool b))) -> reduce b
-    | Not (Bool (Not v)) -> v
-    | Eq (Int (T x), Int (T y)) -> const (x = y)
-    | Eq (((Bool (T _) | Int (T _)) as lit), value) when not (is_literal value) ->
+    | And ({ node = Bottom; _ }, _)
+    | And (_, { node = Bottom; _ })
+    | Or ({ node = Bottom; _ }, _)
+    | Or (_, { node = Bottom; _ })
+    | Eq ({ node = Bottom; _ }, _)
+    | Eq (_, { node = Bottom; _ })
+    | Neq ({ node = Bottom; _ }, _)
+    | Neq (_, { node = Bottom; _ })
+    | Lt ({ node = Bottom; _ }, _)
+    | Lt (_, { node = Bottom; _ })
+    | Lte ({ node = Bottom; _ }, _)
+    | Lte (_, { node = Bottom; _ })
+    | Gt ({ node = Bottom; _ }, _)
+    | Gt (_, { node = Bottom; _ })
+    | Gte ({ node = Bottom; _ }, _)
+    | Gte (_, { node = Bottom; _ })
+    | Not { node = Bottom; _ } -> Value0.bottom
+    | And ({ node = Bool (T x); _ }, { node = Bool (T y); _ }) -> const (x && y)
+    | And ({ node = Bool (T false); _ }, _) | And (_, { node = Bool (T false); _ }) -> const false
+    | And ({ node = Var x; _ }, { node = Bool (Not { node = Var y; _ }); _ })
+    | And ({ node = Bool (Not { node = Var x; _ }); _ }, { node = Var y; _ })
+      when Ident.equal x y -> const false
+    | And ({ node = Bool (T true); _ }, { node = Bool b; _ })
+    | And ({ node = Bool b; _ }, { node = Bool (T true); _ }) -> reduce b
+    | And ({ node = Bool (T true); _ }, v) | And (v, { node = Bool (T true); _ }) -> v
+    | Or ({ node = Bool (T x); _ }, { node = Bool (T y); _ }) -> const (x || y)
+    | Or ({ node = Bool (T true); _ }, _) | Or (_, { node = Bool (T true); _ }) -> const true
+    | Or ({ node = Var x; _ }, { node = Bool (Not { node = Var y; _ }); _ })
+    | Or ({ node = Bool (Not { node = Var x; _ }); _ }, { node = Var y; _ })
+      when Ident.equal x y -> const true
+    | Or ({ node = Bool (T false); _ }, { node = Bool b; _ })
+    | Or ({ node = Bool b; _ }, { node = Bool (T false); _ }) -> reduce b
+    | Or ({ node = Bool (T false); _ }, v) | Or (v, { node = Bool (T false); _ }) -> v
+    | Not { node = Bool (T x); _ } -> const (not x)
+    | Not { node = Bool (Not { node = Bool b; _ }); _ } -> reduce b
+    | Not { node = Bool (Not v); _ } -> v
+    | Eq ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x = y)
+    | Eq (({ node = Bool (T _) | Int (T _); _ } as lit), value) when not (is_literal value) ->
       reduce (Eq (value, lit))
     | Eq (a, b) when reorder_vars a b -> reduce (Eq (b, a))
-    | Eq (Int x, Int y) when identical_int x y -> const true
-    | Eq ((Int (Add (v, Int (T k))) | Int (Add (Int (T k), v))), Int (T c)) ->
-      reduce (Eq (v, Int (T (c - k))))
-    | Eq (Int (Sub (v, Int (T k))), Int (T c)) -> reduce (Eq (v, Int (T (c + k))))
-    | Eq (Int (Sub (Int (T k), v)), Int (T c)) -> reduce (Eq (v, Int (T (k - c))))
-    | Eq (Int (Neg v), Int (T c)) -> reduce (Eq (v, Int (T (neg c))))
-    | Eq (a, b) when same_var a b -> const true
-    | Eq (Refine { excluded; _ }, Int (T n)) when Set.mem excluded (Literal (Int n)) -> const false
-    | Neq (Int (T x), Int (T y)) -> const (x <> y)
-    | Neq (((Bool (T _) | Int (T _)) as lit), value) when not (is_literal value) ->
+    | Eq (a, b) when equal_value a b -> const true
+    | Eq (o, { node = Int (T c); _ }) when Option.is_some (shift o c) ->
+      let v, c = Option.value_exn (shift o c) in
+      reduce (Eq (v, Value0.intern (Int (T c))))
+    | Neq ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x <> y)
+    | Neq (({ node = Bool (T _) | Int (T _); _ } as lit), value) when not (is_literal value) ->
       reduce (Neq (value, lit))
     | Neq (a, b) when reorder_vars a b -> reduce (Neq (b, a))
-    | Neq (Int x, Int y) when identical_int x y -> const false
-    | Neq ((Int (Add (v, Int (T k))) | Int (Add (Int (T k), v))), Int (T c)) ->
-      reduce (Neq (v, Int (T (c - k))))
-    | Neq (Int (Sub (v, Int (T k))), Int (T c)) -> reduce (Neq (v, Int (T (c + k))))
-    | Neq (Int (Sub (Int (T k), v)), Int (T c)) -> reduce (Neq (v, Int (T (k - c))))
-    | Neq (Int (Neg v), Int (T c)) -> reduce (Neq (v, Int (T (neg c))))
-    | Neq (a, b) when same_var a b -> const false
-    | Neq (Refine { excluded; _ }, Int (T n)) when Set.mem excluded (Literal (Int n)) -> const true
-    | Lt (Int (T x), Int (T y)) -> const (x < y)
-    | Lt (Int x, Int y) when identical_int x y -> const false
-    | Lt (a, b) when same_var a b -> const false
-    | Lte (Int (T x), Int (T y)) -> const (x <= y)
-    | Lte (Int x, Int y) when identical_int x y -> const true
-    | Lte (a, b) when same_var a b -> const true
-    | Gt (Int (T x), Int (T y)) -> const (x > y)
-    | Gt (Int x, Int y) when identical_int x y -> const false
-    | Gt (a, b) when same_var a b -> const false
-    | Gte (Int (T x), Int (T y)) -> const (x >= y)
-    | Gte (Int x, Int y) when identical_int x y -> const true
-    | Gte (a, b) when same_var a b -> const true
-    | (T _ | And _ | Or _ | Eq _ | Neq _ | Lt _ | Lte _ | Gt _ | Gte _ | Not _) as expr -> Bool expr
+    | Neq (a, b) when equal_value a b -> const false
+    | Neq (o, { node = Int (T c); _ }) when Option.is_some (shift o c) ->
+      let v, c = Option.value_exn (shift o c) in
+      reduce (Neq (v, Value0.intern (Int (T c))))
+    | Lt ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x < y)
+    | Lt (a, b) when equal_value a b -> const false
+    | Lte ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x <= y)
+    | Lte (a, b) when equal_value a b -> const true
+    | Gt ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x > y)
+    | Gt (a, b) when equal_value a b -> const false
+    | Gte ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x >= y)
+    | Gte (a, b) when equal_value a b -> const true
+    | (T _ | And _ | Or _ | Eq _ | Neq _ | Lt _ | Lte _ | Gt _ | Gte _ | Not _) as expr ->
+      Value0.intern (Bool expr)
 
   and and_ a b = reduce (And (a, b))
   and or_ a b = reduce (Or (a, b))
@@ -1019,50 +1150,67 @@ module Int = struct
     | Div of value * value
     | Mod of value * value
     | Neg of value
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
-  let const i : value = Int (T i)
+  let equal = equal_vint
+  let hash_fold_t = hash_fold_vint
+  let hash = Hash.run ~seed hash_fold_t
+  let const i : value = Value0.intern (Int (T i))
+
+  let unwrap_neg (v : value) =
+    match v.node with
+    | Int (Neg w) -> Some w
+    | _ -> None
+  ;;
+
+  (* [a + b] cancels: [a] is a var and [b] its negation. *)
+  let cancels (a : value) b =
+    match a.node, unwrap_neg b with
+    | Var x, Some { node = Var y; _ } -> Ident.equal x y
+    | _ -> false
+  ;;
 
   (* Only does rewrites that remove terms. *)
   let rec reduce : t -> value = function
-    | Add (Bottom, _)
-    | Add (_, Bottom)
-    | Sub (Bottom, _)
-    | Sub (_, Bottom)
-    | Mul (Bottom, _)
-    | Mul (_, Bottom)
-    | Div (Bottom, _)
-    | Div (_, Bottom)
-    | Mod (Bottom, _)
-    | Mod (_, Bottom)
-    | Neg Bottom -> Bottom
-    | Add (Int (T x), Int (T y)) -> const (x + y)
-    | (Add (Var x, Int (Neg (Var y))) | Add (Int (Neg (Var x)), Var y)) when Ident.equal x y ->
-      const 0L
-    | Add (Int (T 0L), Int i) | Add (Int i, Int (T 0L)) -> reduce i
-    | Add (Int (T 0L), v) | Add (v, Int (T 0L)) -> v
-    | Sub (Int (T x), Int (T y)) -> const (x - y)
-    | Sub (Int i, Int (T 0L)) -> reduce i
-    | Sub (v, Int (T 0L)) -> v
-    | Sub (Int (T 0L), v) -> reduce (Neg v)
-    | Sub (Var x, Var y) when Ident.equal x y -> const 0L
-    | Sub (x, Int (Neg y)) -> reduce (Add (x, y))
-    | Mul (Int (T x), Int (T y)) -> const (x * y)
-    | Mul (_, Int (T 0L)) | Mul (Int (T 0L), _) -> const 0L
-    | Mul (Int i, Int (T 1L)) | Mul (Int (T 1L), Int i) -> reduce i
-    | Mul (v, Int (T -1L)) | Mul (Int (T -1L), v) -> reduce (Neg v)
-    | Mul (v, Int (T 1L)) | Mul (Int (T 1L), v) -> v
-    | Div (v, Int (T -1L)) -> reduce (Neg v) (* Before eval so INT_MIN/-1 wraps. *)
-    | Div (Int (T x), Int (T y)) -> const (x / y)
-    | Div (Int i, Int (T 1L)) -> reduce i
-    | Div (v, Int (T 1L)) -> v
-    | Mod (Int (T x), Int (T y)) -> const (x % y)
-    | Mod (_, Int (T 1L)) -> const 0L
+    | Add ({ node = Bottom; _ }, _)
+    | Add (_, { node = Bottom; _ })
+    | Sub ({ node = Bottom; _ }, _)
+    | Sub (_, { node = Bottom; _ })
+    | Mul ({ node = Bottom; _ }, _)
+    | Mul (_, { node = Bottom; _ })
+    | Div ({ node = Bottom; _ }, _)
+    | Div (_, { node = Bottom; _ })
+    | Mod ({ node = Bottom; _ }, _)
+    | Mod (_, { node = Bottom; _ })
+    | Neg { node = Bottom; _ } -> Value0.bottom
+    | Add ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x + y)
+    | Add (a, b) when cancels a b || cancels b a -> const 0L
+    | Add ({ node = Int (T 0L); _ }, { node = Int i; _ })
+    | Add ({ node = Int i; _ }, { node = Int (T 0L); _ }) -> reduce i
+    | Add ({ node = Int (T 0L); _ }, v) | Add (v, { node = Int (T 0L); _ }) -> v
+    | Sub ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x - y)
+    | Sub ({ node = Int i; _ }, { node = Int (T 0L); _ }) -> reduce i
+    | Sub (v, { node = Int (T 0L); _ }) -> v
+    | Sub ({ node = Int (T 0L); _ }, v) -> reduce (Neg v)
+    | Sub (a, b) when equal_value a b -> const 0L
+    | Sub (x, y) when Option.is_some (unwrap_neg y) ->
+      reduce (Add (x, Option.value_exn (unwrap_neg y)))
+    | Mul ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x * y)
+    | Mul (_, { node = Int (T 0L); _ }) | Mul ({ node = Int (T 0L); _ }, _) -> const 0L
+    | Mul ({ node = Int i; _ }, { node = Int (T 1L); _ })
+    | Mul ({ node = Int (T 1L); _ }, { node = Int i; _ }) -> reduce i
+    | Mul (v, { node = Int (T -1L); _ }) | Mul ({ node = Int (T -1L); _ }, v) -> reduce (Neg v)
+    | Mul (v, { node = Int (T 1L); _ }) | Mul ({ node = Int (T 1L); _ }, v) -> v
+    | Div (v, { node = Int (T -1L); _ }) -> reduce (Neg v) (* INT_MIN/-1 wraps. *)
+    | Div ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x / y)
+    | Div ({ node = Int i; _ }, { node = Int (T 1L); _ }) -> reduce i
+    | Div (v, { node = Int (T 1L); _ }) -> v
+    | Mod ({ node = Int (T x); _ }, { node = Int (T y); _ }) -> const (x % y)
+    | Mod (_, { node = Int (T 1L); _ }) -> const 0L
     (* No x % x -> 0 or x / x -> 1: both trap at x = 0. *)
-    | Neg (Int (T x)) -> const (-x)
-    | Neg (Int (Neg (Int x))) -> reduce x
-    | Neg (Int (Neg v)) -> v
-    | (T _ | Add _ | Sub _ | Mul _ | Div _ | Mod _ | Neg _) as expr -> Int expr
+    | Neg { node = Int (T x); _ } -> const (-x)
+    | Neg v when Option.is_some (unwrap_neg v) -> Option.value_exn (unwrap_neg v)
+    | (T _ | Add _ | Sub _ | Mul _ | Div _ | Mod _ | Neg _) as expr -> Value0.intern (Int expr)
   ;;
 
   exception Divide_by_zero of t
@@ -1073,16 +1221,16 @@ module Int = struct
   let mul a b = reduce (Mul (a, b))
   let neg v = reduce (Neg v)
 
-  let div a (b : value) =
-    match a, b with
-    | Bottom, _ | _, Bottom -> Bottom
+  let div (a : value) (b : value) =
+    match a.node, b.node with
+    | Bottom, _ | _, Bottom -> Value0.bottom
     | _, Int (T 0L) -> raise (Divide_by_zero (Div (a, b)))
     | _ -> reduce (Div (a, b))
   ;;
 
-  let mod_ a (b : value) =
-    match a, b with
-    | Bottom, _ | _, Bottom -> Bottom
+  let mod_ (a : value) (b : value) =
+    match a.node, b.node with
+    | Bottom, _ | _, Bottom -> Value0.bottom
     | _, Int (T 0L) -> raise (Divide_by_zero (Mod (a, b)))
     | _, Int (T n) when Int64.is_negative n -> raise (Negative_modulus (Mod (a, b)))
     | _ -> reduce (Mod (a, b))
@@ -1092,58 +1240,12 @@ end
 module Value1 = struct
   include Value0
 
-  let rec refine value ~excluded =
-    let value, excluded =
-      match value with
-      | Refine { value; excluded = prior } -> value, Set.union prior excluded
-      | value -> value, excluded
-    in
-    let matching_shape label (excluded : Pattern.Excluded.t) =
-      match excluded with
-      | Constructor { label = l; payload = Some _ } -> Ident.Label.equal l label
-      | Literal _ | Constructor { payload = None; _ } -> false
-    in
-    match value with
-    | Bottom -> Bottom
-    | Constructor { label; payload = Some payload }
-      when Set.exists excluded ~f:(matching_shape label) ->
-      (* Push payload refinements into the payload subtree, which keeps
-         payload reduction and match rebuilds at their fixpoint. *)
-      let pushed, rest = Set.partition_tf excluded ~f:(matching_shape label) in
-      let payload_excluded =
-        Set.fold pushed ~init:Pattern.Excluded.Set.empty ~f:(fun acc excluded ->
-          match excluded with
-          | Constructor { payload = Some shape; _ } -> Set.add acc shape
-          | Literal _ | Constructor { payload = None; _ } -> acc)
-      in
-      let payload = refine payload ~excluded:payload_excluded in
-      refine (constructor ~label ~payload:(Some payload)) ~excluded:rest
-    | value ->
-      with_return (fun { return } ->
-        let excluded =
-          Set.filter excluded ~f:(fun excluded ->
-            match Pattern.Excluded.is_excluded excluded value with
-            | Known true -> return Bottom
-            | Known false -> false
-            | Unknown -> true)
-        in
-        if Set.is_empty excluded then value else collapse value ~excluded)
-  ;;
-
-  let refine_branch ~scrutinee ~pattern ~refuted =
-    Pattern.specialize
-      pattern
-      ~scrutinee:(refine scrutinee ~excluded:(Pattern.all_excludes refuted))
-  ;;
-
-  let identical = identical
-
   let rec rewrite_value (value : value) ~target ~replacement =
     let rewrite value = rewrite_value value ~target ~replacement in
-    if identical value target
+    if equal_value value target
     then replacement
     else (
-      match value with
+      match value.node with
       | Bottom | Unit | Var _ | Closure _ | Binder _ | External _ | Prim _ -> value
       | Bool bool_value ->
         (match bool_value with
@@ -1166,15 +1268,15 @@ module Value1 = struct
          (* A divisor rewritten to zero would become a static failure; keep the node and
             let it resurface if the branch is ever actually entered. *)
          | Div (a, b) ->
-           (match rewrite b with
+           (match (rewrite b).node with
             | Int (T 0L) -> value
-            | b -> Int.div (rewrite a) b)
+            | _ -> Int.div (rewrite a) (rewrite b))
          | Mod (a, b) ->
-           (match rewrite b with
+           (match (rewrite b).node with
             | Int (T n) when Int64.(n <= 0L) -> value
-            | b -> Int.mod_ (rewrite a) b)
+            | _ -> Int.mod_ (rewrite a) (rewrite b))
          | Neg a -> Int.neg (rewrite a))
-      | Type ty -> Type (rewrite_ty ty ~target ~replacement)
+      | Type ty -> Value0.type_ (rewrite_ty ty ~target ~replacement)
       | Tuple elts -> Value0.tuple (Nonempty_list.map elts ~f:rewrite)
       | Inject { label; ty } -> Value0.inject ~ty:(rewrite ty) ~label
       | Constructor { label; payload } ->
@@ -1182,7 +1284,6 @@ module Value1 = struct
       | Apply { fn; arg } -> Value0.apply ~fn:(rewrite fn) ~arg:(rewrite arg)
       | Proj { tuple = subject; index } -> Value0.proj (rewrite subject) index
       | Payload { variant; label } -> Value0.payload (rewrite variant) ~label
-      | Refine { value; excluded } -> refine (rewrite value) ~excluded
       | Match { scrutinee = match_scrutinee; arms } ->
         match_
           ~scrutinee:(rewrite match_scrutinee)
@@ -1201,58 +1302,42 @@ module Value1 = struct
     | Variant constructors -> Variant (Map.map constructors ~f:(Option.map ~f:rewrite))
 
   and rewrite value ~target ~replacement =
-    if identical replacement target then value else rewrite_value value ~target ~replacement
+    if equal_value replacement target then value else rewrite_value value ~target ~replacement
 
-  and match_ ~scrutinee ~arms =
-    match scrutinee with
-    | Bottom -> Bottom
-    | scrutinee ->
-      (* Each arm's leaf is specialized to its implied scrutinee. Arms whose specialized
-         bodies are [Bottom] are dead — while dead source-level branches are errors, the
-         value lattice will explore dead branches. *)
-      let arms =
-        Pattern.with_refuted arms
-        |> List.filter_map ~f:(fun (refuted, pattern, leaf) ->
-          match
-            rewrite leaf ~target:scrutinee ~replacement:(refine_branch ~scrutinee ~pattern ~refuted)
-          with
-          | Bottom -> None
-          | specialized -> Some (pattern, (leaf, specialized)))
-      in
-      (* Matches are exhaustive; a sole surviving arm is unconditional. Selection must
-         return the *unspecialized* leaf: an arm's facts hold only relative to this
-         match, and values beside the collapse were never rewritten with them. *)
+  and match_ ~(scrutinee : value) ~arms =
+    match scrutinee.node with
+    | Bottom -> scrutinee
+    | _ ->
       let rec select : _ -> value Or_unknown.t = function
-        | [] -> Known Bottom
-        | [ (_, (leaf, _)) ] -> Known leaf
-        | (pattern, (leaf, _)) :: rest ->
+        | [] -> Known Value0.bottom
+        | [ (_, leaf) ] -> Known leaf
+        | (pattern, leaf) :: rest ->
           (match Pattern.matches scrutinee pattern with
-           | Match _ -> Known leaf
+           | Match -> Known leaf
            | No_match -> select rest
            | Unknown -> Unknown)
       in
-      (match select arms with
+      (match select (Nonempty_list.to_list arms) with
        | Known value -> value
        | Unknown ->
-         Match
-           { scrutinee
-           ; arms =
-               List.map arms ~f:(fun (pattern, (_, specialized)) -> pattern, specialized)
-               |> Nonempty_list.of_list_exn
-           })
+         (* If all arms are the same value, use it *)
+         let (first :: rest) = Nonempty_list.map arms ~f:snd in
+         if List.for_all rest ~f:(Hashcons.equal first)
+         then first
+         else Value0.intern (Match { scrutinee; arms }))
   ;;
 
-  let rec if_ ~loc ~(cond : value) ~then_ ~else_ : value =
-    match cond with
-    | Bool (Not cond) -> if_ ~loc ~cond ~then_:else_ ~else_:then_
-    | Bool (Neq (a, b)) -> if_ ~loc ~cond:(Bool (Eq (a, b))) ~then_:else_ ~else_:then_
-    | cond ->
+  let rec if_ ~(cond : value) ~then_ ~else_ : value =
+    match cond.node with
+    | Bool (Not cond) -> if_ ~cond ~then_:else_ ~else_:then_
+    | Bool (Neq (a, b)) -> if_ ~cond:(Value0.intern (Bool (Eq (a, b)))) ~then_:else_ ~else_:then_
+    | _ ->
       match_
         ~scrutinee:cond
         ~arms:
           (Nonempty_list.create
-             ((Literal { value = Bool true; loc } : Dst.Expr.pattern), then_)
-             [ (Literal { value = Bool false; loc } : Dst.Expr.pattern), else_ ])
+             ((Literal (Bool true) : Canon.t), then_)
+             [ (Literal (Bool false) : Canon.t), else_ ])
   ;;
 end
 
@@ -1262,12 +1347,12 @@ module Desc = struct
     ; mode : Modes.t
     ; static : (value Lazy.t[@sexp.opaque])
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let of_type ty =
-    { ty = Type Type
+    { ty = Value0.type_ Type
     ; mode = Modes.create ~staticity:Static ~erasure:Erased
-    ; static = Lazy.from_val (Type ty : value)
+    ; static = Lazy.from_val (Value0.type_ ty)
     }
   ;;
 end
@@ -1292,24 +1377,32 @@ module Ty = struct
         }
     | Tuple of value Nonempty_list.t
     | Variant of value option Map.M(Ident.Label).t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
-  let arg : value -> value = function
+  let equal = equal_ty
+  let hash_fold_t = hash_fold_ty
+  let hash = Hash.run ~seed hash_fold_t
+
+  let arg (v : value) =
+    match v.node with
     | Type (Arrow { arg_ty; _ } | Pi { arg_ty; _ }) -> arg_ty
     | _ -> raise_s [%message "Bug: expected function type"]
   ;;
 
-  let arg_mode : value -> Modes.t = function
+  let arg_mode (v : value) =
+    match v.node with
     | Type (Arrow { arg_mode; _ } | Pi { arg_mode; _ }) -> arg_mode
     | _ -> raise_s [%message "Bug: expected function type"]
   ;;
 
-  let ret : value -> value = function
+  let ret (v : value) =
+    match v.node with
     | Type (Arrow { ret_ty; _ }) -> ret_ty
     | _ -> raise_s [%message "Bug: expected arrow type"]
   ;;
 
-  let ret_mode : value -> Modes.t = function
+  let ret_mode (v : value) =
+    match v.node with
     | Type (Arrow { ret_mode; _ }) -> ret_mode
     | _ -> raise_s [%message "Bug: expected arrow type"]
   ;;
@@ -1340,7 +1433,7 @@ module Value = struct
     include Concrete
 
     let rec of_value (v : value) : t option =
-      match v with
+      match v.node with
       | Unit -> Some Unit
       | Bool (T b) -> Some (Bool b)
       | Int (T i) -> Some (Int i)
@@ -1349,8 +1442,8 @@ module Value = struct
         |> Nonempty_list.to_list
         |> Option.all
         |> Option.map ~f:(fun elts -> Concrete.Tuple (Nonempty_list.of_list_exn elts))
-      | Closure closure -> Some (Closure closure.hash)
-      | Binder binder -> Some (Closure binder.hash)
+      | Closure closure -> Some (Closure closure.uid)
+      | Binder binder -> Some (Closure binder.uid)
       | Prim prim -> Some (Prim (Prim prim))
       | Type Unit -> Some (Prim (Type Unit))
       | Type Bool -> Some (Prim (Type Bool))
@@ -1360,7 +1453,7 @@ module Value = struct
       | Type (Pi { arg_ty; arg_mode; ret_ty = T { ty = ret_ty; _ }; ret_mode }) ->
         let%bind arg = of_value arg_ty in
         let%map ret = of_value ret_ty in
-        Concrete.Arrow { arg; arg_mode; ret; ret_mode }
+        Concrete.Arrow_t { arg; arg_mode; ret; ret_mode }
       | Type (Tuple elts) ->
         let%map elts = Nonempty_list.map elts ~f:of_value |> Nonempty_list.to_list |> Option.all in
         Concrete.Tuple_t (Nonempty_list.of_list_exn elts)
@@ -1382,12 +1475,14 @@ module Value = struct
       | Constructor { label; payload = Some payload } ->
         let%map payload = of_value payload in
         Concrete.Constructor { label; payload = Some payload }
-      | Bottom | Bool _ | Int _ | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Refine _
-      | Type (Pi _) -> None
+      | Bottom | Bool _ | Int _ | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Type (Pi _) ->
+        None
     ;;
   end
 
-  type t = value =
+  type t = value [@@deriving sexp_of]
+
+  type nonrec node = node =
     | Bottom
     | Unit
     | Bool of vbool
@@ -1419,30 +1514,34 @@ module Value = struct
         }
     | Match of
         { scrutinee : t
-        ; arms : (Dst.Expr.pattern * t) Nonempty_list.t
-        }
-    | Refine of
-        { value : t
-        ; excluded : Set.M(Excluded0).t
+        ; arms : (Canon.t * t) Nonempty_list.t
         }
     | External of
         { symbol : string
         ; ty : t
         }
     | Prim of Builtin0.Prim.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   include Value1
 
-  let ty = function
+  let equal = equal_value
+  let equal_node = equal_node
+  let hash_fold_t = hash_fold_value
+  let hash_fold_node = hash_fold_node
+  let hash = Hash.run ~seed hash_fold_t
+  let hash_node = Hash.run ~seed hash_fold_node
+
+  let ty_exn (value : t) =
+    match value.node with
     | Type ty -> ty
-    | value -> raise_s [%message "Bug: expected concrete type" (value : t)]
+    | _ -> raise_s [%message "Bug: expected concrete type" (value : t)]
   ;;
 
   let of_literal : Dst.Literal.t -> value = function
-    | Unit -> Unit
-    | Bool b -> Bool (T b)
-    | Int i -> Int (T i)
+    | Unit -> Value0.unit
+    | Bool b -> Bool.const b
+    | Int i -> Int.const i
   ;;
 
   module Eliminator = struct
@@ -1452,25 +1551,24 @@ module Value = struct
       | Payload of Ident.Label.t
 
     let rec peel (value : value) frames =
-      match value with
+      match value.node with
       | Apply { fn; arg } -> peel fn (Apply arg :: frames)
       | Proj { tuple; index } -> peel tuple (Proj index :: frames)
       | Payload { variant; label } -> peel variant (Payload label :: frames)
-      | ( Bottom
-        | Unit
-        | Bool _
-        | Int _
-        | Type _
-        | Closure _
-        | Binder _
-        | Var _
-        | Tuple _
-        | Inject _
-        | Constructor _
-        | Match _
-        | Refine _
-        | External _
-        | Prim _ ) as head -> head, frames
+      | Bottom
+      | Unit
+      | Bool _
+      | Int _
+      | Type _
+      | Closure _
+      | Binder _
+      | Var _
+      | Tuple _
+      | Inject _
+      | Constructor _
+      | Match _
+      | External _
+      | Prim _ -> value, frames
     ;;
 
     let unpeel leaf frames =
@@ -1489,29 +1587,33 @@ module Dependent = struct
         { ty : value
         ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
         }
-    | Meet of t * t
-    | Join of t * t
     | Reduce of
         { env : (env[@sexp.opaque])
         ; arg : Ident.t
         ; arg_ty : value
         ; arg_mode : Modes.t
-        ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
         ; ret_ty : Dst.Expr.t
+        ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+        ; uid : (int[@sexp.opaque])
         }
     | Typecheck of
         { env : (env[@sexp.opaque])
         ; arg : Ident.t
         ; arg_ty : value
         ; arg_mode : Modes.t
-        ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
         ; body : Dst.Expr.t
+        ; memo : ((concrete, value) Hashtbl.t[@sexp.opaque])
+        ; uid : (int[@sexp.opaque])
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
+  let equal = equal_dependent
+  let hash_fold_t = hash_fold_dependent
+  let hash = Hash.run ~seed hash_fold_t
   let mono ty : t = T { ty; memo = Hashtbl.create (module Concrete) }
 
-  let rec is_concrete_value : value -> _ = function
+  let rec is_concrete_value (v : value) =
+    match v.node with
     | Unit | Closure _ | Binder _ | External _ | Prim _ -> true
     | Bool b -> is_concrete_bool b
     | Int i -> is_concrete_int i
@@ -1519,7 +1621,7 @@ module Dependent = struct
     | Tuple elts -> Nonempty_list.for_all elts ~f:is_concrete_value
     | Inject { ty; _ } -> is_concrete_value ty
     | Constructor { payload; _ } -> Option.for_all payload ~f:is_concrete_value
-    | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Refine _ -> false
+    | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ -> false
 
   and is_concrete_bool : vbool -> _ = function
     | T _ -> true
@@ -1539,295 +1641,37 @@ module Dependent = struct
 
   and is_concrete_dependent : dependent -> _ = function
     | T { ty; _ } -> is_concrete_value ty
-    | Meet _ | Join _ | Reduce _ | Typecheck _ -> false
-  ;;
-
-  let rec join_concrete_ty (a : ty) (b : ty) : ty option =
-    match a, b with
-    | Unit, Unit -> Some Unit
-    | Bool, Bool -> Some Bool
-    | Int, Int -> Some Int
-    | Type, Type -> Some Type
-    | Tuple a_elts, Tuple b_elts ->
-      (match Nonempty_list.map2 a_elts b_elts ~f:join_concrete_value with
-       | Ok elts ->
-         Nonempty_list.to_list elts
-         |> Option.all
-         |> Option.map ~f:(fun elts -> Tuple (Nonempty_list.of_list_exn elts))
-       | Unequal_lengths -> None)
-    | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode }
-      ) ->
-      let arg_mode = Modes.meet a_arg_mode b_arg_mode in
-      let ret_mode = Modes.join a_ret_mode b_ret_mode in
-      let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = join_concrete_value a_ret_ty b_ret_ty in
-      Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
-    | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
-      ->
-      let arg_mode = Modes.meet a_arg_mode b_arg_mode in
-      let ret_mode = Modes.join a_ret_mode b_ret_mode in
-      let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = join_concrete_dependent (mono a_ret_ty) b_ret_ty in
-      Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
-    | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode }
-      ) ->
-      let arg_mode = Modes.meet a_arg_mode b_arg_mode in
-      let ret_mode = Modes.join a_ret_mode b_ret_mode in
-      let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = join_concrete_dependent a_ret_ty (mono b_ret_ty) in
-      Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
-    | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
-      ->
-      let arg_mode = Modes.meet a_arg_mode b_arg_mode in
-      let ret_mode = Modes.join a_ret_mode b_ret_mode in
-      let%bind arg_ty = meet_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = join_concrete_dependent a_ret_ty b_ret_ty in
-      Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
-    | Variant a_ctors, Variant b_ctors ->
-      Ty.unify_constructors ~f:join_concrete_value a_ctors b_ctors
-    | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> None
-
-  and meet_concrete_ty (a : ty) (b : ty) : ty option =
-    match a, b with
-    | Unit, Unit -> Some Unit
-    | Bool, Bool -> Some Bool
-    | Int, Int -> Some Int
-    | Type, Type -> Some Type
-    | Tuple a_elts, Tuple b_elts ->
-      (match Nonempty_list.map2 a_elts b_elts ~f:meet_concrete_value with
-       | Ok elts ->
-         Nonempty_list.to_list elts
-         |> Option.all
-         |> Option.map ~f:(fun elts -> Tuple (Nonempty_list.of_list_exn elts))
-       | Unequal_lengths -> None)
-    | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode }
-      ) ->
-      let arg_mode = Modes.join a_arg_mode b_arg_mode in
-      let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-      let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = meet_concrete_value a_ret_ty b_ret_ty in
-      Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
-    | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
-      ->
-      let arg_mode = Modes.join a_arg_mode b_arg_mode in
-      let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-      let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = meet_concrete_dependent (mono a_ret_ty) b_ret_ty in
-      Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
-    | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode }
-      ) ->
-      let arg_mode = Modes.join a_arg_mode b_arg_mode in
-      let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-      let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = meet_concrete_dependent a_ret_ty (mono b_ret_ty) in
-      Arrow { arg_ty; arg_mode; ret_ty; ret_mode }
-    | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
-      , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
-      ->
-      let arg_mode = Modes.join a_arg_mode b_arg_mode in
-      let ret_mode = Modes.meet a_ret_mode b_ret_mode in
-      let%bind arg_ty = join_concrete_value a_arg_ty b_arg_ty in
-      let%map ret_ty = meet_concrete_dependent a_ret_ty b_ret_ty in
-      Pi { arg_ty; arg_mode; ret_ty = mono ret_ty; ret_mode }
-    | Variant a_ctors, Variant b_ctors ->
-      Ty.unify_constructors ~f:meet_concrete_value a_ctors b_ctors
-    | (Unit | Bool | Int | Type | Arrow _ | Pi _ | Tuple _ | Variant _), _ -> None
-
-  and join_concrete_bool (a : vbool) (b : vbool) : vbool option =
-    match a, b with
-    | T a, T b when Core.Bool.equal a b -> Some (T a : vbool)
-    | _ -> None
-
-  and meet_concrete_bool a b = join_concrete_bool a b
-
-  and join_concrete_int (a : vint) (b : vint) : vint option =
-    match a, b with
-    | T a, T b when Int64.equal a b -> Some (T a : vint)
-    | _ -> None
-
-  and meet_concrete_int a b = join_concrete_int a b
-
-  and join_concrete_value (a : value) (b : value) : value option =
-    match a, b with
-    | a, Bottom -> Some a
-    | Bottom, b -> Some b
-    | Unit, Unit -> Some Unit
-    | Bool a, Bool b ->
-      let%map b = join_concrete_bool a b in
-      (Bool b : value)
-    | Int a, Int b ->
-      let%map i = join_concrete_int a b in
-      (Int i : value)
-    | Type a, Type b ->
-      let%map ty = join_concrete_ty a b in
-      (Type ty : value)
-    | ( Match { scrutinee = a_scrutinee; arms = a_arms }
-      , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
-      let%bind arms = Pattern.map2_arms a_arms b_arms ~f:join_concrete_value in
-      let%map scrutinee = join_concrete_value a_scrutinee b_scrutinee in
-      Match { scrutinee; arms }
-    | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-      let%bind fn = join_concrete_value a_fn b_fn in
-      let%map arg = join_concrete_value a_arg b_arg in
-      Apply { fn; arg }
-    | Proj a, Proj b when a.index = b.index ->
-      let%map tuple = join_concrete_value a.tuple b.tuple in
-      (Proj { tuple; index = a.index } : value)
-    | Payload a, Payload b when Ident.Label.equal a.label b.label ->
-      let%map variant = join_concrete_value a.variant b.variant in
-      (Payload { variant; label = a.label } : value)
-    | Refine a, Refine b ->
-      let%map value = join_concrete_value a.value b.value in
-      Value.refine value ~excluded:(Set.inter a.excluded b.excluded)
-    | Refine refined, other | other, Refine refined -> join_concrete_value refined.value other
-    | Var a, Var b when Ident.equal a b -> Some (Var a)
-    | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
-    | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
-    | Tuple a_elts, Tuple b_elts ->
-      (match Nonempty_list.map2 a_elts b_elts ~f:join_concrete_value with
-       | Ok elts ->
-         Nonempty_list.to_list elts
-         |> Option.all
-         |> Option.map ~f:(fun elts : value -> Tuple (Nonempty_list.of_list_exn elts))
-       | Unequal_lengths -> None)
-    | Inject a, Inject b when Ident.Label.equal a.label b.label ->
-      let%map ty = join_concrete_value a.ty b.ty in
-      Inject { ty; label = a.label }
-    | Constructor a, Constructor b when Ident.Label.equal a.label b.label ->
-      (match a.payload, b.payload with
-       | None, None -> Some (Constructor { label = a.label; payload = None })
-       | Some a_payload, Some b_payload ->
-         let%map payload = join_concrete_value a_payload b_payload in
-         Constructor { label = a.label; payload = Some payload }
-       | None, Some _ | Some _, None -> None)
-    | ( ( Unit
-        | Bool _
-        | Int _
-        | Type _
-        | Apply _
-        | Proj _
-        | Payload _
-        | Match _
-        | Var _
-        | Tuple _
-        | Inject _
-        | Constructor _
-        | Closure _
-        | Binder _
-        | External _
-        | Prim _ )
-      , _ ) -> None
-
-  and meet_concrete_value (a : value) (b : value) : value option =
-    match a, b with
-    | Bottom, _ | _, Bottom -> Some Bottom
-    | Unit, Unit -> Some Unit
-    | Bool a, Bool b ->
-      let%map b = meet_concrete_bool a b in
-      (Bool b : value)
-    | Int a, Int b ->
-      let%map i = meet_concrete_int a b in
-      (Int i : value)
-    | Type a, Type b ->
-      let%map ty = meet_concrete_ty a b in
-      (Type ty : value)
-    | ( Match { scrutinee = a_scrutinee; arms = a_arms }
-      , Match { scrutinee = b_scrutinee; arms = b_arms } ) ->
-      let%bind arms = Pattern.map2_arms a_arms b_arms ~f:meet_concrete_value in
-      let%map scrutinee = meet_concrete_value a_scrutinee b_scrutinee in
-      Match { scrutinee; arms }
-    | Apply { fn = a_fn; arg = a_arg }, Apply { fn = b_fn; arg = b_arg } ->
-      let%bind fn = meet_concrete_value a_fn b_fn in
-      let%map arg = meet_concrete_value a_arg b_arg in
-      Apply { fn; arg }
-    | Proj a, Proj b when a.index = b.index ->
-      let%map tuple = meet_concrete_value a.tuple b.tuple in
-      (Proj { tuple; index = a.index } : value)
-    | Payload a, Payload b when Ident.Label.equal a.label b.label ->
-      let%map variant = meet_concrete_value a.variant b.variant in
-      (Payload { variant; label = a.label } : value)
-    | Refine a, Refine b ->
-      let%map value = meet_concrete_value a.value b.value in
-      Value.refine value ~excluded:(Set.union a.excluded b.excluded)
-    | Refine refined, other | other, Refine refined ->
-      let%map value = meet_concrete_value refined.value other in
-      Value.refine value ~excluded:refined.excluded
-    | Var a, Var b when Ident.equal a b -> Some (Var a)
-    | Prim a, Prim b when Builtin0.Prim.equal a b -> Some (Prim a)
-    | External a, External b when String.equal a.symbol b.symbol -> Some (External a)
-    | Tuple a_elts, Tuple b_elts ->
-      (match Nonempty_list.map2 a_elts b_elts ~f:meet_concrete_value with
-       | Ok elts ->
-         Nonempty_list.to_list elts
-         |> Option.all
-         |> Option.map ~f:(fun elts : value -> Tuple (Nonempty_list.of_list_exn elts))
-       | Unequal_lengths -> None)
-    | Inject a, Inject b when Ident.Label.equal a.label b.label ->
-      let%map ty = meet_concrete_value a.ty b.ty in
-      Inject { ty; label = a.label }
-    | Constructor a, Constructor b when Ident.Label.equal a.label b.label ->
-      (match a.payload, b.payload with
-       | None, None -> Some (Constructor { label = a.label; payload = None })
-       | Some a_payload, Some b_payload ->
-         let%map payload = meet_concrete_value a_payload b_payload in
-         Constructor { label = a.label; payload = Some payload }
-       | None, Some _ | Some _, None -> None)
-    | ( ( Unit
-        | Bool _
-        | Int _
-        | Type _
-        | Apply _
-        | Proj _
-        | Payload _
-        | Match _
-        | Var _
-        | Tuple _
-        | Inject _
-        | Constructor _
-        | Closure _
-        | Binder _
-        | External _
-        | Prim _ )
-      , _ ) -> None
-
-  and join_concrete_dependent (a : dependent) (b : dependent) : value option =
-    match a, b with
-    | T { ty = a; _ }, T { ty = b; _ } -> join_concrete_value a b
-    | _ -> None
-
-  and meet_concrete_dependent (a : dependent) (b : dependent) : value option =
-    match a, b with
-    | T { ty = a; _ }, T { ty = b; _ } -> meet_concrete_value a b
-    | _ -> None
-  ;;
-
-  let join a b =
-    Option.map (join_concrete_dependent a b) ~f:mono |> Option.value ~default:(Join (a, b))
-  ;;
-
-  let meet a b =
-    Option.map (meet_concrete_dependent a b) ~f:mono |> Option.value ~default:(Meet (a, b))
+    | Reduce _ | Typecheck _ -> false
   ;;
 
   let typecheck ty ~env ~arg ~arg_ty ~arg_mode ~body =
     if is_concrete_value ty
     then mono ty
     else
-      Typecheck { env; arg; arg_ty; arg_mode; memo = Hashtbl.create (module Value.Concrete); body }
+      Typecheck
+        { env
+        ; arg
+        ; arg_ty
+        ; arg_mode
+        ; body
+        ; memo = Hashtbl.create (module Value.Concrete)
+        ; uid = uid ()
+        }
   ;;
 
   let reduce ty ~env ~arg ~arg_ty ~arg_mode ~ret_ty =
     if is_concrete_value ty
     then mono ty
     else
-      Reduce { env; arg; arg_ty; arg_mode; memo = Hashtbl.create (module Value.Concrete); ret_ty }
+      Reduce
+        { env
+        ; arg
+        ; arg_ty
+        ; arg_mode
+        ; ret_ty
+        ; memo = Hashtbl.create (module Value.Concrete)
+        ; uid = uid ()
+        }
   ;;
 end
 
@@ -1851,13 +1695,13 @@ module Expr = struct
         ; family : (int[@sexp.opaque])
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type nonrec case = case =
     { bindings : value Ident.Map.t
     ; body : expr
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type nonrec tree = tree =
     | Leaf of
@@ -1869,12 +1713,12 @@ module Expr = struct
         ; then_ : tree
         ; else_ : tree
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type nonrec target = target =
     | Family of (int[@sexp.opaque])
     | Prim of Builtin0.Prim.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type t = expr =
     | Erased of
@@ -1996,12 +1840,8 @@ module Expr = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
-  (* [monos] overrides what a [Binder] node binds: typecheck emits binder
-     nodes with empty bodies (monos accumulate program-wide), so pre-reify
-     callers supply the family's monos from the store; post-reify the node's
-     own body is correct. *)
   let rec free_vars ?monos (expr : t) : Ident.Set.t =
     match expr with
     | Erased _ | Literal _ | Builtin _ -> Ident.Set.empty
@@ -2193,20 +2033,19 @@ module Expr = struct
   let literal ~loc value =
     let ty = Ty.of_literal value in
     let mode = Modes.create ~staticity:Static ~erasure:Erased in
-    Literal { value = Value.of_literal value; ty = Type ty; mode; loc }
+    Literal { value = Value.of_literal value; ty = Value0.type_ ty; mode; loc }
   ;;
 
-  let rebind bind ~stamp ~f =
+  let rebind bind ~id ~f =
     let loc = loc bind in
-    let var = Ident.create Ident.Raw.anon ~stamp in
-    let ref = Var { id = var; ty = ty bind; mode = mode bind; loc } in
+    let ref = Var { id; ty = ty bind; mode = mode bind; loc } in
     let rest = f ref in
-    Let { var; bind; rest; ty = ty rest; mode = mode rest; loc }
+    Let { var = id; bind; rest; ty = ty rest; mode = mode rest; loc }
   ;;
 
   let tuple ~loc (elts : (t * desc) Nonempty_list.t) : t * desc =
     let exprs, descs = Nonempty_list.unzip elts in
-    let ty = Value.Type (Tuple (Nonempty_list.map descs ~f:(fun (d : desc) -> d.ty))) in
+    let ty = Value0.type_ (Tuple (Nonempty_list.map descs ~f:(fun (d : desc) -> d.ty))) in
     let mode =
       Nonempty_list.fold descs ~init:(Modes.bottom ()) ~f:(fun acc (d : desc) ->
         Modes.join acc d.mode)
@@ -2222,12 +2061,79 @@ module Expr = struct
 end
 
 module Env = struct
-  type t = env [@@deriving sexp]
+  type t = env [@@deriving sexp_of]
 
-  let bind t id value = if Ident.is_anon id then t else Map.set t ~key:id ~data:value
-  let find t id = Map.find t id
-  let find_exn t id = Map.find_exn t id
-  let initial = Ident.Map.empty
+  module Kind = Kind
+
+  let initial = { bindings = Ident.Map.empty; facts = []; level = 0; kind = Abstract }
+  let enter t kind = { t with kind = Kind.join t.kind kind }
+  let abstract t = Kind.compare t.kind Abstract = 0
+  let reducing t = Kind.compare t.kind Reducing >= 0
+  let instancing t = Kind.compare t.kind Instancing >= 0
+
+  let bind t id desc =
+    if Ident.is_anon id
+    then t
+    else
+      { t with bindings = Map.set t.bindings ~key:id ~data:{ desc; level = t.level; cache = None } }
+  ;;
+
+  let rec learn t ~target ~replacement =
+    if equal_value target replacement
+    then t
+    else (
+      match (target : value).node, (replacement : value).node with
+      | Bottom, _ -> t
+      | _, Bottom ->
+        raise_s [%message "Bug: learned a contradicted fact" (target : value) (replacement : value)]
+      | Tuple targets, Tuple replacements
+        when Nonempty_list.length targets = Nonempty_list.length replacements ->
+        Nonempty_list.zip_exn targets replacements
+        |> Nonempty_list.fold ~init:t ~f:(fun t (target, replacement) ->
+          learn t ~target ~replacement)
+      | ( Constructor { label; payload = Some target }
+        , Constructor { label = label'; payload = Some replacement } )
+        when Ident.Label.equal label label' -> learn t ~target ~replacement
+      | _ -> { t with facts = { target; replacement } :: t.facts; level = t.level + 1 })
+  ;;
+
+  let apply (t : t) binding =
+    if binding.level = t.level
+    then binding.desc
+    else (
+      match binding.cache with
+      | Some (facts, applied) when phys_equal facts t.facts -> applied
+      | _ ->
+        let facts = List.take t.facts (t.level - binding.level) in
+        let rewrite value =
+          (* Newest first, so [fold_right] applies facts in the order learned. *)
+          List.fold_right facts ~init:value ~f:(fun { target; replacement } value ->
+            Value.rewrite value ~target ~replacement)
+        in
+        let applied =
+          { binding.desc with
+            ty = rewrite binding.desc.ty
+          ; static = Lazy.map binding.desc.static ~f:rewrite
+          }
+        in
+        binding.cache <- Some (t.facts, applied);
+        applied)
+  ;;
+
+  let find t id = Option.map (Map.find t.bindings id) ~f:(apply t)
+  let find_exn t id = apply t (Map.find_exn t.bindings id)
+
+  let merge t other =
+    let imported =
+      if phys_equal t.facts other.facts
+      then other.bindings
+      else
+        Map.map other.bindings ~f:(fun b -> { desc = apply other b; level = t.level; cache = None })
+    in
+    { t with
+      bindings = Map.merge_skewed t.bindings imported ~combine:(fun ~key:_ existing _ -> existing)
+    }
+  ;;
 end
 
 module Top_level = struct
@@ -2256,7 +2162,7 @@ module Top_level = struct
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Program = struct
@@ -2264,5 +2170,5 @@ module Program = struct
     { top_levels : Top_level.t list
     ; stamp : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end

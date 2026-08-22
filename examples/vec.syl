@@ -14,22 +14,3 @@ let _ = replicate 4 10 : vec 4;;
 let sum4 = fn (v : vec 4) -> match v { (a, (b, (c, d))) -> a + b + c + d };;
 
 let _ = print_int (sum4 (replicate 4 10));;
-
-(* Length-indexed vectors represented as indexed variants. *)
-fun vec (static n : int) : erased type =
-  match erased n { 0 -> variant { nil }, _ -> variant { cons : int ^ vec (n - 1) } }
-;;
-
-fun replicate (static n : int) : int -> vec n =
-  fn (x : int) ->
-    match erased n {
-      0 -> (vec n).nil,
-      _ -> (vec n).cons (x, replicate (n - 1) x),
-    }
-;;
-
-let _ = replicate 4 10 : vec 4;;
-
-let sum4 = fn (v : vec 4) -> match v { .cons (a, .cons (b, .cons (c, .cons (d, .nil)))) -> a + b + c + d };;
-
-let _ = print_int (sum4 (replicate 4 10));;

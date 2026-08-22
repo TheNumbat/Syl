@@ -5,17 +5,17 @@ module Path = struct
     type t =
       | Id of Ident.t
       | Key of Tst.Value.Concrete.t
-    [@@deriving sexp, compare, hash, equal]
+    [@@deriving sexp_of, compare, hash, equal]
   end
 
   module T = struct
-    type t = Entry.t list [@@deriving sexp, compare, equal, hash]
+    type t = Entry.t list [@@deriving sexp_of, compare, equal, hash]
   end
 
   open Entry
   include T
-  include Hashable.Make (T)
-  include Comparable.Make (T)
+  include Hashable.Make_plain (T)
+  include Comparable.Make_plain (T)
 
   let empty = []
   let id id = [ Id id ]
@@ -41,7 +41,7 @@ module Ty = struct
         { arg_ty : t
         ; ret_ty : t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let align_to x ~align =
     assert (Int.is_pow2 align);
@@ -109,13 +109,13 @@ module Env = struct
     ; ty : Ty.t
     ; offset : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   type t =
     { entries : entry array
     ; length : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let empty = { entries = [||]; length = 0 }
 end
@@ -212,7 +212,7 @@ module Expr = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let ty = function
     | Make_env { ty; _ }
@@ -275,7 +275,7 @@ module Block = struct
     { bindings : (Path.t * Ty.t) array
     ; block : t
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and tree =
     | Leaf of
@@ -287,7 +287,7 @@ module Block = struct
         ; then_ : tree
         ; else_ : tree
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and t =
     | Block of
@@ -307,7 +307,7 @@ module Block = struct
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let ty = function
     | Block { return; _ } -> Expr.ty return
@@ -343,7 +343,7 @@ module Proc = struct
         ; ret_ty : Ty.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Program = struct
@@ -351,5 +351,5 @@ module Program = struct
     { procs : Proc.t array
     ; bindings : (Path.t * Block.t) array
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end

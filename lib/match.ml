@@ -27,7 +27,7 @@ module Pattern = struct
         ; right : t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let wild = Var { id = Ident.create Ident.Raw.anon ~stamp:0; loc = Lex.Location.empty }
 
@@ -66,12 +66,12 @@ module Tree = struct
             { label : Ident.Label.t
             ; payload : bool
             }
-      [@@deriving sexp, compare, hash]
+      [@@deriving sexp_of, compare, hash]
     end
 
     include T
     include Comparator.Make (T)
-    include Hashable.Make (T)
+    include Hashable.Make_plain (T)
 
     let arity = function
       | Literal _ -> 0
@@ -83,7 +83,7 @@ module Tree = struct
       let unit = Some (Vec.of_array [| Literal Unit |]) in
       let bool = Some (Vec.of_array [| Literal (Bool true); Literal (Bool false) |]) in
       fun (ty : Tst.Value.t) ->
-        match ty with
+        match ty.node with
         | Type Unit -> unit
         | Type Bool -> bool
         | Type (Tuple elt_tys) -> Some (Vec.of_array [| Tuple (Nonempty_list.length elt_tys) |])
@@ -110,7 +110,7 @@ module Tree = struct
       { path : Tst.Pattern.Step.t Vec.t
       ; ty : Tst.Value.t
       }
-    [@@deriving sexp]
+    [@@deriving sexp_of]
 
     let append sub rest ~exclude =
       let sub_len = Array.length sub in
@@ -124,22 +124,20 @@ module Tree = struct
       if n <= 0 then None else Some (Array.init n ~f:(fun i -> occurrences.(skip col i)))
     ;;
 
-    (* Occurrence types are stored head-normalized: [members] and the dispatches here
-       consult them syntactically. *)
     let deepen ~unfold occurrence (head : Head.t) =
       match head with
       | Literal _ | Constructor { payload = false; _ } -> [||]
       | Tuple arity ->
-        (match occurrence.ty with
+        (match occurrence.ty.node with
          | Type (Tuple elt_tys) when Nonempty_list.length elt_tys = arity ->
            Array.of_list (Nonempty_list.to_list elt_tys)
            |> Array.mapi ~f:(fun index ty ->
              let path = Vec.copy occurrence.path in
              Vec.push_back path (Tst.Pattern.Step.Index index);
              { path; ty = unfold ty })
-         | ty -> raise_s [%message "Bug: expected tuple" (arity : int) (ty : Tst.Value.t)])
+         | ty -> raise_s [%message "Bug: expected tuple" (arity : int) (ty : Tst.Value.node)])
       | Constructor { label; payload = true } ->
-        (match occurrence.ty with
+        (match occurrence.ty.node with
          | Type (Variant constructors) ->
            (match Map.find constructors label with
             | Some (Some ty) ->
@@ -151,7 +149,7 @@ module Tree = struct
                 [%message
                   "Bug: expected payload" (label : Ident.Label.t) (occurrence.ty : Tst.Value.t)])
          | ty ->
-           raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (ty : Tst.Value.t)])
+           raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (ty : Tst.Value.node)])
     ;;
   end
 
@@ -166,7 +164,7 @@ module Tree = struct
         ; cases : (Head.t * t) array
         ; default : t option
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   let rec exhaustive = function
     | Fail -> false
@@ -178,24 +176,17 @@ end
 
 module Result = struct
   module Missing = struct
-    module T = struct
-      (* [All_except] is a wildcard minus the shapes the rows test for;
-         [All_except []] is a full wildcard. *)
-      type t =
-        | All_except of Tst.Pattern.Excluded.t list
-        | Literal of Literal.t
-        | Tuple of t list
-        | Constructor of
-            { label : Ident.Label.t
-            ; payload : t option
-            }
-        | Or of t list
-      [@@deriving sexp, compare, hash]
-    end
-
-    include T
-    include Comparator.Make (T)
-    include Hashable.Make (T)
+    type t =
+      | Wildcard
+      | Literal of Literal.t
+      | Tuple of t list
+      | Constructor of
+          { label : Ident.Label.t
+          ; payload : t option
+          }
+      | Or of t Nonempty_list.t
+      | Excluding of Literal.t Nonempty_list.t
+    [@@deriving sexp_of, compare, hash]
 
     let of_head (head : Tree.Head.t) args =
       match head with
@@ -204,46 +195,34 @@ module Result = struct
       | Constructor { label; payload = _ } -> Constructor { label; payload = List.hd args }
     ;;
 
-    let rec refuted_by (scrutinee : Tst.Value.t) t =
-      let structure : Tst.Value.t -> Tst.Value.t = function
-        | Refine { value; _ } -> value
-        | value -> value
-      in
-      match (scrutinee : Tst.Value.t) with
-      | Bottom -> true
-      | _ ->
-        (match t with
-         | Or items -> List.for_all items ~f:(refuted_by scrutinee)
-         | Literal lit ->
-           Or_unknown.is_false (Tst.Pattern.Excluded.is_excluded (Literal lit) scrutinee)
-         | All_except excluded ->
-           List.exists excluded ~f:(fun excluded ->
-             Or_unknown.is_true (Tst.Pattern.Excluded.is_excluded excluded scrutinee))
-         | Constructor { label; payload } ->
-           Or_unknown.is_false
-             (Tst.Pattern.Excluded.is_excluded (Constructor { label; payload = None }) scrutinee)
+    let rec refuted_by t ~scrutinee ~unfold =
+      let scrutinee : Tst.Value.t = unfold scrutinee in
+      match t with
+      | Wildcard -> false
+      | Literal literal ->
+        (match literal, scrutinee.node with
+         | Unit, _ -> false
+         | Bool want, Bool (T got) -> not (Core.Bool.equal got want)
+         | Int want, Int (T got) -> not (Int64.equal got want)
+         | (Bool _ | Int _), _ -> false)
+      | Tuple elts ->
+        List.existsi elts ~f:(fun index t ->
+          refuted_by t ~scrutinee:(Tst.Value.proj scrutinee index) ~unfold)
+      | Constructor { label; payload } ->
+        (match scrutinee.node with
+         | Constructor { label = got; payload = got_payload } ->
+           (not (Ident.Label.equal got label))
            ||
-             (match payload, structure scrutinee with
-             | Some payload, Constructor { label = got; payload = Some payload_val }
-               when Ident.Label.equal got label -> refuted_by payload_val payload
-             | _ -> false)
-         | Tuple elts ->
-           (match structure scrutinee with
-            | Tuple elt_vals ->
-              (match List.zip (Nonempty_list.to_list elt_vals) elts with
-               | Ok pairs -> List.exists pairs ~f:(fun (value, t) -> refuted_by value t)
-               | Unequal_lengths -> false)
-            | _ -> false))
-    ;;
-
-    let dedup missing =
-      let seen = Hash_set.create () in
-      List.filter missing ~f:(fun item ->
-        if Core.Hash_set.mem seen item
-        then false
-        else (
-          Core.Hash_set.add seen item;
-          true))
+             (match payload, got_payload with
+             | Some payload, Some got_payload -> refuted_by payload ~scrutinee:got_payload ~unfold
+             | None, (None | Some _) | Some _, None -> false)
+         | _ -> false)
+      | Or ts -> Nonempty_list.for_all ts ~f:(fun t -> refuted_by t ~scrutinee ~unfold)
+      | Excluding literals ->
+        (match scrutinee.node with
+         | Bool (T got) -> Nonempty_list.exists literals ~f:(Literal.equal (Bool got))
+         | Int (T got) -> Nonempty_list.exists literals ~f:(Literal.equal (Int got))
+         | _ -> false)
     ;;
   end
 
@@ -252,7 +231,7 @@ module Result = struct
     ; redundant : Pattern.t list
     ; missing : Missing.t list
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Row = struct
@@ -425,7 +404,7 @@ let rec compile_matrix ~unfold reached (occurrences : Tree.Occurrence.t array) (
 
 let rec enumerate_missing ~unfold (occ : Tree.Occurrence.t) : Result.Missing.t =
   match Tree.Head.members occ.ty with
-  | None -> All_except []
+  | None -> Wildcard
   | Some heads ->
     let items =
       Vec.to_list heads
@@ -434,8 +413,9 @@ let rec enumerate_missing ~unfold (occ : Tree.Occurrence.t) : Result.Missing.t =
         Result.Missing.of_head head (Array.to_list sub |> List.map ~f:(enumerate_missing ~unfold)))
     in
     (match items with
+     | [] -> Wildcard
      | [ single ] -> single
-     | _ -> Or items)
+     | items -> Or (Nonempty_list.of_list_exn items))
 
 and missing_matrix ~unfold (occurrences : Tree.Occurrence.t array) (rows : Row.t Vec.t) =
   if Vec.is_empty rows
@@ -458,25 +438,45 @@ and missing_matrix ~unfold (occurrences : Tree.Occurrence.t array) (rows : Row.t
           (before @ [ value ] @ after) :: acc))
       |> List.rev
     | None ->
-      let missing_here : Result.Missing.t =
-        All_except
-          (Row.head rows ~col
-           |> Vec.to_list
-           |> List.map ~f:(fun (head : Tree.Head.t) : Tst.Pattern.Excluded.t ->
-             match head with
-             | Literal lit -> Literal lit
-             | Constructor { label; payload = _ } -> Constructor { label; payload = None }
-             | Tuple _ -> raise_s [%message "Bug: unexpected tuple" (occurrence.ty : Tst.Value.t)])
-          )
+      let heads = Row.head rows ~col in
+      let literals =
+        Vec.fold heads ~init:(Some []) ~f:(fun acc (head : Tree.Head.t) ->
+          match acc, head with
+          | Some literals, Literal value -> Some (value :: literals)
+          | Some _, (Tuple _ | Constructor _) | None, _ -> None)
+        |> Option.map ~f:List.rev
+      in
+      let residue : Result.Missing.t =
+        match Option.bind literals ~f:Nonempty_list.of_list with
+        | None -> Wildcard
+        | Some literals -> Excluding literals
+      in
+      let under_heads =
+        match literals with
+        | None -> []
+        | Some literals ->
+          List.concat_map literals ~f:(fun literal ->
+            let head : Tree.Head.t = Literal literal in
+            let sub = Tree.Occurrence.deepen ~unfold occurrence head in
+            let occ = Tree.Occurrence.append sub occurrences ~exclude:col in
+            missing_matrix ~unfold occ (specialize head occurrence col rows)
+            |> List.map ~f:(fun missing ->
+              let args, rest = List.split_n missing (Tree.Head.arity head) in
+              let value = Result.Missing.of_head head args in
+              let before, after = List.split_n rest col in
+              before @ [ value ] @ after))
       in
       let rest = Tree.Occurrence.remove occurrences col |> Option.value ~default:[||] in
-      missing_matrix ~unfold rest (default occurrence col rows)
-      |> List.map ~f:(fun missing ->
-        let before, after = List.split_n missing col in
-        before @ [ missing_here ] @ after))
+      let under_residue =
+        missing_matrix ~unfold rest (default occurrence col rows)
+        |> List.map ~f:(fun missing ->
+          let before, after = List.split_n missing col in
+          before @ [ residue ] @ after)
+      in
+      under_heads @ under_residue)
 ;;
 
-let compile ~scrutinee ~(ty : Tst.Value.t) ~unfold (patterns : Pattern.t Nonempty_list.t) =
+let compile ~(ty : Tst.Value.t) ~unfold (patterns : Pattern.t Nonempty_list.t) =
   let next_idx = ref 0 in
   let rows =
     Nonempty_list.to_list patterns
@@ -496,11 +496,7 @@ let compile ~scrutinee ~(ty : Tst.Value.t) ~unfold (patterns : Pattern.t Nonempt
   let missing =
     if Tree.exhaustive tree
     then []
-    else
-      missing_matrix ~unfold occurrences rows
-      |> List.map ~f:List.hd_exn
-      |> Result.Missing.dedup
-      |> List.filter ~f:(fun missing -> not (Result.Missing.refuted_by scrutinee missing))
+    else missing_matrix ~unfold occurrences rows |> List.map ~f:List.hd_exn
   in
   let redundant =
     Vec.fold rows ~init:[] ~f:(fun acc row ->

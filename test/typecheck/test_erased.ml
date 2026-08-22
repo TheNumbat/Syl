@@ -312,11 +312,7 @@ let%expect_test "reject: recursive static demanded as a type" =
 fun f (u : unit) : static type = let _ = 0 : f () in int;;
 let _ = f ();;
 |};
-  [%expect
-    {|
-    ((loc ((line 2) (column 43)))
-     (reason (Type_mismatch (got (Type Int)) (need (Var (Anon <opaque>))))))
-    |}]
+  [%expect {| ((loc ((line 2) (column 45))) (reason (Recursion_limit 1000))) |}]
 ;;
 
 (* [erased] with unannotated staticity implies static, so the parameter binds

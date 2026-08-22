@@ -234,7 +234,7 @@ let%expect_test "int literal non-exhaustive" =
   [%expect
     {|
     ((loc ((line 1) (column 9)))
-     (reason (Match (Non_exhaustive ((All_except ((Literal (Int 0)))))))))
+     (reason (Match (Non_exhaustive ((Excluding ((Int 0))))))))
     |}]
 ;;
 
@@ -399,7 +399,7 @@ let%expect_test "match static non-exhaustive" =
   [%expect
     {|
     ((loc ((line 1) (column 32)))
-     (reason (Match (Non_exhaustive ((All_except ((Literal (Int 0)))))))))
+     (reason (Match (Non_exhaustive ((Excluding ((Int 0))))))))
     |}]
 ;;
 
@@ -479,6 +479,22 @@ let _ = f 0;;
 let _ = f 3;;
 |};
   [%expect {| |}]
+;;
+
+(* Refuting the residue witness must not excuse the missing cases hiding
+   under the covered heads: they get their own witnesses. *)
+let%expect_test "a refuted residue does not excuse covered-head cases" =
+  go
+    {|
+fun f (static n : int) : static int = match static (0, n) { (0, 1) -> 7 };;
+|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 38)))
+     (reason
+      (Match
+       (Non_exhaustive ((Tuple ((Literal (Int 0)) (Excluding ((Int 1))))))))))
+    |}]
 ;;
 
 let%expect_test "match static redundant arm" =
@@ -634,15 +650,7 @@ fun f (static n : int) : int =
   }
 ;;
 |};
-  [%expect
-    {|
-    ((loc ((line 5) (column 26)))
-     (reason
-      (Dead_branch
-       (branch (Arm (Literal (value (Int 0)) (loc ((line 5) (column 26))))))
-       (value
-        (Refine (value (Var (Anon <opaque>))) (excluded ((Literal (Int 0)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 (* An or-pattern predecessor excludes both alternatives, so the nested match is
@@ -657,16 +665,7 @@ fun f (static n : int) : int =
   }
 ;;
 |};
-  [%expect
-    {|
-    ((loc ((line 5) (column 26)))
-     (reason
-      (Dead_branch
-       (branch (Arm (Literal (value (Int 0)) (loc ((line 5) (column 26))))))
-       (value
-        (Refine (value (Var (Anon <opaque>)))
-         (excluded ((Literal (Int 0)) (Literal (Int 1)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 (* Refinements flatten across nesting levels: the innermost world excludes both
@@ -685,16 +684,7 @@ fun f (static n : int) : int =
   }
 ;;
 |};
-  [%expect
-    {|
-    ((loc ((line 8) (column 31)))
-     (reason
-      (Dead_branch
-       (branch (Arm (Literal (value (Int 0)) (loc ((line 8) (column 31))))))
-       (value
-        (Refine (value (Var (Anon <opaque>)))
-         (excluded ((Literal (Int 0)) (Literal (Int 1)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "match static or-pattern binds the matched alternative" =
@@ -753,12 +743,12 @@ fun f (x : int) : int =
   }
 ;;
 |};
-  [%expect {| ((loc ((line 4) (column 2))) (reason Static_cycle)) |}]
+  [%expect {| ((loc ((line 3) (column 11))) (reason (Recursion_limit 1000))) |}]
 ;;
 
 let%expect_test "if erased on a self-referential static is an error" =
   go {| fun f (x : int) : bool = let e = (f 1) @ erased in if erased e then x == 1 else x != 1;; |};
-  [%expect {| ((loc ((line 1) (column 52))) (reason Static_cycle)) |}]
+  [%expect {| ((loc ((line 1) (column 35))) (reason (Recursion_limit 1000))) |}]
 ;;
 
 let%expect_test "match static pattern arity mismatch is a clean error" =
@@ -800,10 +790,8 @@ let f =
        (Expected_tuple
         (Match (scrutinee (Var (Anon <opaque>)))
          (arms
-          (((Literal (value (Bool true)) (loc ((line 4) (column 19))))
-            (Type (Tuple ((Type Int) (Type Int)))))
-           ((Literal (value (Bool false)) (loc ((line 4) (column 19))))
-            (Type Int)))))))))
+          (((Literal (Bool true)) (Type (Tuple ((Type Int) (Type Int)))))
+           ((Literal (Bool false)) (Type Int)))))))))
     |}]
 ;;
 
@@ -1001,4 +989,101 @@ let f =
     ((loc ((line 4) (column 42)))
      (reason (Misplaced_unreachable Not_in_head_position)))
     |}]
+;;
+
+(* Exhaustiveness soundness: a concrete value no pattern matches must be
+   covered by some missing witness — otherwise refuting the witnesses could
+   excuse a reachable case. *)
+let%test_unit "missing witnesses cover every unmatched value" =
+  let open Tst in
+  let open Quickcheck.Generator in
+  let open Quickcheck.Generator.Let_syntax in
+  let rec covers (value : Value.t) (missing : Match.Result.Missing.t) =
+    match missing, value.node with
+    | Wildcard, _ -> true
+    | Literal Unit, _ -> true
+    | Literal (Bool want), Bool (T got) -> Core.Bool.equal want got
+    | Literal (Int want), Int (T got) -> Int64.equal want got
+    | Literal _, _ -> false
+    | Tuple ms, Tuple vs ->
+      (match List.zip ms (Nonempty_list.to_list vs) with
+       | Ok zip -> List.for_all zip ~f:(fun (m, v) -> covers v m)
+       | Unequal_lengths -> false)
+    | Tuple _, _ -> false
+    | Constructor { label; payload }, Constructor { label = got; payload = got_payload } ->
+      Ident.Label.equal label got
+      &&
+        (match payload, got_payload with
+        | None, None -> true
+        | Some m, Some v -> covers v m
+        | None, Some _ | Some _, None -> false)
+    | Constructor _, _ -> false
+    | Or ms, _ -> Nonempty_list.exists ms ~f:(covers value)
+    | Excluding literals, Bool (T got) ->
+      not (Nonempty_list.exists literals ~f:(Dst.Literal.equal (Bool got)))
+    | Excluding literals, Int (T got) ->
+      not (Nonempty_list.exists literals ~f:(Dst.Literal.equal (Int got)))
+    | Excluding _, _ -> false
+  in
+  let loc = Lex.Location.empty in
+  let ty =
+    Value.type_ (Ty.Tuple (Nonempty_list.of_list_exn [ Value.type_ Bool; Value.type_ Int ]))
+  in
+  let wild : Dst.Expr.pattern = Var { id = Ident.create Ident.Raw.anon ~stamp:0; loc } in
+  let bool_pat =
+    union
+      [ return wild
+      ; (let%map b = bool in
+         (Literal { value = Bool b; loc } : Dst.Expr.pattern))
+      ]
+  in
+  let int_pat =
+    union
+      [ return wild
+      ; (let%map i = Int64.gen_incl (-1L) 2L in
+         (Literal { value = Int i; loc } : Dst.Expr.pattern))
+      ]
+  in
+  let row =
+    let%map b = bool_pat
+    and i = int_pat in
+    (Tuple { elts = Nonempty_list.of_list_exn [ b; i ]; loc } : Dst.Expr.pattern)
+  in
+  let pattern =
+    union
+      [ row
+      ; return wild
+      ; (let%map left = row
+         and right = row in
+         (Or { left; right; loc } : Dst.Expr.pattern))
+      ]
+  in
+  let patterns =
+    let%bind n = of_list [ 1; 2; 3 ] in
+    list_with_length n pattern >>| Nonempty_list.of_list_exn
+  in
+  let concrete =
+    let%map b = bool
+    and i = Int64.gen_incl (-2L) 3L in
+    Value.tuple (Nonempty_list.of_list_exn [ Bool.const b; Int.const i ])
+  in
+  Quickcheck.test
+    (tuple2 patterns concrete)
+    ~sexp_of:[%sexp_of: Dst.Expr.pattern Nonempty_list.t * Value.t]
+    ~f:(fun (patterns, value) ->
+      let compiled = Match.compile ~ty ~unfold:Fn.id patterns in
+      let matched =
+        Nonempty_list.exists patterns ~f:(fun pattern ->
+          match Pattern.matches value (Pattern.Canon.of_pattern pattern) with
+          | Match -> true
+          | No_match -> false
+          | Unknown -> raise_s [%message "undecided concrete match" (value : Value.t)])
+      in
+      if (not matched) && not (List.exists compiled.missing ~f:(covers value))
+      then
+        raise_s
+          [%message
+            "unmatched value not covered by any missing witness"
+              (value : Value.t)
+              (compiled.missing : Match.Result.Missing.t list)])
 ;;

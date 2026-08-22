@@ -23,7 +23,7 @@ module Result : sig
     | Ok of 'a
     | Parse_error of Parse.Error.t Loc.t
     | Type_error of Typecheck.Error.t Loc.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 val to_cst : string -> Cst.Program.t Result.t

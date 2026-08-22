@@ -20,7 +20,7 @@ module rec Ty : sig
         }
     | Tuple of Value.t Nonempty_list.t
     | Variant of Value.t option Ident.Label.Map.t
-  [@@deriving sexp]
+  [@@deriving sexp_of, hash, equal]
 
   val arg : Value.t -> Value.t
   val arg_mode : Value.t -> Modes.t
@@ -41,29 +41,27 @@ and Dependent : sig
         { ty : Value.t
         ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
         }
-    | Meet of t * t
-    | Join of t * t
     | Reduce of
         { env : Env.t
         ; arg : Ident.t
         ; arg_ty : Value.t
         ; arg_mode : Modes.t
-        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
         ; ret_ty : Dst.Expr.t
+        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
+        ; uid : int
         }
     | Typecheck of
         { env : Env.t
         ; arg : Ident.t
         ; arg_ty : Value.t
         ; arg_mode : Modes.t
-        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
         ; body : Dst.Expr.t
+        ; memo : (Value.Concrete.t, Value.t) Hashtbl.t
+        ; uid : int
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of, hash, equal]
 
   val mono : Value.t -> t
-  val meet : t -> t -> t
-  val join : t -> t -> t
 
   val reduce
     :  Value.t
@@ -96,7 +94,7 @@ and Bool : sig
     | Gt of Value.t * Value.t
     | Gte of Value.t * Value.t
     | Not of Value.t
-  [@@deriving sexp]
+  [@@deriving sexp_of, hash, equal]
 
   val const : bool -> Value.t
   val and_ : Value.t -> Value.t -> Value.t
@@ -119,7 +117,7 @@ and Int : sig
     | Div of Value.t * Value.t
     | Mod of Value.t * Value.t
     | Neg of Value.t
-  [@@deriving sexp]
+  [@@deriving sexp_of, hash, equal]
 
   exception Divide_by_zero of t
   exception Negative_modulus of t
@@ -134,28 +132,39 @@ and Int : sig
 end
 
 and Closure : sig
-  type t =
+  type t = private
     { arg : Ident.t
     ; ty : Value.t
-    ; body : Expr.t
+    ; body : Expr.t Lazy.t
     ; body_dst : Dst.Expr.t
     ; env : Env.t
     ; family : int
-    ; hash : int
+    ; uid : int
     }
-  [@@deriving sexp, compare, hash, equal]
+  [@@deriving sexp_of, hash, equal]
+
+  val const
+    :  arg:Ident.t
+    -> ty:Value.t
+    -> body:Expr.t Lazy.t
+    -> body_dst:Dst.Expr.t
+    -> env:Env.t
+    -> family:int
+    -> t
 end
 
 and Binder : sig
-  type t =
+  type t = private
     { arg : Ident.t
     ; ty : Value.t
     ; body_dst : Dst.Expr.t
     ; env : Env.t
     ; family : int
-    ; hash : int
+    ; uid : int
     }
-  [@@deriving sexp, compare, hash, equal]
+  [@@deriving sexp_of, hash, equal]
+
+  val const : arg:Ident.t -> ty:Value.t -> body_dst:Dst.Expr.t -> env:Env.t -> family:int -> t
 end
 
 and Value : sig
@@ -168,14 +177,6 @@ and Value : sig
       | Closure of int
       | Prim of Builtin0.t
       | External of string
-      | Arrow of
-          { arg : t
-          ; arg_mode : Modes.t
-          ; ret : t
-          ; ret_mode : Modes.t
-          }
-      | Tuple_t of t Nonempty_list.t
-      | Variant_t of t option Ident.Label.Map.t
       | Inject of
           { label : Ident.Label.t
           ; ty : t
@@ -184,7 +185,15 @@ and Value : sig
           { label : Ident.Label.t
           ; payload : t option
           }
-    [@@deriving sexp, compare, hash]
+      | Arrow_t of
+          { arg : t
+          ; arg_mode : Modes.t
+          ; ret : t
+          ; ret_mode : Modes.t
+          }
+      | Tuple_t of t Nonempty_list.t
+      | Variant_t of t option Ident.Label.Map.t
+    [@@deriving sexp_of, compare, hash]
 
     include Comparable.S with type t := t
     include Hashable.S with type t := t
@@ -193,7 +202,9 @@ and Value : sig
     val of_value : Value.t -> t option
   end
 
-  type t = private
+  type t = node Hashcons.t [@@deriving sexp_of, equal, hash]
+
+  and node = private
     | Bottom
     | Unit
     | Bool of Bool.t
@@ -225,20 +236,15 @@ and Value : sig
         }
     | Match of
         { scrutinee : t
-        ; arms : (Dst.Expr.pattern * t) Nonempty_list.t
-        }
-    | Refine of
-        { value : t
-        ; excluded : Pattern.Excluded.Set.t
+        ; arms : (Pattern.Canon.t * t) Nonempty_list.t
         }
     | External of
         { symbol : string
         ; ty : t
         }
     | Prim of Builtin0.Prim.t
-  [@@deriving sexp]
+  [@@deriving sexp_of, equal, hash]
 
-  val ty : t -> Ty.t
   val bottom : t
   val unit : t
   val type_ : Ty.t -> t
@@ -254,9 +260,8 @@ and Value : sig
   val inject : ty:t -> label:Ident.Label.t -> t
   val constructor : label:Ident.Label.t -> payload:t option -> t
   val apply : fn:t -> arg:t -> t
-  val match_ : scrutinee:t -> arms:(Dst.Expr.pattern * t) Nonempty_list.t -> t
-  val if_ : loc:Lex.Location.t -> cond:t -> then_:t -> else_:t -> t
-  val refine : t -> excluded:Pattern.Excluded.Set.t -> t
+  val if_ : cond:t -> then_:t -> else_:t -> t
+  val match_ : scrutinee:t -> arms:(Pattern.Canon.t * t) Nonempty_list.t -> t
 
   module Eliminator : sig
     (* A stuck eliminator awaiting its subject *)
@@ -270,15 +275,12 @@ and Value : sig
     val unpeel : Value.t -> t list -> Value.t
   end
 
-  (* Syntactic identity: the equality [rewrite] matches [target] with. *)
-  val identical : t -> t -> bool
+  (* Assuming [t] is [Type ty], returns [ty]. *)
+  val ty_exn : t -> Ty.t
 
-  (* Rewrite occurrences of [target] (syntactic identity) to [replacement],
-     renormalizing through the smart constructors. *)
+  (* Rewrite occurrences of [target] to [replacement], renormalizing through
+     the smart constructors. *)
   val rewrite : t -> target:t -> replacement:t -> t
-
-  (* Refine the scrutinee assuming it matches [pattern] and none of [refuted]. *)
-  val refine_branch : scrutinee:t -> pattern:Dst.Expr.pattern -> refuted:Dst.Expr.pattern list -> t
 end
 
 and Desc : sig
@@ -287,18 +289,36 @@ and Desc : sig
     ; mode : Modes.t
     ; static : Value.t Lazy.t
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   val of_type : Ty.t -> t
 end
 
 and Env : sig
-  type t = Desc.t Ident.Map.t [@@deriving sexp]
+  module Kind : sig
+    type t =
+      | Abstract
+      | Speculative
+      | Reducing
+      | Instancing
+    [@@deriving sexp_of, compare]
+  end
+
+  type t [@@deriving sexp_of]
 
   val initial : t
+  val enter : t -> Kind.t -> t
+  val abstract : t -> bool
+  val reducing : t -> bool
+  val instancing : t -> bool
+
+  (* Semantically rewrite every existing binding's type and static value with
+  [target -> replacement]. The rewrites are applied lazily at [find]. *)
+  val learn : t -> target:Value.t -> replacement:Value.t -> t
   val bind : t -> Ident.t -> Desc.t -> t
   val find : t -> Ident.t -> Desc.t Option.t
   val find_exn : t -> Ident.t -> Desc.t
+  val merge : t -> t -> t
 end
 
 and Expr : sig
@@ -321,13 +341,13 @@ and Expr : sig
         ; family : int
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and case =
     { bindings : Value.t Ident.Map.t
     ; body : t
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and tree =
     | Leaf of
@@ -339,12 +359,12 @@ and Expr : sig
         ; then_ : tree
         ; else_ : tree
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and target =
     | Family of int
     | Prim of Builtin0.Prim.t
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   and t =
     | Erased of
@@ -466,12 +486,12 @@ and Expr : sig
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 
   (* Combinators *)
 
   val literal : loc:Lex.Location.t -> Dst.Literal.t -> t
-  val rebind : t -> stamp:int -> f:(t -> t) -> t
+  val rebind : t -> id:Ident.t -> f:(t -> t) -> t
   val tuple : loc:Lex.Location.t -> (t * Desc.t) Nonempty_list.t -> t * Desc.t
 
   (* Util *)
@@ -489,47 +509,58 @@ and Expr : sig
 end
 
 and Pattern : sig
-  module Excluded : sig
+  module Canon : sig
     type t =
+      | Wild
       | Literal of Dst.Literal.t
+      | Tuple of t Nonempty_list.t
       | Constructor of
           { label : Ident.Label.t
-          ; payload : t option (* None excludes the whole tag. *)
+          ; payload : t option
           }
-    [@@deriving sexp, compare, equal, hash]
+      | Or of t * t
+    [@@deriving sexp_of, equal, hash]
 
-    include Comparable.S with type t := t
-
-    (* Whether the value has the excluded shape. *)
-    val is_excluded : t -> Value.t -> bool Or_unknown.t
+    val of_pattern : Dst.Expr.pattern -> t
   end
-
-  (* The shapes excluded by the pattern failing to match. *)
-  val excludes : Dst.Expr.pattern -> Excluded.Set.t
-
-  (* The shapes excluded by all of the patterns failing to match. *)
-  val all_excludes : Dst.Expr.pattern list -> Excluded.Set.t
-
-  (* Specialize [scrutinee] assuming it matches the pattern. *)
-  val specialize : Dst.Expr.pattern -> scrutinee:Value.t -> Value.t
 
   module Step : sig
     type t =
       | Index of int
       | Payload of Ident.Label.t
-    [@@deriving sexp, compare, equal, hash]
+    [@@deriving sexp_of]
   end
 
   module Matched : sig
     type t =
-      | Match of (Ident.t * Step.t list) list
+      | Match
       | No_match
       | Unknown
-    [@@deriving sexp, compare, equal, hash]
+    [@@deriving sexp_of]
   end
 
-  (* Whether a value definitely matches a pattern. *)
-  val matches : Value.t -> Dst.Expr.pattern -> Matched.t
+  module World : sig
+    type 'a t =
+      { pattern : Dst.Expr.pattern
+      ; positive : Dst.Expr.pattern
+      ; speculative : bool
+      ; body : 'a
+      }
+  end
+
+  (* Specialize [scrutinee] assuming it matches the pattern. *)
+  val specialize : Canon.t -> scrutinee:Value.t -> Value.t
+
+  (* All worlds covered by the patterns. Finite-domain wildcards become multiple worlds. *)
+  val worlds
+    :  unfold:(Value.t -> Value.t)
+    -> ty:Value.t
+    -> scrutinee:Value.t
+    -> (Dst.Expr.pattern * 'a) Nonempty_list.t
+    -> 'a World.t Nonempty_list.t
+
+  (* Whether a value definitely matches a canonical pattern. *)
+  val matches : Value.t -> Canon.t -> Matched.t
 
   (* Whether a value definitely selects a particular pattern from an exhaustive list. *)
   val selects
@@ -537,28 +568,20 @@ and Pattern : sig
     -> Dst.Expr.pattern Nonempty_list.t
     -> (int * (Ident.t * Step.t list) list) Or_unknown.t
 
-  (* If a scrutinee matches the first pattern, does it match the second pattern? *)
-  val implies : Dst.Expr.pattern -> Dst.Expr.pattern -> bool Or_unknown.t
-
   (* Patterns must agree structurally, except the last arm, which exhaustiveness
      makes unconditional. *)
   val arms_agree
-    :  (Dst.Expr.pattern * Value.t) Nonempty_list.t
-    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
+    :  (Canon.t * Value.t) Nonempty_list.t
+    -> (Canon.t * Value.t) Nonempty_list.t
     -> bool
 
   (* Combine two arm lists positionally, keeping the first list's patterns.
      [None] if the arms don't agree or [f] fails on a pair of leaves. *)
   val map2_arms
-    :  (Dst.Expr.pattern * Value.t) Nonempty_list.t
-    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t
+    :  (Canon.t * Value.t) Nonempty_list.t
+    -> (Canon.t * Value.t) Nonempty_list.t
     -> f:(Value.t -> Value.t -> Value.t option)
-    -> (Dst.Expr.pattern * Value.t) Nonempty_list.t option
-
-  (* Each arm paired with the patterns refuted before it, in first-match order. *)
-  val with_refuted
-    :  (Dst.Expr.pattern * 'a) Nonempty_list.t
-    -> (Dst.Expr.pattern list * Dst.Expr.pattern * 'a) list
+    -> (Canon.t * Value.t) Nonempty_list.t option
 end
 
 module Top_level : sig
@@ -587,7 +610,7 @@ module Top_level : sig
         ; mode : Modes.t
         ; loc : Lex.Location.t
         }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
 
 module Program : sig
@@ -597,5 +620,5 @@ module Program : sig
     { top_levels : Top_level.t list
     ; stamp : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp_of]
 end
