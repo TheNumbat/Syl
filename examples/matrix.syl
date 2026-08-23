@@ -1,0 +1,93 @@
+(* Dimension-safe matrix-vector multiplication. Rows and columns are erased
+   indices: they constrain the program, but no sizes or bounds checks survive
+   at runtime. *)
+fun nat (erased _ : unit) : erased type =
+  variant {
+    z,
+    s : &(nat ()),
+  }
+;;
+
+let nat = nat ();;
+
+fun mk_nat (static n : int) : nat =
+  if erased n < 0
+  then unreachable
+  else
+    match static n {
+      0 -> nat.z,
+      n -> nat.s box (mk_nat (n - 1)),
+    }
+;;
+
+fun vec (erased t : type) : erased (static nat -> erased type) =
+  fn (static n : nat) ->
+    match static n {
+      .z -> variant { nil },
+      .s &m -> variant { cons : t ^ vec t m },
+    }
+;;
+
+fun matrix (erased t : type) : erased (static nat -> erased (static nat -> erased type)) =
+  fn (static rows : nat) -> fn (static columns : nat) -> vec (vec t columns) rows
+;;
+
+fun dot (static n : nat) : vec int n -> vec int n -> int =
+  fn (left : vec int n) ->
+    fn (right : vec int n) ->
+      match static n {
+        .z -> 0,
+        .s &m ->
+          match left { .cons (x, xs) -> match right { .cons (y, ys) -> x * y + dot m xs ys } },
+      }
+;;
+
+fun mat_vec
+  (static rows : nat) : (static nat \ columns
+                           -> matrix int rows columns
+                           -> vec int columns
+                           -> vec int rows) =
+  fn (static columns : nat) ->
+    fn (m : matrix int rows columns) ->
+      fn (v : vec int columns) ->
+        match static rows {
+          .z -> (vec int rows).nil,
+          .s &remaining ->
+            match m {
+              .cons (row, rest) ->
+                (vec int rows).cons (dot columns row v, mat_vec remaining columns rest v),
+            },
+        }
+;;
+
+let zero = mk_nat 0;;
+
+let one = mk_nat 1;;
+
+let two = mk_nat 2;;
+
+let three = mk_nat 3;;
+
+let vec3 =
+  fn (a : int) ->
+    fn (b : int) ->
+      fn (c : int) ->
+        (vec int three).cons (a, (vec int two).cons (b, (vec int one).cons (c, (vec int zero).nil)))
+;;
+
+let row1 = vec3 1 2 3;;
+
+let row2 = vec3 4 5 6;;
+
+let m =
+  (vec (vec int three) two).cons
+    (row1, (vec (vec int three) one).cons (row2, (vec (vec int three) zero).nil))
+;;
+
+let result = mat_vec two three m (vec3 7 8 9);;
+
+let _ = result : vec int two;;
+
+let _ =
+  match result { .cons (x, .cons (y, .nil)) -> let _ = print_int x in let _ = print_int y in () }
+;;

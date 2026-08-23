@@ -1,0 +1,42 @@
+(* A tiny typed-printing DSL. A static format computes the type of the
+   function that consumes its arguments; the format itself is absent from the
+   generated program. *)
+fun format (erased _ : unit) : erased type =
+  variant {
+    end,
+    int : &(format ()),
+    bool : &(format ()),
+  }
+;;
+
+let format = format ();;
+
+fun printer (erased f : format) : erased type =
+  match erased f {
+    .end -> unit,
+    .int &rest -> int -> dynamic printer rest,
+    .bool &rest -> bool -> dynamic printer rest,
+  }
+;;
+
+fun render (static f : format) : printer f =
+  match static f {
+    .end -> (),
+    .int &rest -> fn (x : int) -> let _ = print_int x in render rest,
+    .bool &rest -> fn (x : bool) -> let _ = print_bool x in render rest,
+  }
+;;
+
+let int_then_bool = format.int box (format.bool box (format.end));;
+
+let bool_then_two_ints = format.bool box (format.int box (format.int box (format.end)));;
+
+let _ = render int_then_bool 42 true;;
+
+let _ = render bool_then_two_ints false 20 22;;
+
+(* The same interpreter specializes to a different ordinary function type for
+   every static format. *)
+let _ = render int_then_bool : int -> dynamic (bool -> dynamic unit);;
+
+let _ = render bool_then_two_ints : bool -> dynamic (int -> dynamic (int -> dynamic unit));;
