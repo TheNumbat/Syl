@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Syl</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: #f6f3ec;
+      color: #191817;
+      font-family: 'IBM Plex Serif', Georgia, serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: #8e2a1f;
+      text-decoration: underline;
+      text-decoration-thickness: .5px;
+      text-underline-offset: 2px;
+    }
+
+    a:hover {
+      color: #6d1f16;
+    }
+
+    .page {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 76px 32px 96px;
+    }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font: 600 26px/1.2 'IBM Plex Serif', Georgia, serif;
+      letter-spacing: -.022em;
+    }
+
+    header .meta {
+      font: 400 12px/1.5 'IBM Plex Mono', monospace;
+      color: #7d766a;
+    }
+
+    header .meta a {
+      color: #7d766a;
+    }
+
+    p.intro {
+      margin: 20px 0 0;
+      font: 400 16px/1.65 'IBM Plex Serif', Georgia, serif;
+      color: #191817;
+      text-wrap: pretty;
+    }
+
+    p.body {
+      margin: 16px 0 0;
+      font: 400 16px/1.65 'IBM Plex Serif', Georgia, serif;
+      color: #3a3833;
+      text-wrap: pretty;
+    }
+
+    p code {
+      font: 400 14px/1 'IBM Plex Mono', monospace;
+    }
+
+    .label {
+      margin: 34px 0 10px;
+      font: 500 11px/1 'IBM Plex Mono', monospace;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: #8e2a1f;
+    }
+
+    .label+p.body {
+      margin: 0 0 14px;
+    }
+
+    footer {
+      margin: 44px 0 0;
+      font: 400 11.5px/1.6 'IBM Plex Mono', monospace;
+      color: #7d766a;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+
+    <header>
+      <h1>Syl</h1>
+      <p class="meta">v0.0 · <a href="https://github.com/TheNumbat/Syl">source</a></p>
+    </header>
+
+    <p class="intro">Syl is a modal, staged, and dependently typed systems programming language.
+      It&nbsp;draws inspiration from 2LTT, OxCaml, C++, Rust, and Idris. More details to come.
+    </p>
+</body>
+
+</html>
