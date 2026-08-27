@@ -1345,8 +1345,18 @@ module Value1 = struct
     | Unit | Bool | Int | Type -> ty
     | Arrow { arg_ty; arg_mode; ret_ty; ret_mode } ->
       Arrow { arg_ty = rewrite arg_ty; arg_mode; ret_ty = rewrite ret_ty; ret_mode }
-    (* Dependent returns capture their env; substitution stops at the binder. *)
+    (* Dependent returns capture their env; substitution stops at the binder.
+       A mono return has no binder, so it rewrites like an arrow's. *)
     | Pi { arg_ty; arg_mode; ret_ty; ret_mode } ->
+      let ret_ty =
+        match ret_ty with
+        | T { ty; _ } ->
+          let rewritten = rewrite ty in
+          if phys_equal rewritten ty
+          then ret_ty
+          else T { ty = rewritten; memo = Hashtbl.create (module Value0.Key) }
+        | Reduce _ | Typecheck _ -> ret_ty
+      in
       Pi { arg_ty = rewrite arg_ty; arg_mode; ret_ty; ret_mode }
     | Tuple elts -> Tuple (Nonempty_list.map elts ~f:rewrite)
     | Variant constructors -> Variant (Map.map constructors ~f:(Option.map ~f:rewrite))
@@ -1597,6 +1607,57 @@ module Value = struct
         | Deref -> deref value)
     ;;
   end
+end
+
+module Repr = struct
+  let scalars : (Ident.Label.t * value) list =
+    List.map
+      [ "unit", (Unit : ty); "bool", Bool; "int", Int; "type", Type ]
+      ~f:(fun (name, ty) -> Ident.Label.of_string name, Value0.type_ ty)
+  ;;
+
+  let compounds = List.map [ "tuple"; "arrow"; "pi"; "variant"; "ref" ] ~f:Ident.Label.of_string
+
+  let head : Ty.t -> Ident.Label.t =
+    let label name = Ident.Label.of_string name in
+    function
+    | Unit -> label "unit"
+    | Bool -> label "bool"
+    | Int -> label "int"
+    | Type -> label "type"
+    | Tuple _ -> label "tuple"
+    | Arrow _ -> label "arrow"
+    | Pi _ -> label "pi"
+    | Variant _ -> label "variant"
+    | Ref _ -> label "ref"
+  ;;
+
+  let scalar_of_label label = List.Assoc.find scalars label ~equal:Ident.Label.equal
+
+  let variant : Value.t =
+    List.map scalars ~f:fst @ compounds
+    |> List.map ~f:(fun label -> label, None)
+    |> Ident.Label.Map.of_alist_exn
+    |> fun constructors -> Value0.type_ (Variant constructors)
+  ;;
+end
+
+module Fact = struct
+  let entail ~(target : Value.t) ~(replacement : Value.t) : (Value.t * Value.t) list =
+    match target.node with
+    | Apply { fn = { node = Prim (Builtin0.Prim.Type prim); _ }; arg } ->
+      (match prim, replacement.node with
+       | Repr, Constructor { label; payload = None } ->
+         (match Repr.scalar_of_label label with
+          | Some ty -> [ arg, ty ]
+          | None -> [])
+       | Is_unit, Bool (T true) -> [ arg, Value0.type_ Unit ]
+       | Is_bool, Bool (T true) -> [ arg, Value0.type_ Bool ]
+       | Is_int, Bool (T true) -> [ arg, Value0.type_ Int ]
+       | Is_type, Bool (T true) -> [ arg, Value0.type_ Type ]
+       | _ -> [])
+    | _ -> []
+  ;;
 end
 
 module Dependent = struct
@@ -2161,7 +2222,10 @@ module Env = struct
       | ( Constructor { label; payload = Some target }
         , Constructor { label = label'; payload = Some replacement } )
         when Ident.Label.equal label label' -> learn t ~target ~replacement
-      | _ -> { t with facts = { target; replacement } :: t.facts; level = t.level + 1 })
+      | _ ->
+        let t = { t with facts = { target; replacement } :: t.facts; level = t.level + 1 } in
+        List.fold (Fact.entail ~target ~replacement) ~init:t ~f:(fun t (target, replacement) ->
+          learn t ~target ~replacement))
   ;;
 
   let apply (t : t) binding =

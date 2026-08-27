@@ -44,6 +44,7 @@ module Prim = struct
       | Is_tuple
       | Is_arrow
       | Is_pi
+      | Repr
       | Tuple_get
       | Tuple_length
       | Arrow_arg
@@ -94,6 +95,7 @@ module Prim = struct
     | Type Is_tuple -> "syl_type_is_tuple"
     | Type Is_arrow -> "syl_type_is_arrow"
     | Type Is_pi -> "syl_type_is_pi"
+    | Type Repr -> "syl_type_repr"
     | Type Tuple_get -> "syl_type_tuple_get"
     | Type Tuple_length -> "syl_type_tuple_length"
     | Type Arrow_arg -> "syl_type_arrow_arg"
@@ -145,6 +147,7 @@ let builtins =
         ; Type Is_tuple
         ; Type Is_arrow
         ; Type Is_pi
+        ; Type Repr
         ; Type Tuple_get
         ; Type Tuple_length
         ; Type Arrow_arg

@@ -22,6 +22,8 @@ builtin ( && ) = syl_bool_and;;
 builtin ( || ) = syl_bool_or;;
 builtin ( ! ) = syl_bool_not;;
 
+builtin repr = syl_type_repr;;
+
 builtin unerase_unit = syl_unerase_unit;;
 builtin unerase_bool = syl_unerase_bool;;
 builtin unerase_int = syl_unerase_int;;

@@ -1504,7 +1504,8 @@ let _ = print_int (f 10);;
     |}]
 ;;
 
-(* TODO need the is_ty prims to refine t, or a proper dependent match on t as a variant *)
+(* Each true-world entails [t := unit] etc. from the [is_*] condition, so the branch
+   checks at [erased t -> t]. The typecase spelling is [match erased repr t]. *)
 let%expect_test "polymorphic unerase" =
   go
     {|
@@ -1519,57 +1520,7 @@ fun erased unerase (erased t : type) : erased (erased t -> t) =
   else unreachable
 ;;
 |};
-  [%expect
-    {|
-    ((loc ((line 6) (column 4)))
-     (reason
-      (Type_mismatch
-       (got
-        (Match
-         (scrutinee
-          (Apply (fn (Prim (Type Is_unit))) (arg (Var (Anon <opaque>)))))
-         (arms
-          (((Literal (Bool true))
-            (Type
-             (Pi (arg_ty (Type Unit))
-              (arg_mode ((staticity Static) (erasure Erased)))
-              (ret_ty (T (ty (Type Unit)) (memo <opaque>)))
-              (ret_mode ((staticity Static) (erasure Unerased))))))
-           ((Literal (Bool false))
-            (Match
-             (scrutinee
-              (Apply (fn (Prim (Type Is_bool))) (arg (Var (Anon <opaque>)))))
-             (arms
-              (((Literal (Bool true))
-                (Type
-                 (Pi (arg_ty (Type Bool))
-                  (arg_mode ((staticity Static) (erasure Erased)))
-                  (ret_ty (T (ty (Type Bool)) (memo <opaque>)))
-                  (ret_mode ((staticity Static) (erasure Unerased))))))
-               ((Literal (Bool false))
-                (Match
-                 (scrutinee
-                  (Apply (fn (Prim (Type Is_int))) (arg (Var (Anon <opaque>)))))
-                 (arms
-                  (((Literal (Bool true))
-                    (Type
-                     (Pi (arg_ty (Type Int))
-                      (arg_mode ((staticity Static) (erasure Erased)))
-                      (ret_ty (T (ty (Type Int)) (memo <opaque>)))
-                      (ret_mode ((staticity Static) (erasure Unerased))))))
-                   ((Literal (Bool false)) Bottom)))))))))))))
-       (need
-        (Type
-         (Pi (arg_ty (Var (Anon <opaque>)))
-          (arg_mode ((staticity Static) (erasure Erased)))
-          (ret_ty
-           (Reduce (env <opaque>) (arg (Anon <opaque>))
-            (arg_ty (Var (Anon <opaque>)))
-            (arg_mode ((staticity Static) (erasure Erased)))
-            (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 6) (column 59)))))
-            (memo <opaque>) (uid <opaque>)))
-          (ret_mode ((staticity Static) (erasure Unerased)))))))))
-    |}]
+  [%expect {| |}]
 ;;
 
 let%expect_test "match static literal scrutinee shadows later arms" =

@@ -44,6 +44,7 @@ module Prim : sig
       | Is_tuple
       | Is_arrow
       | Is_pi
+      | Repr
       | Tuple_get
       | Tuple_length
       | Arrow_arg

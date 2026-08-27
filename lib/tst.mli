@@ -273,6 +273,18 @@ and Value : sig
   val rewrite : t -> target:t -> replacement:t -> t
 end
 
+and Repr : sig
+  (* The variant type [repr] returns. *)
+  val variant : Value.t
+  val head : Ty.t -> Ident.Label.t
+  val scalar_of_label : Ident.Label.t -> Value.t option
+end
+
+and Fact : sig
+  (* Facts entailed by learning [target := replacement]. *)
+  val entail : target:Value.t -> replacement:Value.t -> (Value.t * Value.t) list
+end
+
 and Desc : sig
   type t =
     { ty : Value.t

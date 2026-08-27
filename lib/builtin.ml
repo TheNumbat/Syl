@@ -176,6 +176,14 @@ module Prim = struct
              ; arg_mode = static_erased
              ; ret_mode = static_erased
              })
+      | Repr ->
+        Value.type_
+          (Pi
+             { arg_ty = Value.type_ Type
+             ; ret_ty = Dependent.mono Tst.Repr.variant
+             ; arg_mode = static_erased
+             ; ret_mode = static_erased
+             })
       | Arrow_arg | Arrow_ret | Pi_arg ->
         Value.type_
           (Pi
@@ -239,6 +247,10 @@ module Prim = struct
          | Type (Pi _) -> Tst.Bool.const true
          | Type _ -> Tst.Bool.const false
          | _ -> Value.apply ~fn:(Value.prim (Type Is_pi)) ~arg:value)
+      | Repr ->
+        (match value.node with
+         | Type ty -> Value.constructor ~label:(Tst.Repr.head ty) ~payload:None
+         | _ -> Value.apply ~fn:(Value.prim (Type Repr)) ~arg:value)
       | Arrow_arg ->
         (match value.node with
          | Type (Arrow { arg_ty; _ }) -> arg_ty

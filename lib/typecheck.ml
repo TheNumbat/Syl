@@ -789,8 +789,13 @@ and leq_arms state (a : Value.t) (b : Value.t) =
   let decompose scrutinee arms ~obligation =
     State.judge state ~f:(fun () ->
       Nonempty_list.for_all arms ~f:(fun (pattern, leaf) ->
+        let facts =
+          let replacement = Pattern.specialize pattern ~scrutinee in
+          (scrutinee, replacement) :: Fact.entail ~target:scrutinee ~replacement
+        in
         let fact value =
-          Value.rewrite value ~target:scrutinee ~replacement:(Pattern.specialize pattern ~scrutinee)
+          List.fold facts ~init:value ~f:(fun value (target, replacement) ->
+            Value.rewrite value ~target ~replacement)
         in
         obligation ~fact leaf))
   in
@@ -1441,7 +1446,11 @@ and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode =
     in
     let ret_desc = reduce state env ret_ty in
     let ty = require_static_type state ~loc ret_desc in
-    let ret_ty = Dependent.reduce ty ~env ~arg:arg_id ~arg_ty ~arg_mode ~ret_ty in
+    let ret_ty =
+      if Ident.is_anon arg_id
+      then Dependent.mono ty
+      else Dependent.reduce ty ~env ~arg:arg_id ~arg_ty ~arg_mode ~ret_ty
+    in
     Value.type_ (Pi { arg_ty; arg_mode; ret_ty; ret_mode })
 
 and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
@@ -1694,7 +1703,14 @@ and typecheck_apply state env ~fn ~arg ~loc =
     let keyable = Dependent.is_concrete arg_val in
     let fn_val =
       let v = Lazy.force fn_desc.static in
-      if keyable && Modes.is_unerased mode then demand_name state ~loc v else v
+      if keyable && Modes.is_unerased mode
+      then demand_name state ~loc v
+      else (
+        match v.node with
+        | Apply _
+          when Modes.is_erased mode && Modes.is_unerased ret_mode && not (unfolding_name state v) ->
+          unfold state v
+        | _ -> v)
     in
     let ty =
       match fn_val.node with
