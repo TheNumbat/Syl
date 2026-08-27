@@ -49,7 +49,7 @@ and Dependent : sig
         ; arg_mode : Modes.t
         ; ret_ty : Dst.Expr.t
         ; memo : (Value.t, Value.t) Hashtbl.t
-        ; uid : int
+        ; uid : Ids.Fn.t
         }
     | Typecheck of
         { env : Env.t
@@ -58,7 +58,7 @@ and Dependent : sig
         ; arg_mode : Modes.t
         ; body : Dst.Expr.t
         ; memo : (Value.t, Value.t) Hashtbl.t
-        ; uid : int
+        ; uid : Ids.Fn.t
         }
   [@@deriving sexp_of, hash, equal]
 
@@ -141,18 +141,20 @@ and Closure : sig
     ; body : Expr.t Lazy.t
     ; body_dst : Dst.Expr.t
     ; env : Env.t
-    ; family : int
-    ; uid : int
+    ; family : Ids.Family.t
+    ; uid : Ids.Fn.t
     }
   [@@deriving sexp_of, hash, equal]
 
   val const
-    :  arg:Ident.t
+    :  ?uid:Ids.Fn.t
+    -> arg:Ident.t
     -> ty:Value.t
     -> body:Expr.t Lazy.t
     -> body_dst:Dst.Expr.t
     -> env:Env.t
-    -> family:int
+    -> family:Ids.Family.t
+    -> unit
     -> t
 end
 
@@ -162,12 +164,20 @@ and Binder : sig
     ; ty : Value.t
     ; body_dst : Dst.Expr.t
     ; env : Env.t
-    ; family : int
-    ; uid : int
+    ; family : Ids.Family.t
+    ; uid : Ids.Fn.t
     }
   [@@deriving sexp_of, hash, equal]
 
-  val const : arg:Ident.t -> ty:Value.t -> body_dst:Dst.Expr.t -> env:Env.t -> family:int -> t
+  val const
+    :  ?uid:Ids.Fn.t
+    -> arg:Ident.t
+    -> ty:Value.t
+    -> body_dst:Dst.Expr.t
+    -> env:Env.t
+    -> family:Ids.Family.t
+    -> unit
+    -> t
 end
 
 and Value : sig
@@ -214,6 +224,7 @@ and Value : sig
     | Box of t
     | Deref of t
     | Prim of Builtin0.Prim.t
+    | Rec of Ids.Fn.t
   [@@deriving sexp_of, equal, hash]
 
   include Comparable.S_plain with type t := t
@@ -224,6 +235,7 @@ and Value : sig
   val closure : Closure.t -> t
   val binder : Binder.t -> t
   val var : Ident.t -> t
+  val rec_ : Ids.Fn.t -> t
   val prim : Builtin0.Prim.t -> t
   val external_ : symbol:string -> ty:t -> t
   val of_literal : Dst.Literal.t -> t
@@ -286,12 +298,15 @@ and Env : sig
 
   val initial : t
   val enter : t -> Kind.t -> t
+  val enter_body : t -> t
+  val demanded : t -> t
+  val live : t -> bool
   val abstract : t -> bool
   val reducing : t -> bool
   val instancing : t -> bool
 
   (* Semantically rewrite every existing binding's type and static value with
-  [target -> replacement]. The rewrites are applied lazily at [find]. *)
+     [target -> replacement]. The rewrites are applied lazily at [find]. *)
   val learn : t -> target:Value.t -> replacement:Value.t -> t
   val bind : t -> Ident.t -> Desc.t -> t
   val find : t -> Ident.t -> Desc.t Option.t
@@ -307,16 +322,16 @@ and Expr : sig
         ; body : t
         ; ty : Value.t
         ; mode : Modes.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
     | Binder of
         { var : Ident.t
         ; arg : Ident.t
-        ; body : t Core.Int.Map.t
+        ; body : t Hashcons.Tag.Map.t
         ; ty : Value.t
         ; mode : Modes.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
   [@@deriving sexp_of]
@@ -340,7 +355,7 @@ and Expr : sig
   [@@deriving sexp_of]
 
   and target =
-    | Family of int
+    | Family of Ids.Family.t
     | Prim of Builtin0.Prim.t
   [@@deriving sexp_of]
 
@@ -368,15 +383,15 @@ and Expr : sig
         ; body : t
         ; ty : Value.t
         ; mode : Modes.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
     | Binder of
         { arg : Ident.t
-        ; body : t Core.Int.Map.t
+        ; body : t Hashcons.Tag.Map.t
         ; ty : Value.t
         ; mode : Modes.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
     | Apply of
@@ -488,7 +503,7 @@ and Expr : sig
 
   (* [monos] overrides what a [Binder] node binds: pre-reify nodes carry
      empty bodies, so supply the family's monos from the store. *)
-  val free_vars : ?monos:(int -> t Core.Int.Map.t) -> t -> Ident.Set.t
+  val free_vars : ?monos:(Ids.Family.t -> t Hashcons.Tag.Map.t) -> t -> Ident.Set.t
   val ty : t -> Value.t
   val mode : t -> Modes.t
   val loc : t -> Lex.Location.t
@@ -606,11 +621,5 @@ module Top_level : sig
 end
 
 module Program : sig
-  (* Fully reified: [Specialize] targets are resolved and binder bodies carry
-     their monomorphizations. *)
-  type t =
-    { top_levels : Top_level.t list
-    ; stamp : int
-    }
-  [@@deriving sexp_of]
+  type t = { top_levels : Top_level.t list } [@@deriving sexp_of]
 end

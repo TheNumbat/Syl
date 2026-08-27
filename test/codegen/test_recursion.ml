@@ -513,3 +513,69 @@ let _ = print_int (count 7 3);;
 |};
   [%expect {| 7 |}]
 ;;
+
+let%expect_test "non-uniform curried recursion runs the demanded chain" =
+  (* The recursive call defers while [grow] elaborates and specializes along
+     the concrete descent: three levels, each at a doubled argument type,
+     each emitted and dispatched. *)
+  go
+    {|
+fun grow (erased t : type) : (static int -> t -> dynamic int) =
+  fn (static d : int) -> fn (x : t) ->
+    if erased (d == 0) then 0 else 1 + grow (t ^ t) (d - 1) (x, x)
+;;
+let _ = print_int (grow int 3 7);;
+|};
+  [%expect {| 3 |}]
+;;
+
+let%expect_test "a chain deferred inside its group's own elaboration computes at collection" =
+  (* The recursive call sits in a dynamic lambda elaborated while [f] is
+     active, so every instance below the root exists only as a pending
+     computation until emission reachability demands it. *)
+  go
+    {|
+fun f (static n : int) : (int -> dynamic int) =
+  fn (x : int) -> if erased (n == 0) then x else f (n - 1) x
+;;
+let _ = print_int (f 3 7);;
+|};
+  [%expect {| 7 |}]
+;;
+
+let%expect_test "a deferred name nested in an aggregate literal resolves" =
+  (* The deferred [f (n - 1)] rides inside a static tuple that lands as a
+     mono's key literal; materializing the literal resolves the child to the
+     value eager specialization would have left. *)
+  go
+    {|
+fun first (static p : (int -> dynamic int) ^ int) : (int -> dynamic int) =
+  match static p { (g, k) -> g }
+;;
+fun f (static n : int) : (int -> dynamic int) =
+  fn (x : int) -> if erased (n == 0) then x else first (f (n - 1), 0) x
+;;
+let _ = print_int (f 2 7);;
+|};
+  [%expect {| 7 |}]
+;;
+
+let%expect_test "one function keyed by both spellings of a recursive name" =
+  (* Inside [f]'s body the argument [f] keeps its folded name; at top level it
+     is the settled value. The two spellings are judgment-equal but key
+     distinct instances of [apply2] — both must dispatch correctly. *)
+  go
+    {|
+fun apply2 (static g : static int -> int) : int = g 2;;
+fun f (static n : int) : int =
+  if erased (n == 0) then apply2 f + f 1 else n
+;;
+let _ = print_int (f 0);;
+let _ = print_int (apply2 f);;
+|};
+  [%expect
+    {|
+    3
+    2
+    |}]
+;;

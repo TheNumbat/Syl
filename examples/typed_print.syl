@@ -1,6 +1,3 @@
-(* A tiny typed-printing DSL. A static format computes the type of the
-   function that consumes its arguments; the format itself is absent from the
-   generated program. *)
 fun format (erased _ : unit) : erased type =
   variant {
     end,
@@ -35,8 +32,6 @@ let _ = render int_then_bool 42 true;;
 
 let _ = render bool_then_two_ints false 20 22;;
 
-(* The same interpreter specializes to a different ordinary function type for
-   every static format. *)
 let _ = render int_then_bool : int -> dynamic (bool -> dynamic unit);;
 
 let _ = render bool_then_two_ints : bool -> dynamic (int -> dynamic (int -> dynamic unit));;

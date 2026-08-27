@@ -1,30 +1,31 @@
 open! Core
 open Lst
-module Key = Core.Int
 
 module State = struct
   type t =
     { mutable path : Path.t
-    ; mutable stamp : int
     ; mutable bindings : (Path.t * Block.t) Vec.t
     ; procs : Proc.t Vec.t
-    ; monos : Int.Hash_set.t
+    ; monos : Ids.Family.Hash_set.t
     ; externals : (string, Path.t) Hashtbl.t
     }
 
-  let create ~stamp =
+  let create () =
     { path = Path.empty
-    ; stamp
     ; bindings = Vec.of_array [||]
     ; procs = Vec.create ()
-    ; monos = Int.Hash_set.create ()
+    ; monos = Ids.Family.Hash_set.create ()
     ; externals = Hashtbl.create (module String)
     }
   ;;
 
   let proc t proc = Vec.push_back t.procs proc
   let block t path block = Vec.push_back t.bindings (path, block)
-  let mono_base family = Path.id (Ident.create (Ident.Raw.id "ℱ") ~stamp:family)
+
+  let mono_base family =
+    Path.id
+      (Ident.create (Ident.Raw.id "ℱ") ~stamp:(Ids.Stamp.of_int_exn (Ids.Family.to_int_exn family)))
+  ;;
 
   let monomorph t family id =
     if Hash_set.mem t.monos family
@@ -60,19 +61,14 @@ module State = struct
   ;;
 
   module Id = struct
-    let fresh t sym =
-      let stamp = t.stamp in
-      t.stamp <- stamp + 1;
-      Ident.create (Ident.Raw.id sym) ~stamp
-    ;;
-
-    let refresh t id = fresh t (Ident.name () id)
-    let inject t label = fresh t (Ident.Label.print () label)
-    let if_ t = fresh t "if"
-    let match_ t = fresh t "match"
-    let temp t = fresh t "$"
-    let lambda t = fresh t "λ"
-    let env t = fresh t "𝒰"
+    let fresh sym = Ident.fresh (Ident.Raw.id sym)
+    let refresh id = fresh (Ident.name () id)
+    let inject label = fresh (Ident.Label.print () label)
+    let if_ () = fresh "if"
+    let match_ () = fresh "match"
+    let temp () = fresh "$"
+    let lambda () = fresh "λ"
+    let env () = fresh "𝒰"
   end
 end
 
@@ -125,9 +121,7 @@ let rec linearize_ty (ty : Sst.Ty.t) : Ty.t =
   | Bool -> Bool
   | Int -> Int
   | Type -> Type
-  | Pi _ -> Env
-  | Arrow { arg_ty; ret_ty } ->
-    Closure { arg_ty = linearize_ty arg_ty; ret_ty = linearize_ty ret_ty }
+  | Pi | Arrow _ -> Fn
   | Tuple elts -> Tuple (Nonempty_list.map elts ~f:linearize_ty)
   | Variant constructors -> Variant (Map.map constructors ~f:(Option.map ~f:linearize_ty))
   | Ref -> Ref
@@ -140,24 +134,24 @@ let linearize_arrow (ty : Sst.Ty.t) : Ty.t * Ty.t =
 ;;
 
 let linearize_external state symbol ty loc : Expr.t =
-  let path = Path.id (State.Id.fresh state symbol) in
+  let path = Path.id (State.Id.fresh symbol) in
   State.external_ state symbol path;
   let arg_ty, ret_ty = linearize_arrow ty in
   State.proc state (External { path; arg_ty; ret_ty; symbol; loc });
-  Make_closure { body = path; env = None; ty = Closure { arg_ty; ret_ty }; loc }
+  Make_closure { body = path; env = None; ty = Fn; loc }
 ;;
 
 let linearize_inject state label ty loc : Expr.t =
   let arg_ty, ret_ty = linearize_arrow ty in
-  let arg_path = Path.id (State.Id.temp state) in
+  let arg_path = Path.id (State.Id.temp ()) in
   let body_path, body =
-    State.scope state ~id:(State.Id.inject state label) (fun () ->
+    State.scope state ~id:(State.Id.inject label) (fun () ->
       Expr.Make_variant { label; payload = Some (arg_path, arg_ty); ty = ret_ty; loc })
   in
   State.proc
     state
     (Closure { path = body_path; arg = arg_path; arg_ty; env = Lst.Env.empty; body; loc });
-  Make_closure { body = body_path; env = None; ty = Closure { arg_ty; ret_ty }; loc }
+  Make_closure { body = body_path; env = None; ty = Fn; loc }
 ;;
 
 let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
@@ -208,7 +202,7 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
     Tag_test { variant; variant_ty; label; ty = linearize_ty ty; loc }
   | If { cond; then_; else_; ty; loc } ->
     let ty = linearize_ty ty in
-    let id = State.Id.if_ state in
+    let id = State.Id.if_ () in
     let path = Path.with_id state.path id in
     let cond = linearize_expr state env cond in
     let _, then_ = State.scope state ~id (fun () -> linearize_expr state env then_) in
@@ -217,7 +211,7 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
     Ident { path; ty; loc }
   | Match { cases; tree; ty; loc } ->
     let ty = linearize_ty ty in
-    let id = State.Id.match_ state in
+    let id = State.Id.match_ () in
     let path = Path.with_id state.path id in
     let cases =
       Nonempty_list.to_list cases
@@ -241,22 +235,22 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
     let env = linearize_funs ~loc state env funs in
     linearize_expr state env rest
   | Lambda { arg; ty; body; family; loc; _ } ->
-    let arg_ty, ret_ty = linearize_arrow ty in
+    let arg_ty, _ = linearize_arrow ty in
     let arg_path = Path.id arg in
     let free_vars = Set.remove (Sst.Expr.free_vars body) arg in
     let outer_env, inner_env = Env.build env free_vars in
     let env = Env.rebind env free_vars in
     let env_path =
-      State.bind state ~id:(State.Id.env state) (Make_env { env = outer_env; ty = Env; loc })
+      State.bind state ~id:(State.Id.env ()) (Make_env { env = outer_env; ty = Env; loc })
     in
-    let lambda = State.Id.lambda state in
+    let lambda = State.Id.lambda () in
     let base = State.monomorph state family lambda in
     let body =
       let env = Env.bind env arg arg_path arg_ty in
       State.scope_at state base (fun () -> linearize_expr state env body)
     in
     State.proc state (Closure { path = base; arg = arg_path; arg_ty; env = inner_env; body; loc });
-    Make_closure { body = base; env = Some env_path; ty = Closure { arg_ty; ret_ty }; loc }
+    Make_closure { body = base; env = Some env_path; ty = Fn; loc }
   | Apply { fn; arg; ty; loc } ->
     let arg_ty = linearize_ty (Sst.Expr.ty arg) in
     let fn = linearize_path state env fn in
@@ -267,7 +261,7 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
       Map.fold body ~init:Ident.Set.empty ~f:(fun ~key:_ ~data:body acc ->
         Set.union acc (Sst.Expr.free_vars body))
     in
-    let lambda = State.Id.lambda state in
+    let lambda = State.Id.lambda () in
     let base = State.monomorph state family lambda in
     let outer_env, inner_env = Env.build env free_vars in
     Map.iteri body ~f:(fun ~key ~data:body ->
@@ -277,7 +271,10 @@ let rec linearize_expr state env (sst : Sst.Expr.t) : Expr.t =
       let body_path = Path.with_key base key in
       let body = State.scope_at state body_path (fun () -> linearize_expr state env body) in
       State.proc state (Thunk { path = body_path; env = inner_env; body; loc }));
-    Make_env { env = outer_env; ty = Env; loc }
+    let env_path =
+      State.bind state ~id:(State.Id.temp ()) (Make_env { env = outer_env; ty = Env; loc })
+    in
+    Make_binder { env = env_path; ty = Fn; loc }
   | Specialize { fn; arg; target; key; ty; loc } ->
     let ty = linearize_ty ty in
     let arg_ty = linearize_ty (Sst.Expr.ty arg) in
@@ -313,7 +310,7 @@ and linearize_path state env (sst : Sst.Expr.t) : Path.t =
   match sst with
   | Var { id; _ } -> Env.path env id
   | _ ->
-    let id = State.Id.temp state in
+    let id = State.Id.temp () in
     let path, block = State.scope state ~id (fun () -> linearize_expr state env sst) in
     State.block state path block;
     path
@@ -329,18 +326,18 @@ and linearize_funs ~loc state env (funs : Sst.Expr.fun_ Nonempty_list.t) =
   let env_path =
     State.bind
       state
-      ~id:(State.Id.env state)
+      ~id:(State.Id.env ())
       (Make_env_rec { length = outer_env.length; ty = Env; loc })
   in
   let env =
     Nonempty_list.map funs ~f:(function
         | (Lambda { var; family; _ } | Binder { var; family; _ }) as fun_ ->
-        let lambda = State.Id.refresh state var in
+        let lambda = State.Id.refresh var in
         let base = State.monomorph state family lambda in
         base, fun_)
     |> Nonempty_list.fold ~init:env ~f:(fun acc -> function
       | base, Lambda { var; arg; body; ty; _ } ->
-        let arg_ty, ret_ty = linearize_arrow ty in
+        let arg_ty, _ = linearize_arrow ty in
         let arg_path = Path.id arg in
         let free_vars = Set.remove (Sst.Expr.free_vars body) arg in
         let env = Env.rebind env free_vars in
@@ -352,10 +349,9 @@ and linearize_funs ~loc state env (funs : Sst.Expr.fun_ Nonempty_list.t) =
         State.proc
           state
           (Closure { path = base; arg = arg_path; arg_ty; env = inner_env; body; loc });
-        let ty = Ty.Closure { arg_ty; ret_ty } in
-        let closure = Expr.Make_closure { body = base; env = Some env_path; ty; loc } in
+        let closure = Expr.Make_closure { body = base; env = Some env_path; ty = Fn; loc } in
         let path = State.bind state ~id:var closure in
-        Env.bind acc var path ty
+        Env.bind acc var path Fn
       | base, Binder { var; body; _ } ->
         Map.iteri body ~f:(fun ~key ~data:body ->
           let free_vars = Sst.Expr.free_vars body in
@@ -364,14 +360,14 @@ and linearize_funs ~loc state env (funs : Sst.Expr.fun_ Nonempty_list.t) =
           let body_path = Path.with_key base key in
           let body = State.scope_at state body_path (fun () -> linearize_expr state env body) in
           State.proc state (Thunk { path = body_path; env = inner_env; body; loc }));
-        let path = State.bind state ~id:var (Ident { path = env_path; ty = Env; loc }) in
-        Env.bind acc var path Env)
+        let path = State.bind state ~id:var (Make_binder { env = env_path; ty = Fn; loc }) in
+        Env.bind acc var path Fn)
   in
   let _ =
     let outer_env, _ = Env.build env free_vars in
     State.bind
       state
-      ~id:(State.Id.temp state)
+      ~id:(State.Id.temp ())
       (Fill_env_rec { path = env_path; env = outer_env; ty = Unit; loc })
   in
   env
@@ -390,7 +386,7 @@ let linearize_top_level state env (sst : Sst.Top_level.t) : Env.t =
 ;;
 
 let linearize (sst : Sst.Program.t) : Program.t =
-  let state = State.create ~stamp:sst.stamp in
+  let state = State.create () in
   let _ =
     List.fold sst.top_levels ~init:Env.empty ~f:(fun env top_level ->
       linearize_top_level state env top_level)

@@ -522,8 +522,13 @@ and expr_fun t : Expr.fun_ =
   let arg = parse_arg t in
   let _, after_arg = leading t in
   expect t ~kind:Colon;
-  let ret_mode = maybe_modes ~required:false t in
-  let ret_ty = expr t in
+  let ret_ty, ret_mode =
+    let modes = maybe_modes ~required:false t in
+    match expr t with
+    | { node = Arrow arrow; _ } as ret_ty ->
+      { ret_ty with node = Expr.Arrow { arrow with arg_mode = modes } }, Modes.Maybe.none
+    | ret_ty -> ret_ty, modes
+  in
   expect t ~kind:Asn;
   let body = expr t in
   With_loc.create

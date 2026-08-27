@@ -10,8 +10,7 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Type Type -> Type
   | Type (Arrow { arg_ty; ret_ty; _ }) ->
     Arrow { arg_ty = simplify_ty arg_ty; ret_ty = simplify_ty ret_ty }
-  | Type (Pi { arg_ty; ret_ty; _ }) ->
-    Pi { arg_ty = simplify_ty arg_ty; ret_ty = simplify_dependent ret_ty }
+  | Type (Pi _) -> Pi
   | Type (Tuple elts) -> Tuple (Nonempty_list.map elts ~f:simplify_ty)
   | Type (Variant constructors) -> Variant (Map.map constructors ~f:(Option.map ~f:simplify_ty))
   | Type (Ref _) -> Ref
@@ -32,26 +31,13 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
   | Constructor _
   | Box _
   | Deref _
+  | Rec _
   | Bottom -> raise_s [%message "Bug: expected resolved type" (ty : Tst.Value.t)]
-
-and simplify_dependent (ty : Tst.Dependent.t) =
-  match ty with
-  | T { memo; _ } | Typecheck { memo; _ } | Reduce { memo; _ } ->
-    Hashtbl.fold memo ~init:Key.Map.empty ~f:(fun ~key ~data acc ->
-      if Tst.Dependent.is_concrete key
-      then Map.set acc ~key:(Hashcons.tag key) ~data:(simplify_ty data)
-      else acc)
 ;;
 
 let simplify_arrow (ty : Tst.Value.t) : Ty.t * Ty.t =
   match ty.node with
   | Type (Arrow { arg_ty; ret_ty; _ }) -> simplify_ty arg_ty, simplify_ty ret_ty
-  | _ -> raise_s [%message "Bug: expected arrow" (ty : Tst.Value.t)]
-;;
-
-let simplify_pi (ty : Tst.Value.t) : Ty.t * _ =
-  match ty.node with
-  | Type (Pi { arg_ty; ret_ty; _ }) -> simplify_ty arg_ty, simplify_dependent ret_ty
   | _ -> raise_s [%message "Bug: expected arrow" (ty : Tst.Value.t)]
 ;;
 
@@ -195,7 +181,7 @@ let rec simplify_value ~loc ~(ty : Tst.Value.t) (value : Tst.Value.t) : Expr.t =
      | _ ->
        raise_s [%message "Bug: expected variant type" (ty : Tst.Value.t) (loc : Lex.Location.t)])
   | Bottom -> raise_s [%message "Bug: emitted unreachable branch" (loc : Lex.Location.t)]
-  | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ ->
+  | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ | Rec _ ->
     raise_s [%message "Bug: expected runtime value" (value : Tst.Value.t) (loc : Lex.Location.t)]
 
 and simplify_expr (env : Env.t) (expr : Tst.Expr.t) : Expr.t =
@@ -293,10 +279,9 @@ and simplify_expr (env : Env.t) (expr : Tst.Expr.t) : Expr.t =
     in
     let tree = simplify_switch env (Nonempty_list.to_array cases) tree in
     Match { cases; tree; ty = simplify_ty ty; loc }
-  | Binder { arg; ty; family; body; loc; _ } ->
-    let arg_ty, ret_ty = simplify_pi ty in
+  | Binder { arg; ty = _; family; body; loc; _ } ->
     let body = simplify_monos env body in
-    Binder { arg; body; ty = Pi { arg_ty; ret_ty }; family; loc }
+    Binder { arg; body; ty = Pi; family; loc }
   | Specialize { fn = Lambda { arg = var; body; _ }; arg; key = None; loc; _ } ->
     let bind = simplify_expr env arg in
     let rest = simplify_expr (Env.bind env var bind) body in
@@ -360,13 +345,12 @@ and simplify_funs env (funs : Tst.Expr.fun_ Nonempty_list.t) : Expr.fun_ list =
         let arg_ty, ret_ty = simplify_arrow ty in
         let body = simplify_expr env body in
         Some (Expr.Lambda { var; arg; body; ty = Arrow { arg_ty; ret_ty }; family; loc }))
-    | Binder { var; arg; ty; mode; family; body; loc; _ } ->
+    | Binder { var; arg; ty = _; mode; family; body; loc; _ } ->
       if Modes.is_erased mode
       then None
       else (
-        let arg_ty, ret_ty = simplify_pi ty in
         let body = simplify_monos env body in
-        Some (Expr.Binder { var; arg; body; ty = Pi { arg_ty; ret_ty }; family; loc })))
+        Some (Expr.Binder { var; arg; body; ty = Pi; family; loc })))
 ;;
 
 let simplify_top_level env (tst : Tst.Top_level.t) : Env.t * Top_level.t Option.t =
@@ -401,5 +385,5 @@ let simplify_top_level env (tst : Tst.Top_level.t) : Env.t * Top_level.t Option.
 let simplify (tst : Tst.Program.t) : Program.t =
   let env = Env.create () in
   let _, top_levels = List.fold_map tst.top_levels ~init:env ~f:simplify_top_level in
-  { top_levels = List.filter_opt top_levels; stamp = tst.stamp }
+  { top_levels = List.filter_opt top_levels }
 ;;

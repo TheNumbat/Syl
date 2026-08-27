@@ -1,5 +1,5 @@
 open! Core
-module Key := Core.Int
+module Key := Hashcons.Tag
 
 module Path : sig
   module Entry : sig
@@ -31,11 +31,8 @@ module Ty : sig
     | Variant of t option Ident.Label.Map.t
     | Ref
     | Env
-    | Closure of
-        { arg_ty : t
-        ; ret_ty : t
-        }
-  [@@deriving sexp_of]
+    | Fn
+  [@@deriving sexp_of, equal]
 
   (* TODO these will change once we switch to an llvm backend. *)
 
@@ -92,6 +89,11 @@ module Expr : sig
     | Make_closure of
         { body : Path.t
         ; env : Path.t option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Make_binder of
+        { env : Path.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }

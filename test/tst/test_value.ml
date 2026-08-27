@@ -74,7 +74,7 @@ let%expect_test "an unreachable assertion never reports" =
 (* Exhaustive arms selecting one leaf everywhere make the conditional that
    leaf; the collapse keeps conditional representatives from nesting. *)
 let%expect_test "a conditional with identical leaves is constant" =
-  let cond = Value.var (Ident.create Ident.Raw.anon ~stamp:0) in
+  let cond = Value.var (Ident.create Ident.Raw.anon ~stamp:(Ids.Stamp.create ())) in
   show (Value.if_ ~cond ~then_:(int 5) ~else_:(int 5));
   [%expect {| (Int (T 5)) |}]
 ;;

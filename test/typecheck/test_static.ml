@@ -51,6 +51,29 @@ let%expect_test "fun static -> arg" =
 fun f (x : int) : static (static int -> int) = fn (static y : int) -> x + y;;
 let _ = (f 0) @ static;;
 let _ = assert erased (f 0 1 == 1);;
+
+|};
+  [%expect {| |}]
+;;
+
+(* As after an arrow, modes on a fun's arrow return type bind to its argument:
+   this is the same function as above, not a parametric arrow marked static. *)
+let%expect_test "fun static -> arg, bare arrow return" =
+  go
+    {|
+fun f (x : int) : static int -> int = fn (static y : int) -> x + y;;
+let _ = (f 0) @ static;;
+let _ = assert erased (f 0 1 == 1);;
+|};
+  [%expect {| |}]
+;;
+
+let%expect_test "fun pi return, bare" =
+  go
+    {|
+fun g (static n : int) : erased type \ t -> t -> t =
+  fn (erased t : type) -> fn (x : t) -> x;;
+let _ = assert erased (g 0 int 1 == 1);;
 |};
   [%expect {| |}]
 ;;

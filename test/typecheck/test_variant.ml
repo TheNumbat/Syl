@@ -949,7 +949,11 @@ let%expect_test "self-referential payload" =
 fun bad (static n : int) : erased type = variant { wrap : bad n };;
 let x = (bad 0).wrap;;
 |};
-  [%expect {| ((loc ((line 2) (column 58))) (reason (Recursion_limit 1000))) |}]
+  [%expect
+    {|
+    ((loc ((line 3) (column 8)))
+     (reason (Infinite_size (Apply (fn (Rec 117)) (arg (Int (T 0)))))))
+    |}]
 ;;
 
 (* ===== Match interactions ===== *)

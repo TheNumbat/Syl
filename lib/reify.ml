@@ -2,13 +2,12 @@ open! Core
 open Tst
 
 type t =
-  { monos :
-      Expr.t Core.Int.Map.t Core.Int.Map.t (* family -> key -> body; union across the family *)
-  ; groups : Ident.t Core.Int.Map.t (* fun value -> its binding *)
-  ; unfold : Value.t -> Value.t (* value -> whnf or self *)
+  { monos : Expr.t Hashcons.Tag.Map.t Ids.Family.Map.t
+  ; fun_bindings : Ident.t Ids.Fn.Map.t
+  ; resolve : loc:Lex.Location.t -> Value.t -> Value.t
   }
 
-let family_monos t family = Map.find t.monos family |> Option.value ~default:Core.Int.Map.empty
+let family_monos t family = Map.find t.monos family |> Option.value ~default:Hashcons.Tag.Map.empty
 let free_vars t expr = Expr.free_vars ~monos:(family_monos t) expr
 
 let tuple_elt_tys ~loc (ty : Value.t) elts =
@@ -34,16 +33,13 @@ let payload_ty ~loc (desc : Tst.Desc.t) label =
   | _ -> raise_s [%message "Bug: expected varaint" (desc.ty : Value.t) (loc : Lex.Location.t)]
 ;;
 
-(* TODO should we force captured statics during typechecking so this is always val? *)
-let force_static desc = Lazy.force desc.Desc.static
-
 module Func = struct
   type t =
     | Closure of Closure.t
     | Binder of Binder.t
 
-  let of_val desc =
-    match (force_static desc).node with
+  let of_val ~resolve (desc : Desc.t) =
+    match (resolve (Lazy.force desc.static) : Value.t).node with
     | Closure closure -> Some (Closure closure)
     | Binder binder -> Some (Binder binder)
     | _ -> None
@@ -66,10 +62,6 @@ module Func = struct
   ;;
 end
 
-(* A function or box on the literal's concrete data spine must materialize as
-   an expression. Values under stuck heads pass through as literals: they only
-   occur in mono bodies whose static context did not resolve them, which are
-   never emitted. *)
 let rec value_needs_reify (value : Value.t) =
   match value.node with
   | Closure _ | Binder _ | Box _ -> true
@@ -80,26 +72,28 @@ let rec value_needs_reify (value : Value.t) =
 
 let ref_content_ty t ~loc (ty : Value.t) =
   match ty.node with
-  | Value.Type (Ref p) ->
-    (match p.node with
-     | Apply _ ->
-       let content = t.unfold p in
-       if Value.equal content p
-       then
-         raise_s [%message "Bug: ref pointee never unfolded" (p : Value.t) (loc : Lex.Location.t)]
-       else content
-     | _ -> p)
+  | Value.Type (Ref p) -> t.resolve ~loc p
   | _ ->
     raise_s [%message "Bug: boxed value at a non-ref type" (ty : Value.t) (loc : Lex.Location.t)]
 ;;
 
 let rec reify_expr t bound (expr : Expr.t) : Expr.t =
+  if Modes.is_erased (Expr.mode expr)
+  then expr
+  else (
+    let expr = reify_expr' t bound expr in
+    let ty = Expr.ty expr in
+    let resolved = t.resolve ~loc:(Expr.loc expr) ty in
+    if phys_equal resolved ty then expr else Expr.with_ty expr resolved)
+
+and reify_expr' t bound (expr : Expr.t) : Expr.t =
   match expr with
   | Erased _ | Builtin _ | Var _ -> expr
   | Literal { value; ty; mode; loc } ->
+    let value = t.resolve ~loc value in
     if value_needs_reify value
     then quote_value t bound ~loc { ty; mode; static = Lazy.from_val value } value
-    else expr
+    else Literal { value; ty; mode; loc }
   | Extcall x -> Extcall { x with arg = reify_expr t bound x.arg }
   | Apply x -> Apply { x with fn = reify_expr t bound x.fn; arg = reify_expr t bound x.arg }
   | Specialize x ->
@@ -129,6 +123,7 @@ let rec reify_expr t bound (expr : Expr.t) : Expr.t =
   | Match x ->
     let cases =
       Nonempty_list.map x.cases ~f:(fun ({ Expr.bindings; body } : Expr.case) ->
+        let bindings = Map.map bindings ~f:(t.resolve ~loc:x.loc) in
         { Expr.bindings; body = reify_expr t bound body })
     in
     Match { x with cases; tree = reify_tree t bound x.tree }
@@ -145,12 +140,14 @@ and reify_tree t bound (tree : Expr.tree) : Expr.tree =
 
 and reify_fun t bound (fun_ : Expr.fun_) : Expr.fun_ =
   match fun_ with
-  | Lambda x -> Lambda { x with body = reify_expr t bound x.body }
+  | Lambda x ->
+    Lambda { x with body = reify_expr t bound x.body; ty = t.resolve ~loc:(Expr.loc x.body) x.ty }
   | Binder x -> Binder { x with body = reify_monos t bound (family_monos t x.family) }
 
 and reify_monos t bound monos = Map.map monos ~f:(reify_expr t bound)
 
 and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
+  let value = t.resolve ~loc value in
   match value.node with
   | Bottom
   | Unit
@@ -165,7 +162,8 @@ and quote_value t bound ~loc (desc : Desc.t) (value : Value.t) : Expr.t =
   | Inject _
   | Apply _
   | Match _
-  | Deref _ -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
+  | Deref _
+  | Rec _ -> Literal { value; ty = desc.ty; mode = desc.mode; loc }
   | Box payload ->
     let content_ty = ref_content_ty t ~loc desc.ty in
     let payload =
@@ -222,7 +220,7 @@ and quote_function t bound ~loc (desc : Desc.t) ~uid ~env ~quote =
   match Map.find bound uid with
   | Some id -> Var { id; ty = desc.ty; mode = desc.mode; loc }
   | None ->
-    (match Map.find t.groups uid with
+    (match Map.find t.fun_bindings uid with
      | Some id -> quote_fun_group t bound env ~loc id
      | None -> quote bound)
 
@@ -241,23 +239,24 @@ and quote_binder t bound ~loc ~mode (binder : Binder.t) : Expr.t =
   close_missing t bound binder.env expr
 
 and quote_fun_group t bound env ~loc root : Expr.t =
-  let members = collect_fun_group t bound env root in
+  let resolve = t.resolve ~loc in
+  let members = collect_fun_group t bound env ~loc root in
   let env =
     Map.fold members ~init:env ~f:(fun ~key:_ ~data:desc env ->
-      match Func.of_val desc with
+      match Func.of_val ~resolve desc with
       | Some fn -> Env.merge env (Func.env fn)
       | None -> env)
   in
   let bound =
     Map.fold members ~init:bound ~f:(fun ~key:id ~data:desc bound ->
-      match Func.of_val desc with
+      match Func.of_val ~resolve desc with
       | Some fn -> Map.set bound ~key:(Func.uid fn) ~data:id
       | None -> bound)
   in
   let funs =
     Map.to_alist members
     |> List.filter_map ~f:(fun (var, desc) ->
-      match Func.of_val desc with
+      match Func.of_val ~resolve desc with
       | Some (Closure closure) ->
         Some
           (Lambda
@@ -308,19 +307,19 @@ and close_missing t bound env expr =
     | None -> raise_s [%message "Bug: free var not bound" (id : Ident.t) (loc : Lex.Location.t)]
     | Some desc when Modes.is_erased desc.Desc.mode -> rest
     | Some desc ->
-      (match Func.of_val desc with
+      (match Func.of_val ~resolve:(t.resolve ~loc) desc with
        | Some fn when Func.is_bound bound id fn -> rest
        | Some _ | None ->
          Let
            { var = id
-           ; bind = quote_value t bound ~loc desc (force_static desc)
+           ; bind = quote_value t bound ~loc desc (Lazy.force desc.static)
            ; rest
            ; ty
            ; mode
            ; loc
            }))
 
-and collect_fun_group t bound env root =
+and collect_fun_group t bound env ~loc root =
   let rec loop members work =
     match work with
     | [] -> members
@@ -332,7 +331,7 @@ and collect_fun_group t bound env root =
            [%message
              "Bug: function group dependency is not bound in any environment" (id : Ident.t)]
        | Some desc ->
-         (match Func.of_val desc with
+         (match Func.of_val ~resolve:(t.resolve ~loc) desc with
           | None -> loop members work
           | Some fn when Func.is_bound bound id fn -> loop members work
           | Some fn ->
@@ -356,6 +355,9 @@ and function_deps t = function
 ;;
 
 let rec find_targets acc (expr : Expr.t) =
+  if Modes.is_erased (Expr.mode expr) then acc else find_targets' acc expr
+
+and find_targets' acc (expr : Expr.t) =
   match expr with
   | Erased _ | Literal _ | Builtin _ | Var _ -> acc
   | Extcall { arg; _ } -> find_targets acc arg
@@ -365,10 +367,10 @@ let rec find_targets acc (expr : Expr.t) =
   | Ref_get { ref; _ } -> find_targets acc ref
   | Tuple { elts; _ } -> Nonempty_list.fold elts ~init:acc ~f:find_targets
   | Apply { fn; arg; _ } -> find_targets (find_targets acc fn) arg
-  | Specialize { fn; arg; target; key; _ } ->
+  | Specialize { fn; arg; target; key; loc; _ } ->
     let acc =
       match target, key with
-      | Family family, Some key -> (family, Hashcons.tag key) :: acc
+      | Family family, Some key -> (family, Hashcons.tag key, loc) :: acc
       | Family _, None | Prim _, _ -> acc
     in
     find_targets (find_targets acc fn) arg
@@ -398,44 +400,65 @@ and find_targets_tree acc (tree : Expr.tree) =
     find_targets_tree (find_targets_tree (find_targets acc cond) then_) else_
 ;;
 
-let reachable_monos monos top_levels =
-  let seeds =
-    List.fold top_levels ~init:[] ~f:(fun acc (tl : Top_level.t) ->
-      match tl with
-      | Erased _ | External _ | Builtin _ -> acc
-      | Let { bind; _ } -> find_targets acc bind
-      | Fun { funs; _ } -> Nonempty_list.fold funs ~init:acc ~f:find_targets_fun)
-  in
-  let rec visit kept = function
+let find_targets_top acc (tl : Top_level.t) =
+  match tl with
+  | Erased _ | External _ | Builtin _ -> acc
+  | Let { bind; _ } -> find_targets acc bind
+  | Fun { funs; _ } -> Nonempty_list.fold funs ~init:acc ~f:find_targets_fun
+;;
+
+let reachable_monos ~monomorphized top_levels =
+  let seeds = List.fold top_levels ~init:[] ~f:find_targets_top in
+  let rec visit kept ~depth frontier =
+    match frontier with
     | [] -> kept
-    | (family, key) :: frontier ->
-      let kept_already =
-        Map.find kept family |> Option.value_map ~default:false ~f:(fun m -> Map.mem m key)
-      in
-      if kept_already
-      then visit kept frontier
-      else (
-        match Map.find monos family |> Option.bind ~f:(fun m -> Map.find m key) with
-        | None -> visit kept frontier
-        | Some body ->
-          let kept =
-            Map.update kept family ~f:(fun m ->
-              Map.set (Option.value m ~default:Core.Int.Map.empty) ~key ~data:body)
+    | _ :: _ ->
+      let kept, next =
+        List.fold frontier ~init:(kept, []) ~f:(fun (kept, next) (family, key, _) ->
+          let kept_already =
+            Map.find kept family
+            |> Option.value_map ~default:false ~f:(fun monos -> Map.mem monos key)
           in
-          visit kept (find_targets frontier body))
+          if kept_already
+          then kept, next
+          else (
+            match monomorphized ~family ~key ~depth with
+            | None -> kept, next
+            | Some body ->
+              let kept =
+                Map.update kept family ~f:(fun monos ->
+                  Map.set (Option.value monos ~default:Hashcons.Tag.Map.empty) ~key ~data:body)
+              in
+              kept, find_targets next body))
+      in
+      visit kept ~depth:(depth + 1) (List.rev next)
   in
-  visit Core.Int.Map.empty seeds
+  visit Ids.Family.Map.empty ~depth:0 seeds
 ;;
 
 let top_level t (top_level : Top_level.t) : Top_level.t =
-  let bound = Core.Int.Map.empty in
+  let bound = Ids.Fn.Map.empty in
   match top_level with
-  | Erased _ | External _ | Builtin _ -> top_level
+  | Erased _ | Builtin _ -> top_level
+  | External x -> External { x with ty = t.resolve ~loc:x.loc x.ty }
   | Let x -> Let { x with bind = reify_expr t bound x.bind }
   | Fun x -> Fun { x with funs = Nonempty_list.map x.funs ~f:(reify_fun t bound) }
 ;;
 
-let program ~monos ~groups ~unfold top_levels =
-  let t = { monos = reachable_monos monos top_levels; groups; unfold } in
-  List.map top_levels ~f:(top_level t)
+(* Every specialized call should have a monomorphized target *)
+let check_targets t top_levels =
+  List.fold top_levels ~init:[] ~f:find_targets_top
+  |> List.iter ~f:(fun (family, key, loc) ->
+    if not (Map.mem (family_monos t family) key)
+    then
+      raise_s
+        [%message
+          "Bug: emitted dispatch target lacks a mono" (family : Ids.Family.t) (loc : Lex.Location.t)])
+;;
+
+let program ~monomorphized ~fun_bindings ~resolve top_levels =
+  let t = { monos = reachable_monos ~monomorphized top_levels; fun_bindings; resolve } in
+  let top_levels = List.map top_levels ~f:(top_level t) in
+  check_targets t top_levels;
+  top_levels
 ;;

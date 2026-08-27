@@ -33,7 +33,9 @@ module Pattern = struct
         }
   [@@deriving sexp_of]
 
-  let wild = Var { id = Ident.create Ident.Raw.anon ~stamp:0; loc = Lex.Location.empty }
+  let wild =
+    Var { id = Ident.create Ident.Raw.anon ~stamp:(Ids.Stamp.create ()); loc = Lex.Location.empty }
+  ;;
 
   let is_wild : t -> bool = function
     | Var _ -> true

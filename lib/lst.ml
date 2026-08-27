@@ -4,7 +4,7 @@ module Path = struct
   module Entry = struct
     type t =
       | Id of Ident.t
-      | Key of int
+      | Key of Hashcons.Tag.t
     [@@deriving sexp_of, compare, hash, equal]
   end
 
@@ -38,11 +38,8 @@ module Ty = struct
     | Variant of t option Ident.Label.Map.t
     | Ref
     | Env
-    | Closure of
-        { arg_ty : t
-        ; ret_ty : t
-        }
-  [@@deriving sexp_of]
+    | Fn
+  [@@deriving sexp_of, equal]
 
   let align_to x ~align =
     assert (Int.is_pow2 align);
@@ -59,7 +56,7 @@ module Ty = struct
     | Int -> 8, 8
     | Env -> 8, 8
     | Ref -> 8, 8
-    | Closure _ -> 16, 8
+    | Fn -> 16, 8
     | Tuple elts ->
       let elts = Nonempty_list.to_list elts |> List.map ~f:size_align in
       if List.for_all elts ~f:(fun (size, _) -> size = 0) then 0, 1 else tuple_size_align elts
@@ -97,7 +94,7 @@ module Ty = struct
   let align_in_mem (t : t) =
     match t with
     | Unit | Type -> raise_s [%message "Bug: undefined alignment"]
-    | Bool | Int | Env | Ref | Closure _ | Tuple _ | Variant _ -> snd (size_align t)
+    | Bool | Int | Env | Ref | Fn | Tuple _ | Variant _ -> snd (size_align t)
   ;;
 
   let payload_size_in_mem constructors = fst (payload_size_align constructors)
@@ -148,6 +145,11 @@ module Expr = struct
     | Make_closure of
         { body : Path.t
         ; env : Path.t option
+        ; ty : Ty.t
+        ; loc : Lex.Location.t
+        }
+    | Make_binder of
+        { env : Path.t
         ; ty : Ty.t
         ; loc : Lex.Location.t
         }
@@ -232,6 +234,7 @@ module Expr = struct
     | Make_env_rec { ty; _ }
     | Fill_env_rec { ty; _ }
     | Make_closure { ty; _ }
+    | Make_binder { ty; _ }
     | Apply_closure { ty; _ }
     | Apply_thunk { ty; _ }
     | Apply_proc { ty; _ }
@@ -252,6 +255,7 @@ module Expr = struct
     | Make_env_rec { loc; _ }
     | Fill_env_rec { loc; _ }
     | Make_closure { loc; _ }
+    | Make_binder { loc; _ }
     | Apply_closure { loc; _ }
     | Apply_thunk { loc; _ }
     | Apply_proc { loc; _ }
@@ -273,6 +277,7 @@ module Expr = struct
     | Make_env_rec expr -> Make_env_rec { expr with ty }
     | Fill_env_rec expr -> Fill_env_rec { expr with ty }
     | Make_closure expr -> Make_closure { expr with ty }
+    | Make_binder expr -> Make_binder { expr with ty }
     | Apply_closure expr -> Apply_closure { expr with ty }
     | Apply_thunk expr -> Apply_thunk { expr with ty }
     | Apply_proc expr -> Apply_proc { expr with ty }

@@ -5,10 +5,12 @@ open Tst
 (* These are soundness obligations: reflexivity, transitivity, agreement
    across orientation, and every exhibited bound being leq-verifiable. *)
 
-let anon stamp = Ident.create Ident.Raw.anon ~stamp
-let int_vars = Array.init 3 ~f:(fun i -> Value.var (anon i))
-let bool_vars = Array.init 2 ~f:(fun i -> Value.var (anon (10 + i)))
-let spine_vars = Array.init 2 ~f:(fun i -> Value.var (anon (20 + i)))
+(* Fixture stamps live far above anything minted during the tests. *)
+
+let fresh_var () = Value.var (Ident.fresh Ident.Raw.anon)
+let int_vars = Array.init 3 ~f:(fun _ -> fresh_var ())
+let bool_vars = Array.init 2 ~f:(fun _ -> fresh_var ())
+let spine_vars = Array.init 2 ~f:(fun _ -> fresh_var ())
 let label_a = Ident.Label.of_string "a"
 let label_b = Ident.Label.of_string "b"
 
@@ -34,19 +36,20 @@ let binder_pool =
          ; ret_mode = Modes.create ~staticity:Static ~erasure:Erased
          })
   in
-  let mk ~stamp ~body =
-    let arg = Ident.create (Ident.Raw.id "t") ~stamp in
+  let mk ~body =
+    let arg = Ident.fresh (Ident.Raw.id "t") in
     Value.binder
       (Binder.const
          ~arg
          ~ty:type_arrow
          ~body_dst:(body arg)
          ~env:Env.initial
-         ~family:(9000 + stamp))
+         ~family:(Ids.Family.create ())
+         ())
   in
-  let identity = mk ~stamp:60 ~body:(fun arg : Dst.Expr.t -> Var { id = arg; loc }) in
+  let identity = mk ~body:(fun arg : Dst.Expr.t -> Var { id = arg; loc }) in
   let wrap =
-    mk ~stamp:61 ~body:(fun arg : Dst.Expr.t ->
+    mk ~body:(fun arg : Dst.Expr.t ->
       Variant
         { constructors =
             Nonempty_list.singleton
@@ -430,7 +433,7 @@ let arrow ~arg_mode ~ret_mode : Value.t =
 
 let%test_unit "an ordered pair's join and meet are its sides" =
   let state = Typecheck.For_testing.create_state () in
-  let x = Value.var (anon 40) in
+  let x = fresh_var () in
   (match Typecheck.For_testing.join_value state Value.bottom x with
    | Some j when phys_equal j x -> ()
    | j -> raise_s [%message "join with bottom is not the other side" (j : Value.t option)]);
@@ -455,7 +458,7 @@ let%test_unit "a match-involved pair takes the conditional representative" =
   let arr_a = arrow ~arg_mode:static_erased ~ret_mode:ret in
   let arr_b = arrow ~arg_mode:param_unerased ~ret_mode:ret in
   let arr_c = arrow ~arg_mode:dynamic_unerased ~ret_mode:ret in
-  let m = Value.if_ ~cond:(Value.var (anon 41)) ~then_:arr_a ~else_:arr_b in
+  let m = Value.if_ ~cond:(fresh_var ()) ~then_:arr_a ~else_:arr_b in
   assert (not (leq m arr_c));
   assert (not (leq arr_c m));
   (match Typecheck.For_testing.join_value state m arr_c with
@@ -471,7 +474,7 @@ let%test_unit "a match-involved pair takes the conditional representative" =
    requires the repeats to hit the cache rather than re-derive. *)
 let%test_unit "repeated judgment pairs hit the leq memo" =
   let state = Typecheck.For_testing.create_state () in
-  let v = Value.var (anon 42) in
+  let v = fresh_var () in
   let arr m = arrow ~arg_mode:m ~ret_mode:(Modes.create ~staticity:Static ~erasure:Unerased) in
   let arr1 = arr (Modes.create ~staticity:Dynamic ~erasure:Erased) in
   let arr2 = arr (Modes.create ~staticity:Dynamic ~erasure:Unerased) in
@@ -491,7 +494,7 @@ let%test_unit "repeated judgment pairs hit the leq memo" =
 let%test_unit "arm decomposition assumes the arm's pattern" =
   let state = Typecheck.For_testing.create_state () in
   let leq = Typecheck.For_testing.leq_value state in
-  let c = Value.var (anon 43) in
+  let c = fresh_var () in
   let conditional = Value.if_ ~cond:c ~then_:c ~else_:(Bool.const false) in
   if not (leq conditional c) then raise_s [%message "a-side fact missing" (conditional : Value.t)];
   let conditional = Value.if_ ~cond:c ~then_:(Bool.const true) ~else_:c in

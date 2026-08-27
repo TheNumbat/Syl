@@ -4,11 +4,11 @@ open! Syl
 let loc = Lex.Location.empty
 let mode = Modes.bottom ()
 let binding_desc ty = { Tst.Desc.ty; mode; static = Lazy.from_val Tst.Value.bottom }
-let id name stamp = Ident.create (Ident.Raw.id name) ~stamp
+let id name = Ident.fresh (Ident.Raw.id name)
 let bool_pat value = Syl.Match.Pattern.Literal { value = Bool value; loc }
 let int_pat value = Syl.Match.Pattern.Literal { value = Int (Int64.of_int value); loc }
 let unit_pat = Syl.Match.Pattern.Literal { value = Unit; loc }
-let var_pat name stamp = Syl.Match.Pattern.Var { id = id name stamp; loc }
+let var_pat name = Syl.Match.Pattern.Var { id = id name; loc }
 let tuple_pat elts = Syl.Match.Pattern.Tuple { elts = Nonempty_list.of_list_exn elts; loc }
 let or_pat left right = Syl.Match.Pattern.Or { left; right; loc }
 
@@ -40,9 +40,9 @@ let compile patterns ~scrutinee_ty =
 ;;
 
 let%expect_test "var" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
-  compile [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty) ] ~scrutinee_ty:int_ty;
+  compile [ var_pat "x", Ident.Map.singleton x (binding_desc int_ty) ] ~scrutinee_ty:int_ty;
   [%expect
     {|
     ((tree
@@ -97,12 +97,12 @@ let%expect_test "or pattern exhaustive" =
 ;;
 
 let%expect_test "redundant" =
-  let x = id "x" 0 in
-  let y = id "y" 1 in
+  let x = id "x" in
+  let y = id "y" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
-    [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty)
-    ; var_pat "y" 1, Ident.Map.singleton y (binding_desc int_ty)
+    [ var_pat "x", Ident.Map.singleton x (binding_desc int_ty)
+    ; var_pat "y", Ident.Map.singleton y (binding_desc int_ty)
     ]
     ~scrutinee_ty:int_ty;
   [%expect
@@ -116,12 +116,12 @@ let%expect_test "redundant" =
 ;;
 
 let%expect_test "tuple paths" =
-  let x = id "x" 0 in
-  let y = id "y" 0 in
+  let x = id "x" in
+  let y = id "y" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
-    [ tuple_pat [ bool_pat true; var_pat "x" 0 ], Ident.Map.singleton x (binding_desc bool_ty)
-    ; tuple_pat [ bool_pat false; var_pat "y" 0 ], Ident.Map.singleton y (binding_desc bool_ty)
+    [ tuple_pat [ bool_pat true; var_pat "x" ], Ident.Map.singleton x (binding_desc bool_ty)
+    ; tuple_pat [ bool_pat false; var_pat "y" ], Ident.Map.singleton y (binding_desc bool_ty)
     ]
     ~scrutinee_ty:
       (Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ]));
@@ -149,10 +149,10 @@ let%expect_test "tuple paths" =
 ;;
 
 let%expect_test "nested or" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
-    [ ( tuple_pat [ or_pat (bool_pat true) (bool_pat false); var_pat "x" 0 ]
+    [ ( tuple_pat [ or_pat (bool_pat true) (bool_pat false); var_pat "x" ]
       , Ident.Map.singleton x (binding_desc bool_ty) )
     ]
     ~scrutinee_ty:
@@ -205,10 +205,10 @@ let%expect_test "int literal without wildcard - non-exhaustive" =
 ;;
 
 let%expect_test "int literal with wildcard - wildcard not redundant" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
-    [ int_pat 42, Ident.Map.empty; var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty) ]
+    [ int_pat 42, Ident.Map.empty; var_pat "x", Ident.Map.singleton x (binding_desc int_ty) ]
     ~scrutinee_ty:int_ty;
   [%expect
     {|
@@ -239,10 +239,10 @@ let%expect_test "two int literals without wildcard - non-exhaustive" =
 ;;
 
 let%expect_test "int wildcard then literal - literal is redundant" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
-    [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty); int_pat 42, Ident.Map.empty ]
+    [ var_pat "x", Ident.Map.singleton x (binding_desc int_ty); int_pat 42, Ident.Map.empty ]
     ~scrutinee_ty:int_ty;
   [%expect
     {|
@@ -266,9 +266,9 @@ let%expect_test "unit is exhaustive" =
 ;;
 
 let%expect_test "bool wildcard is exhaustive" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
-  compile [ var_pat "x" 0, Ident.Map.singleton x (binding_desc bool_ty) ] ~scrutinee_ty:bool_ty;
+  compile [ var_pat "x", Ident.Map.singleton x (binding_desc bool_ty) ] ~scrutinee_ty:bool_ty;
   [%expect
     {|
     ((tree
@@ -279,10 +279,10 @@ let%expect_test "bool wildcard is exhaustive" =
 ;;
 
 let%expect_test "bool true then wildcard - exhaustive, wildcard not redundant" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
-    [ bool_pat true, Ident.Map.empty; var_pat "x" 0, Ident.Map.singleton x (binding_desc bool_ty) ]
+    [ bool_pat true, Ident.Map.empty; var_pat "x", Ident.Map.singleton x (binding_desc bool_ty) ]
     ~scrutinee_ty:bool_ty;
   [%expect
     {|
@@ -297,10 +297,10 @@ let%expect_test "bool true then wildcard - exhaustive, wildcard not redundant" =
 ;;
 
 let%expect_test "bool wildcard then true - true is redundant" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   compile
-    [ var_pat "x" 0, Ident.Map.singleton x (binding_desc bool_ty); bool_pat true, Ident.Map.empty ]
+    [ var_pat "x", Ident.Map.singleton x (binding_desc bool_ty); bool_pat true, Ident.Map.empty ]
     ~scrutinee_ty:bool_ty;
   [%expect
     {|
@@ -380,14 +380,14 @@ let%expect_test "tuple (bool, bool) full coverage" =
 ;;
 
 let%expect_test "tuple (bool, bool) wildcard second - exhaustive" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
-    [ tuple_pat [ bool_pat true; var_pat "x" 0 ], Ident.Map.singleton x (binding_desc bool_ty)
-    ; tuple_pat [ bool_pat false; var_pat "x" 0 ], Ident.Map.singleton x (binding_desc bool_ty)
+    [ tuple_pat [ bool_pat true; var_pat "x" ], Ident.Map.singleton x (binding_desc bool_ty)
+    ; tuple_pat [ bool_pat false; var_pat "x" ], Ident.Map.singleton x (binding_desc bool_ty)
     ]
     ~scrutinee_ty:tuple_ty;
   [%expect
@@ -575,13 +575,13 @@ let%expect_test "or pattern tuple cross product" =
 ;;
 
 let%expect_test "multiple int literals with wildcard" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ int_pat 0, Ident.Map.empty
     ; int_pat 1, Ident.Map.empty
     ; int_pat 2, Ident.Map.empty
-    ; var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty)
+    ; var_pat "x", Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:int_ty;
   [%expect
@@ -702,12 +702,12 @@ let%expect_test "tuple (bool, bool) three of four" =
 ;;
 
 let%expect_test "tuple with all wildcards - exhaustive" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
-    [ ( tuple_pat [ var_pat "x" 0; var_pat "x" 0 ]
+    [ ( tuple_pat [ var_pat "x"; var_pat "x" ]
       , Ident.Map.singleton x (binding_desc (Tst.Value.type_ Tst.Ty.Bool)) )
     ]
     ~scrutinee_ty:tuple_ty;
@@ -719,19 +719,21 @@ let%expect_test "tuple with all wildcards - exhaustive" =
        (cases
         (((Tuple 2)
           (Leaf (case 0)
-           (bindings ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
+           (bindings
+            ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))
+             (((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
        (default ())))
      (redundant ()) (missing ()))
     |}]
 ;;
 
 let%expect_test "tuple wildcard then specific - specific redundant" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
-    [ ( tuple_pat [ var_pat "x" 0; var_pat "x" 0 ]
+    [ ( tuple_pat [ var_pat "x"; var_pat "x" ]
       , Ident.Map.singleton x (binding_desc (Tst.Value.type_ Tst.Ty.Bool)) )
     ; tuple_pat [ bool_pat true; bool_pat false ], Ident.Map.empty
     ]
@@ -744,7 +746,9 @@ let%expect_test "tuple wildcard then specific - specific redundant" =
        (cases
         (((Tuple 2)
           (Leaf (case 0)
-           (bindings ((((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
+           (bindings
+            ((((Id x) <opaque>) ((path ((Index 1))) (ty (Type Bool))))
+             (((Id x) <opaque>) ((path ((Index 0))) (ty (Type Bool))))))))))
        (default ())))
      (redundant
       ((Tuple
@@ -796,8 +800,8 @@ let%expect_test "tuple (int, int) both wildcards - exhaustive" =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Int; Tst.Value.type_ Tst.Ty.Int ])
   in
   compile
-    [ ( tuple_pat [ var_pat "x" 0; var_pat "y" 1 ]
-      , Ident.Map.of_alist_exn [ id "x" 0, binding_desc int_ty; id "y" 1, binding_desc int_ty ] )
+    [ ( tuple_pat [ var_pat "x"; var_pat "y" ]
+      , Ident.Map.of_alist_exn [ id "x", binding_desc int_ty; id "y", binding_desc int_ty ] )
     ]
     ~scrutinee_ty:tuple_ty;
   [%expect
@@ -817,15 +821,15 @@ let%expect_test "tuple (int, int) both wildcards - exhaustive" =
 ;;
 
 let%expect_test "tuple (int, bool) partial with wildcard fallback" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Int; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ int_pat 0; bool_pat true ], Ident.Map.empty
-    ; tuple_pat [ var_pat "x" 0; bool_pat false ], Ident.Map.singleton x (binding_desc int_ty)
-    ; tuple_pat [ var_pat "x" 0; bool_pat true ], Ident.Map.singleton x (binding_desc int_ty)
+    ; tuple_pat [ var_pat "x"; bool_pat false ], Ident.Map.singleton x (binding_desc int_ty)
+    ; tuple_pat [ var_pat "x"; bool_pat true ], Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:tuple_ty;
   [%expect
@@ -855,10 +859,10 @@ let%expect_test "tuple (int, bool) partial with wildcard fallback" =
 ;;
 
 let%expect_test "all redundant after wildcard" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
-    [ var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty)
+    [ var_pat "x", Ident.Map.singleton x (binding_desc int_ty)
     ; int_pat 0, Ident.Map.empty
     ; int_pat 1, Ident.Map.empty
     ; int_pat 2, Ident.Map.empty
@@ -994,14 +998,14 @@ let%expect_test "tuple (bool, int) - column selection prefers bool" =
 ;;
 
 let%expect_test "or pattern in tuple with wildcard fallback" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
     [ tuple_pat [ or_pat (bool_pat true) (bool_pat false); bool_pat true ], Ident.Map.empty
-    ; tuple_pat [ var_pat "x" 0; bool_pat false ], Ident.Map.singleton x (binding_desc bool_ty)
+    ; tuple_pat [ var_pat "x"; bool_pat false ], Ident.Map.singleton x (binding_desc bool_ty)
     ]
     ~scrutinee_ty:tuple_ty;
   [%expect
@@ -1092,13 +1096,13 @@ let%expect_test "redundant tuple after full tuple coverage" =
 ;;
 
 let%expect_test "partial tuple redundancy - (true, _) then (true, false)" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
-    [ tuple_pat [ bool_pat true; var_pat "x" 0 ], Ident.Map.singleton x (binding_desc bool_ty)
+    [ tuple_pat [ bool_pat true; var_pat "x" ], Ident.Map.singleton x (binding_desc bool_ty)
     ; tuple_pat [ bool_pat true; bool_pat false ], Ident.Map.empty
     ; tuple_pat [ bool_pat false; bool_pat true ], Ident.Map.empty
     ; tuple_pat [ bool_pat false; bool_pat false ], Ident.Map.empty
@@ -1172,9 +1176,9 @@ let%expect_test "nested tuple with wildcard - missing inner cases" =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   let outer_ty = Tst.Value.type_ (Tst.Ty.Tuple [ inner_ty; Tst.Value.type_ Tst.Ty.Bool ]) in
-  let x = id "x" 0 in
+  let x = id "x" in
   compile
-    [ ( tuple_pat [ tuple_pat [ bool_pat true; var_pat "x" 0 ]; bool_pat true ]
+    [ ( tuple_pat [ tuple_pat [ bool_pat true; var_pat "x" ]; bool_pat true ]
       , Ident.Map.singleton x (binding_desc (Tst.Value.type_ Tst.Ty.Bool)) )
     ]
     ~scrutinee_ty:outer_ty;
@@ -1224,14 +1228,14 @@ let%expect_test "nested tuple with wildcard - missing inner cases" =
 ;;
 
 let%expect_test "tuple (int, bool) wildcard int exhaustive" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Int; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
-    [ tuple_pat [ var_pat "x" 0; bool_pat true ], Ident.Map.singleton x (binding_desc int_ty)
-    ; tuple_pat [ var_pat "x" 0; bool_pat false ], Ident.Map.singleton x (binding_desc int_ty)
+    [ tuple_pat [ var_pat "x"; bool_pat true ], Ident.Map.singleton x (binding_desc int_ty)
+    ; tuple_pat [ var_pat "x"; bool_pat false ], Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:tuple_ty;
   [%expect
@@ -1278,13 +1282,13 @@ let%expect_test "multiple or-patterns both redundant and missing" =
 ;;
 
 let%expect_test "tuple (bool, bool) wildcard first, constructor second - partial" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty =
     Tst.Value.type_ (Tst.Ty.Tuple [ Tst.Value.type_ Tst.Ty.Bool; Tst.Value.type_ Tst.Ty.Bool ])
   in
   compile
-    [ tuple_pat [ var_pat "x" 0; bool_pat true ], Ident.Map.singleton x (binding_desc bool_ty) ]
+    [ tuple_pat [ var_pat "x"; bool_pat true ], Ident.Map.singleton x (binding_desc bool_ty) ]
     ~scrutinee_ty:tuple_ty;
   [%expect
     {|
@@ -1310,13 +1314,13 @@ let%expect_test "tuple (bool, bool) wildcard first, constructor second - partial
 ;;
 
 let%expect_test "int three literals then wildcard - wildcard needed" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ int_pat 0, Ident.Map.empty
     ; int_pat 1, Ident.Map.empty
     ; int_pat 0, Ident.Map.empty
-    ; var_pat "x" 0, Ident.Map.singleton x (binding_desc int_ty)
+    ; var_pat "x", Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:int_ty;
   [%expect
@@ -1335,11 +1339,11 @@ let%expect_test "int three literals then wildcard - wildcard needed" =
 ;;
 
 let%expect_test "variant option exhaustive" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ ctor_pat "none" None, Ident.Map.empty
-    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "some" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:option_int_ty;
   [%expect
@@ -1361,10 +1365,10 @@ let%expect_test "variant option exhaustive" =
 ;;
 
 let%expect_test "variant missing constructor" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
-    [ ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty) ]
+    [ ctor_pat "some" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc int_ty) ]
     ~scrutinee_ty:option_int_ty;
   [%expect
     {|
@@ -1406,11 +1410,11 @@ let%expect_test "variant payload literal - payload non-exhaustive" =
 ;;
 
 let%expect_test "variant payload switch with wildcard fallback" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ ctor_pat "some" (Some (int_pat 0)), Ident.Map.empty
-    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "some" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc int_ty)
     ; ctor_pat "none" None, Ident.Map.empty
     ]
     ~scrutinee_ty:option_int_ty;
@@ -1436,11 +1440,11 @@ let%expect_test "variant payload switch with wildcard fallback" =
 ;;
 
 let%expect_test "variant redundant constructor" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ ctor_pat "none" None, Ident.Map.empty
-    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "some" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc int_ty)
     ; ctor_pat "none" None, Ident.Map.empty
     ]
     ~scrutinee_ty:option_int_ty;
@@ -1465,11 +1469,11 @@ let%expect_test "variant redundant constructor" =
 ;;
 
 let%expect_test "variant or across constructors" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
     [ or_pat (ctor_pat "none" None) (ctor_pat "some" (Some (int_pat 0))), Ident.Map.empty
-    ; ctor_pat "some" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "some" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:option_int_ty;
   [%expect
@@ -1494,17 +1498,16 @@ let%expect_test "variant or across constructors" =
 ;;
 
 let%expect_test "variant in tuple - payload paths" =
-  let x = id "x" 0 in
-  let y = id "y" 1 in
+  let x = id "x" in
+  let y = id "y" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let tuple_ty = Tst.Value.type_ (Tst.Ty.Tuple [ option_int_ty; bool_ty ]) in
   compile
-    [ ( tuple_pat [ ctor_pat "some" (Some (var_pat "x" 0)); bool_pat true ]
+    [ ( tuple_pat [ ctor_pat "some" (Some (var_pat "x")); bool_pat true ]
       , Ident.Map.singleton x (binding_desc int_ty) )
-    ; ( tuple_pat [ ctor_pat "none" None; var_pat "y" 1 ]
-      , Ident.Map.singleton y (binding_desc bool_ty) )
-    ; ( tuple_pat [ ctor_pat "some" (Some (var_pat "x" 0)); bool_pat false ]
+    ; tuple_pat [ ctor_pat "none" None; var_pat "y" ], Ident.Map.singleton y (binding_desc bool_ty)
+    ; ( tuple_pat [ ctor_pat "some" (Some (var_pat "x")); bool_pat false ]
       , Ident.Map.singleton x (binding_desc int_ty) )
     ]
     ~scrutinee_ty:tuple_ty;
@@ -1549,14 +1552,14 @@ let%expect_test "variant in tuple - payload paths" =
 ;;
 
 let%expect_test "variant tag order is label order" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let ty = variant_ty [ "b", Some int_ty; "a", None; "c", Some bool_ty ] in
   compile
-    [ ctor_pat "c" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc bool_ty)
+    [ ctor_pat "c" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc bool_ty)
     ; ctor_pat "a" None, Ident.Map.empty
-    ; ctor_pat "b" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty)
+    ; ctor_pat "b" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc int_ty)
     ]
     ~scrutinee_ty:ty;
   [%expect
@@ -1582,12 +1585,12 @@ let%expect_test "variant tag order is label order" =
 ;;
 
 let%expect_test "variant missing several constructors" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   let bool_ty = Tst.Value.type_ Tst.Ty.Bool in
   let ty = variant_ty [ "b", Some int_ty; "a", None; "c", Some bool_ty ] in
   compile
-    [ ctor_pat "b" (Some (var_pat "x" 0)), Ident.Map.singleton x (binding_desc int_ty) ]
+    [ ctor_pat "b" (Some (var_pat "x")), Ident.Map.singleton x (binding_desc int_ty) ]
     ~scrutinee_ty:ty;
   [%expect
     {|
@@ -1611,12 +1614,12 @@ let%expect_test "variant missing several constructors" =
 ;;
 
 let%expect_test "variant nested payload" =
-  let x = id "x" 0 in
+  let x = id "x" in
   let inner_ty = option_int_ty in
   let ty = variant_ty [ "wrap", Some inner_ty; "empty", None ] in
   let int_ty = Tst.Value.type_ Tst.Ty.Int in
   compile
-    [ ( ctor_pat "wrap" (Some (ctor_pat "some" (Some (var_pat "x" 0))))
+    [ ( ctor_pat "wrap" (Some (ctor_pat "some" (Some (var_pat "x"))))
       , Ident.Map.singleton x (binding_desc int_ty) )
     ; ctor_pat "wrap" (Some (ctor_pat "none" None)), Ident.Map.empty
     ; ctor_pat "empty" None, Ident.Map.empty

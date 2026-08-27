@@ -294,9 +294,5 @@ module Top_level = struct
 end
 
 module Program = struct
-  type t =
-    { top_levels : Top_level.t list
-    ; stamp : int
-    }
-  [@@deriving sexp]
+  type t = { top_levels : Top_level.t list } [@@deriving sexp]
 end

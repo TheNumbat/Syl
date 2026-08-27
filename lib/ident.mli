@@ -54,7 +54,9 @@ end
 
 type t [@@deriving sexp, compare, equal, hash]
 
-val create : Raw.t -> stamp:int -> t
+val create : Raw.t -> stamp:Ids.Stamp.t -> t
+val fresh : Raw.t -> t
+val unbound : Raw.t -> t
 val is_anon : t -> bool
 val name : unit -> t -> string
 val print : unit -> t -> string

@@ -16,11 +16,38 @@ let%expect_test "recursive list instantiates" =
   [%expect {| |}]
 ;;
 
-let%expect_test "the unguarded family still hits the recursion limit" =
+let%expect_test "one ref guards recursive occurrences inside its pointee" =
+  go
+    {|fun tree (erased t : type) : erased type =
+        variant { leaf : t, node : &(tree t ^ tree t) }
+      ;;
+      let x = (tree int).node (box ((tree int).leaf 1, (tree int).leaf 2));;|};
+  [%expect {| |}]
+;;
+
+let%expect_test "factoring the guarded pointee does not expose recursion" =
+  go
+    {|fun pair (erased t : type) : erased type = t ^ t;;
+      fun tree (erased t : type) : erased type =
+        variant { leaf : t, node : &(pair (tree t)) }
+      ;;
+      let x = (tree int).node (box ((tree int).leaf 1, (tree int).leaf 2));;|};
+  [%expect {| |}]
+;;
+
+let%expect_test "the unguarded family has infinite size" =
+  (* The row forms — the guard folds the self-application — and the error
+     moves to where it belongs: layout. *)
   go
     {|fun bad (erased t : type) : erased type = variant { nil, cons : t ^ bad t };;
       let x = (bad int).nil;;|};
-  [%expect {| ((loc ((line 1) (column 68))) (reason (Recursion_limit 1000))) |}]
+  [%expect
+    {|
+    ((loc ((line 2) (column 14)))
+     (reason
+      (Infinite_size
+       (Type (Tuple ((Type Int) (Apply (fn (Rec 10)) (arg (Type Int)))))))))
+    |}]
 ;;
 
 let%expect_test "non-recursive refs" =
@@ -91,44 +118,7 @@ let%expect_test "structurally different recursive names stay apart" =
           ((cons
             ((Type
               (Tuple
-               ((Type Int)
-                (Type
-                 (Ref
-                  (Apply
-                   (fn
-                    (Binder
-                     ((arg ((Id t) <opaque>))
-                      (ty
-                       (Type
-                        (Pi (arg_ty (Type Type))
-                         (arg_mode ((staticity Static) (erasure Erased)))
-                         (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                         (ret_mode ((staticity Static) (erasure Erased))))))
-                      (body_dst
-                       (Variant
-                        (constructors
-                         (((label nil) (payload ()))
-                          ((label cons)
-                           (payload
-                            ((Tuple
-                              (elts
-                               ((Var (id ((Id t) <opaque>))
-                                 (loc ((line 1) (column 65))))
-                                (Ref
-                                 (arg
-                                  (Apply
-                                   (fn
-                                    (Var (id ((Id list) <opaque>))
-                                     (loc ((line 1) (column 71)))))
-                                   (arg
-                                    (Var (id ((Id t) <opaque>))
-                                     (loc ((line 1) (column 76)))))
-                                   (loc ((line 1) (column 71)))))
-                                 (loc ((line 1) (column 69))))))
-                              (loc ((line 1) (column 65)))))))))
-                        (loc ((line 1) (column 43)))))
-                      (env <opaque>) (family <opaque>) (uid <opaque>))))
-                   (arg (Type Int))))))))))
+               ((Type Int) (Type (Ref (Apply (fn (Rec 32)) (arg (Type Int))))))))))
            (nil ())))))
        (need
         (Type
@@ -136,44 +126,7 @@ let%expect_test "structurally different recursive names stay apart" =
           ((cons
             ((Type
               (Tuple
-               ((Type Bool)
-                (Type
-                 (Ref
-                  (Apply
-                   (fn
-                    (Binder
-                     ((arg ((Id t) <opaque>))
-                      (ty
-                       (Type
-                        (Pi (arg_ty (Type Type))
-                         (arg_mode ((staticity Static) (erasure Erased)))
-                         (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                         (ret_mode ((staticity Static) (erasure Erased))))))
-                      (body_dst
-                       (Variant
-                        (constructors
-                         (((label nil) (payload ()))
-                          ((label cons)
-                           (payload
-                            ((Tuple
-                              (elts
-                               ((Var (id ((Id bool) <opaque>))
-                                 (loc ((line 2) (column 72))))
-                                (Ref
-                                 (arg
-                                  (Apply
-                                   (fn
-                                    (Var (id ((Id other) <opaque>))
-                                     (loc ((line 2) (column 81)))))
-                                   (arg
-                                    (Var (id ((Id t) <opaque>))
-                                     (loc ((line 2) (column 87)))))
-                                   (loc ((line 2) (column 81)))))
-                                 (loc ((line 2) (column 79))))))
-                              (loc ((line 2) (column 72)))))))))
-                        (loc ((line 2) (column 50)))))
-                      (env <opaque>) (family <opaque>) (uid <opaque>))))
-                   (arg (Type Int))))))))))
+               ((Type Bool) (Type (Ref (Apply (fn (Rec 34)) (arg (Type Int))))))))))
            (nil ()))))))))
     |}]
 ;;
@@ -201,77 +154,24 @@ let%expect_test "ref distinguishes keys" =
        (got
         (Type
          (Ref
-          (Apply
-           (fn
-            (Binder
-             ((arg ((Id t) <opaque>))
-              (ty
-               (Type
-                (Pi (arg_ty (Type Type))
-                 (arg_mode ((staticity Static) (erasure Erased)))
-                 (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                 (ret_mode ((staticity Static) (erasure Erased))))))
-              (body_dst
-               (Variant
-                (constructors
-                 (((label nil) (payload ()))
-                  ((label cons)
-                   (payload
-                    ((Tuple
-                      (elts
-                       ((Var (id ((Id t) <opaque>)) (loc ((line 1) (column 65))))
-                        (Ref
-                         (arg
-                          (Apply
-                           (fn
-                            (Var (id ((Id list) <opaque>))
-                             (loc ((line 1) (column 71)))))
-                           (arg
-                            (Var (id ((Id t) <opaque>))
-                             (loc ((line 1) (column 76)))))
-                           (loc ((line 1) (column 71)))))
-                         (loc ((line 1) (column 69))))))
-                      (loc ((line 1) (column 65)))))))))
-                (loc ((line 1) (column 43)))))
-              (env <opaque>) (family <opaque>) (uid <opaque>))))
-           (arg (Type Int))))))
+          (Type
+           (Variant
+            ((cons
+              ((Type
+                (Tuple
+                 ((Type Int) (Type (Ref (Apply (fn (Rec 40)) (arg (Type Int))))))))))
+             (nil ())))))))
        (need
         (Type
          (Ref
-          (Apply
-           (fn
-            (Binder
-             ((arg ((Id t) <opaque>))
-              (ty
-               (Type
-                (Pi (arg_ty (Type Type))
-                 (arg_mode ((staticity Static) (erasure Erased)))
-                 (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                 (ret_mode ((staticity Static) (erasure Erased))))))
-              (body_dst
-               (Variant
-                (constructors
-                 (((label nil) (payload ()))
-                  ((label cons)
-                   (payload
-                    ((Tuple
-                      (elts
-                       ((Var (id ((Id t) <opaque>)) (loc ((line 1) (column 65))))
-                        (Ref
-                         (arg
-                          (Apply
-                           (fn
-                            (Var (id ((Id list) <opaque>))
-                             (loc ((line 1) (column 71)))))
-                           (arg
-                            (Var (id ((Id t) <opaque>))
-                             (loc ((line 1) (column 76)))))
-                           (loc ((line 1) (column 71)))))
-                         (loc ((line 1) (column 69))))))
-                      (loc ((line 1) (column 65)))))))))
-                (loc ((line 1) (column 43)))))
-              (env <opaque>) (family <opaque>) (uid <opaque>))))
-           (arg (Type Bool)))))))))
+          (Type
+           (Variant
+            ((cons
+              ((Type
+                (Tuple
+                 ((Type Bool)
+                  (Type (Ref (Apply (fn (Rec 40)) (arg (Type Bool))))))))))
+             (nil ()))))))))))
     |}]
 ;;
 
@@ -307,82 +207,18 @@ let%expect_test "a ref is not its pointee" =
           ((cons
             ((Type
               (Tuple
-               ((Type Int)
-                (Type
-                 (Ref
-                  (Apply
-                   (fn
-                    (Binder
-                     ((arg ((Id t) <opaque>))
-                      (ty
-                       (Type
-                        (Pi (arg_ty (Type Type))
-                         (arg_mode ((staticity Static) (erasure Erased)))
-                         (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                         (ret_mode ((staticity Static) (erasure Erased))))))
-                      (body_dst
-                       (Variant
-                        (constructors
-                         (((label nil) (payload ()))
-                          ((label cons)
-                           (payload
-                            ((Tuple
-                              (elts
-                               ((Var (id ((Id t) <opaque>))
-                                 (loc ((line 1) (column 65))))
-                                (Ref
-                                 (arg
-                                  (Apply
-                                   (fn
-                                    (Var (id ((Id list) <opaque>))
-                                     (loc ((line 1) (column 71)))))
-                                   (arg
-                                    (Var (id ((Id t) <opaque>))
-                                     (loc ((line 1) (column 76)))))
-                                   (loc ((line 1) (column 71)))))
-                                 (loc ((line 1) (column 69))))))
-                              (loc ((line 1) (column 65)))))))))
-                        (loc ((line 1) (column 43)))))
-                      (env <opaque>) (family <opaque>) (uid <opaque>))))
-                   (arg (Type Int))))))))))
+               ((Type Int) (Type (Ref (Apply (fn (Rec 54)) (arg (Type Int))))))))))
            (nil ())))))
        (need
         (Type
          (Ref
-          (Apply
-           (fn
-            (Binder
-             ((arg ((Id t) <opaque>))
-              (ty
-               (Type
-                (Pi (arg_ty (Type Type))
-                 (arg_mode ((staticity Static) (erasure Erased)))
-                 (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                 (ret_mode ((staticity Static) (erasure Erased))))))
-              (body_dst
-               (Variant
-                (constructors
-                 (((label nil) (payload ()))
-                  ((label cons)
-                   (payload
-                    ((Tuple
-                      (elts
-                       ((Var (id ((Id t) <opaque>)) (loc ((line 1) (column 65))))
-                        (Ref
-                         (arg
-                          (Apply
-                           (fn
-                            (Var (id ((Id list) <opaque>))
-                             (loc ((line 1) (column 71)))))
-                           (arg
-                            (Var (id ((Id t) <opaque>))
-                             (loc ((line 1) (column 76)))))
-                           (loc ((line 1) (column 71)))))
-                         (loc ((line 1) (column 69))))))
-                      (loc ((line 1) (column 65)))))))))
-                (loc ((line 1) (column 43)))))
-              (env <opaque>) (family <opaque>) (uid <opaque>))))
-           (arg (Type Int)))))))))
+          (Type
+           (Variant
+            ((cons
+              ((Type
+                (Tuple
+                 ((Type Int) (Type (Ref (Apply (fn (Rec 54)) (arg (Type Int))))))))))
+             (nil ()))))))))))
     |}]
 ;;
 
@@ -459,45 +295,7 @@ let%expect_test "ref intro of the wrong pointee is rejected" =
       (Type_mismatch (got (Type (Tuple ((Type Int) (Type (Ref (Type Int)))))))
        (need
         (Type
-         (Tuple
-          ((Type Int)
-           (Type
-            (Ref
-             (Apply
-              (fn
-               (Binder
-                ((arg ((Id t) <opaque>))
-                 (ty
-                  (Type
-                   (Pi (arg_ty (Type Type))
-                    (arg_mode ((staticity Static) (erasure Erased)))
-                    (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                    (ret_mode ((staticity Static) (erasure Erased))))))
-                 (body_dst
-                  (Variant
-                   (constructors
-                    (((label nil) (payload ()))
-                     ((label cons)
-                      (payload
-                       ((Tuple
-                         (elts
-                          ((Var (id ((Id t) <opaque>))
-                            (loc ((line 1) (column 65))))
-                           (Ref
-                            (arg
-                             (Apply
-                              (fn
-                               (Var (id ((Id list) <opaque>))
-                                (loc ((line 1) (column 71)))))
-                              (arg
-                               (Var (id ((Id t) <opaque>))
-                                (loc ((line 1) (column 76)))))
-                              (loc ((line 1) (column 71)))))
-                            (loc ((line 1) (column 69))))))
-                         (loc ((line 1) (column 65)))))))))
-                   (loc ((line 1) (column 43)))))
-                 (env <opaque>) (family <opaque>) (uid <opaque>))))
-              (arg (Type Int))))))))))))
+         (Tuple ((Type Int) (Type (Ref (Apply (fn (Rec 74)) (arg (Type Int))))))))))))
     |}]
 ;;
 
@@ -632,43 +430,7 @@ let%expect_test "generators with different growth stay apart" =
            (node
             ((Type
               (Ref
-               (Apply
-                (fn
-                 (Binder
-                  ((arg ((Id t) <opaque>))
-                   (ty
-                    (Type
-                     (Pi (arg_ty (Type Type))
-                      (arg_mode ((staticity Static) (erasure Erased)))
-                      (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                      (ret_mode ((staticity Static) (erasure Erased))))))
-                   (body_dst
-                    (Variant
-                     (constructors
-                      (((label leaf)
-                        (payload
-                         ((Var (id ((Id t) <opaque>))
-                           (loc ((line 1) (column 62)))))))
-                       ((label node)
-                        (payload
-                         ((Ref
-                           (arg
-                            (Apply
-                             (fn
-                              (Var (id ((Id weird1) <opaque>))
-                               (loc ((line 1) (column 74)))))
-                             (arg
-                              (Tuple
-                               (elts
-                                ((Var (id ((Id t) <opaque>))
-                                  (loc ((line 1) (column 82))))
-                                 (Var (id ((Id t) <opaque>))
-                                  (loc ((line 1) (column 86))))))
-                               (loc ((line 1) (column 82)))))
-                             (loc ((line 1) (column 74)))))
-                           (loc ((line 1) (column 72)))))))))
-                     (loc ((line 1) (column 45)))))
-                   (env <opaque>) (family <opaque>) (uid <opaque>))))
+               (Apply (fn (Rec 102))
                 (arg (Type (Tuple ((Type Int) (Type Int))))))))))))))
        (need
         (Type
@@ -677,48 +439,7 @@ let%expect_test "generators with different growth stay apart" =
            (node
             ((Type
               (Ref
-               (Apply
-                (fn
-                 (Binder
-                  ((arg ((Id t) <opaque>))
-                   (ty
-                    (Type
-                     (Pi (arg_ty (Type Type))
-                      (arg_mode ((staticity Static) (erasure Erased)))
-                      (ret_ty (T (ty (Type Type)) (memo <opaque>)))
-                      (ret_mode ((staticity Static) (erasure Erased))))))
-                   (body_dst
-                    (Variant
-                     (constructors
-                      (((label leaf)
-                        (payload
-                         ((Var (id ((Id t) <opaque>))
-                           (loc ((line 2) (column 68)))))))
-                       ((label node)
-                        (payload
-                         ((Ref
-                           (arg
-                            (Apply
-                             (fn
-                              (Var (id ((Id weird5) <opaque>))
-                               (loc ((line 2) (column 80)))))
-                             (arg
-                              (Tuple
-                               (elts
-                                ((Var (id ((Id t) <opaque>))
-                                  (loc ((line 2) (column 88))))
-                                 (Tuple
-                                  (elts
-                                   ((Var (id ((Id t) <opaque>))
-                                     (loc ((line 2) (column 93))))
-                                    (Var (id ((Id t) <opaque>))
-                                     (loc ((line 2) (column 97))))))
-                                  (loc ((line 2) (column 93))))))
-                               (loc ((line 2) (column 88)))))
-                             (loc ((line 2) (column 80)))))
-                           (loc ((line 2) (column 78)))))))))
-                     (loc ((line 2) (column 51)))))
-                   (env <opaque>) (family <opaque>) (uid <opaque>))))
+               (Apply (fn (Rec 104))
                 (arg
                  (Type
                   (Tuple ((Type Int) (Type (Tuple ((Type Int) (Type Int))))))))))))))))))))
@@ -786,4 +507,155 @@ let%expect_test "missing cases stay finite for non-uniform families" =
      (reason
       (Match (Non_exhaustive ((Constructor (label next) (payload (Wildcard))))))))
     |}]
+;;
+
+(* Guardedness: the fold is the group's, not the &'s, so any spelling of the
+   self-reference inside the pointee works. *)
+let%expect_test "the guard covers a let alias" =
+  go
+    {|fun tree (erased t : type) : erased type =
+        let self = tree t in
+        variant { leaf : t, node : &(self ^ self) }
+      ;;
+      let x = (tree int).node (box ((tree int).leaf 1, (tree int).leaf 2));;|};
+  [%expect {| |}]
+;;
+
+let%expect_test "one ref guards a nested variant former" =
+  go
+    {|fun tree (erased t : type) : erased type =
+        variant { leaf : t, node : &(variant { one : tree t, two : tree t ^ tree t }) }
+      ;;
+      let x = (tree int).leaf 1;;|};
+  [%expect {| |}]
+;;
+
+let%expect_test "a sibling annotation may reference the group" =
+  go
+    {|fun shape (erased t : type) : erased type = variant { s : &(shape t), z }
+      and mk (erased t : type) : shape t = (shape t).z;;
+      let x = mk int;;|};
+  [%expect {| ((loc ((line 2) (column 33))) (reason (Unbound_ident ((Id shape) <opaque>)))) |}]
+;;
+
+let%expect_test "a partially guarded group is finite on the guarded side" =
+  go
+    {|fun tree (erased t : type) : erased type = variant { leaf : t, node : &(forest t) }
+      and forest (erased t : type) : erased type = variant { nil, cons : tree t ^ forest t };;
+      let x = (tree int).leaf 5;;
+      let _ = match x { .leaf n -> n, .node _ -> 0 };;|};
+  [%expect {| |}]
+;;
+
+let%expect_test "the unguarded side of a partial group has infinite size" =
+  go
+    {|fun tree (erased t : type) : erased type = variant { leaf : t, node : &(forest t) }
+      and forest (erased t : type) : erased type = variant { nil, cons : tree t ^ forest t };;
+      fun get (dynamic x : tree int) : dynamic int = match x { .leaf n -> n, .node (&f) -> 0 };;|};
+  [%expect
+    {|
+    ((loc ((line 3) (column 53)))
+     (reason
+      (Infinite_size
+       (Type
+        (Tuple
+         ((Apply (fn (Rec 144)) (arg (Type Int)))
+          (Apply (fn (Rec 145)) (arg (Type Int)))))))))
+    |}]
+;;
+
+let%expect_test "an infinite tuple type has no inhabitants" =
+  go
+    {|fun p (erased t : type) : erased type = t ^ p t;;
+      let x = (1, 2) : p int;;|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 21)))
+     (reason
+      (Type_mismatch (got (Type (Tuple ((Type Int) (Type Int)))))
+       (need (Type (Tuple ((Type Int) (Apply (fn (Rec 150)) (arg (Type Int))))))))))
+    |}]
+;;
+
+let%expect_test "a family demanding its own unfolding hits the limit" =
+  go
+    {|fun weird (erased t : type) : erased type =
+        match erased (weird t) { _ -> t };;
+      let x = 1 : weird int;;|};
+  [%expect {| ((loc ((line 2) (column 22))) (reason (Recursion_limit 1000))) |}]
+;;
+
+(* Demands unfold chains of folded names to a fixpoint. *)
+let%expect_test "recursive erased computation unfolds on demand" =
+  go
+    {|fun count (static n : int) : erased int = if erased (n == 0) then 0 else count (n - 1);;
+      let _ = match erased (count 3) { 0 -> print_int 7, _ -> print_int 8 };;|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 57)))
+     (reason
+      (Dead_branch
+       (branch (Arm (Var (id (Anon <opaque>)) (loc ((line 2) (column 57))))))
+       (value (Int (T 0))))))
+    |}]
+;;
+
+let%expect_test "assert demands through the guard" =
+  go
+    {|fun evenp (static n : int) : erased bool =
+        if erased (n == 0) then true else if erased (n == 1) then false else evenp (n - 2);;
+      let _ = assert erased (evenp 4);;|};
+  [%expect {| |}]
+;;
+
+(* A non-uniform unguarded family recurses at a fresh key every level, so
+   layout resolution cannot close its cycle; the recursion limit brakes it. *)
+let%expect_test "a non-uniform unguarded family hits the recursion limit" =
+  go
+    {|fun bad (erased t : type) : erased type = variant { z, next : bad (t ^ t) };;
+      let _ = (bad int).z;;|};
+  [%expect {| ((loc ((line 1) (column 67))) (reason (Recursion_limit 1000))) |}]
+;;
+
+(* Erased bindings never exist at runtime, so validating a ghost arm must not
+   resolve the payload's layout. *)
+let%expect_test "an erased inspector over an unguarded family is a ghost" =
+  go
+    {|fun bad (erased t : type) : erased type = variant { nil, cons : bad t };;
+      fun probe (static erased b : bad int) : erased int =
+        match erased b { .nil -> 0, .cons rest -> 1 }
+      ;;|};
+  [%expect {| |}]
+;;
+
+(* An external's declared type is a runtime calling convention, so it resolves
+   like any emitted node's type. *)
+let%expect_test "an external over an unguarded family has infinite size" =
+  go
+    {|fun bad (erased t : type) : erased type = variant { nil, cons : bad t };;
+      external foo : bad int -> dynamic int = foo;;|};
+  [%expect
+    {|
+    ((loc ((line 2) (column 6)))
+     (reason (Infinite_size (Apply (fn (Rec 164)) (arg (Type Int))))))
+    |}]
+;;
+
+(* An erased node never reaches runtime, so nothing under it resolves — the
+   unerased element inside this ghost tuple included. *)
+let%expect_test "a ghost tuple over an unguarded family is accepted" =
+  go
+    {|fun bad (erased t : type) : erased type = variant { nil, cons : bad t };;
+      let ghost = ((bad int).nil, int);;|};
+  [%expect {| |}]
+;;
+
+(* Reachability mirrors reification: a specialization referenced only under a
+   ghost is dead, so it is neither resolved nor emitted. *)
+let%expect_test "a ghost composite retains no monomorphizations" =
+  go
+    {|fun bad (erased t : type) : erased type = variant { nil, cons : bad t };;
+      fun make (static erased u : unit) : bad int = (bad int).nil;;
+      let ghost = (make (), int);;|};
+  [%expect {| |}]
 ;;

@@ -1,27 +1,19 @@
 open! Core
 
 module Env = struct
-  type t =
-    { vars : int Ident.Raw.Map.t
-    ; stamp : int ref
-    }
+  type t = { vars : Ident.t Ident.Raw.Map.t }
 
-  let create () = { vars = Ident.Raw.Map.empty; stamp = ref 0 }
-
-  let next t =
-    let stamp = !(t.stamp) in
-    t.stamp := stamp + 1;
-    stamp
-  ;;
+  let create () = { vars = Ident.Raw.Map.empty }
 
   let bind t raw =
-    let stamp = next t in
-    { t with vars = Map.set t.vars ~key:raw ~data:stamp }, Ident.create raw ~stamp
+    let id = Ident.fresh raw in
+    { vars = Map.set t.vars ~key:raw ~data:id }, id
   ;;
 
   let find t raw =
-    let stamp = Map.find t.vars raw |> Option.value ~default:(-1) in
-    Ident.create raw ~stamp
+    match Map.find t.vars raw with
+    | Some id -> id
+    | None -> Ident.unbound raw
   ;;
 end
 
@@ -222,5 +214,5 @@ let desugar (cst : Cst.Program.t) : Dst.Program.t =
   let env = Env.create () in
   let env, program = fold_top_levels env stdlib [] in
   let _, program = fold_top_levels env cst.items program in
-  { top_levels = List.rev program; stamp = !(env.stamp) }
+  { top_levels = List.rev program }
 ;;

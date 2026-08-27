@@ -23,6 +23,32 @@ let%expect_test "arrow" =
   [%expect {| let _ = (int : type) \ name -> static (erased type -> static name);; |}]
 ;;
 
+let%expect_test "fun return modes" =
+  go "fun f (x : int) : static int -> int = f x;;";
+  [%expect
+    {|
+    fun f (x : int) : static int -> int =
+      f x
+    ;;
+    |}];
+  go "fun f (x : int) : static (int -> int) = f x;;";
+  [%expect
+    {|
+    fun f (x : int) : static (int -> int) =
+      f x
+    ;;
+    |}];
+  go "fun f (x : int) : static static int -> int = f x;;";
+  [%expect {| ((loc ((line 1) (column 18))) (reason (Duplicate_mode Staticity))) |}];
+  go "fun f (x : int) : dynamic int = f x;;";
+  [%expect
+    {|
+    fun f (x : int) : dynamic int =
+      f x
+    ;;
+    |}]
+;;
+
 let%expect_test "funs" =
   go "let _ = fun x (_ : unit) : unit = () in x;;";
   [%expect

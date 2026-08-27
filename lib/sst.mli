@@ -1,5 +1,5 @@
 open! Core
-module Key := Core.Int
+module Key := Hashcons.Tag
 
 module Ty : sig
   type t =
@@ -12,10 +12,7 @@ module Ty : sig
         { arg_ty : t
         ; ret_ty : t
         }
-    | Pi of
-        { arg_ty : t
-        ; ret_ty : t Key.Map.t
-        }
+    | Pi
     | Variant of t option Ident.Label.Map.t
     | Ref
   [@@deriving sexp_of]
@@ -32,7 +29,7 @@ end
 
 module Expr : sig
   type target =
-    | Family of int
+    | Family of Ids.Family.t
     | Prim of Builtin0.Prim.t
   [@@deriving sexp_of]
 
@@ -42,7 +39,7 @@ module Expr : sig
         ; arg : Ident.t
         ; body : t
         ; ty : Ty.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
     | Binder of
@@ -50,7 +47,7 @@ module Expr : sig
         ; arg : Ident.t
         ; body : t Key.Map.t
         ; ty : Ty.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
   [@@deriving sexp_of]
@@ -94,14 +91,14 @@ module Expr : sig
         { arg : Ident.t
         ; body : t
         ; ty : Ty.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
     | Binder of
         { arg : Ident.t
         ; body : t Key.Map.t
         ; ty : Ty.t
-        ; family : int
+        ; family : Ids.Family.t
         ; loc : Lex.Location.t
         }
     | Apply of
@@ -166,7 +163,7 @@ module Expr : sig
         }
     | Ref_get of
         { ref : t
-        ; ty : Ty.t (* the pointee type *)
+        ; ty : Ty.t
         ; loc : Lex.Location.t
         }
     | If of
@@ -223,9 +220,5 @@ module Top_level : sig
 end
 
 module Program : sig
-  type t =
-    { top_levels : Top_level.t list
-    ; stamp : int
-    }
-  [@@deriving sexp_of]
+  type t = { top_levels : Top_level.t list } [@@deriving sexp_of]
 end

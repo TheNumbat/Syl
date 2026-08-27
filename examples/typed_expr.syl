@@ -1,6 +1,3 @@
-(* A typed expression language. The result sort is carried only at compile
-   time, so malformed expressions cannot be represented and evaluation needs
-   no runtime sort checks. *)
 let sort =
   variant {
     int,

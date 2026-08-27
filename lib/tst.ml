@@ -2,14 +2,6 @@ open! Core
 
 let seed = 42
 
-let uid =
-  let next = ref 0 in
-  fun () ->
-    let uid = !next in
-    Core.Int.incr next;
-    uid
-;;
-
 module Kind = struct
   type t =
     | Abstract
@@ -79,7 +71,7 @@ and dependent =
       ; arg_mode : Modes.t
       ; ret_ty : Dst.Expr.t
       ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
-      ; uid : (int[@sexp.opaque])
+      ; uid : (Ids.Fn.t[@sexp.opaque])
       }
   | Typecheck of
       { env : (env[@sexp.opaque])
@@ -88,7 +80,7 @@ and dependent =
       ; arg_mode : Modes.t
       ; body : Dst.Expr.t
       ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
-      ; uid : (int[@sexp.opaque])
+      ; uid : (Ids.Fn.t[@sexp.opaque])
       }
 [@@deriving sexp_of]
 
@@ -158,6 +150,7 @@ and node =
   | Box of value
   | Deref of value
   | Prim of Builtin0.Prim.t
+  | Rec of Ids.Fn.t
 [@@deriving sexp_of]
 
 and closure =
@@ -166,8 +159,8 @@ and closure =
   ; body : (expr Lazy.t[@sexp.opaque])
   ; body_dst : Dst.Expr.t
   ; env : (env[@sexp.opaque])
-  ; family : (int[@sexp.opaque])
-  ; uid : (int[@sexp.opaque])
+  ; family : (Ids.Family.t[@sexp.opaque])
+  ; uid : (Ids.Fn.t[@sexp.opaque])
   }
 [@@deriving sexp_of]
 
@@ -176,8 +169,8 @@ and binder =
   ; ty : value
   ; body_dst : Dst.Expr.t
   ; env : (env[@sexp.opaque])
-  ; family : (int[@sexp.opaque])
-  ; uid : (int[@sexp.opaque])
+  ; family : (Ids.Family.t[@sexp.opaque])
+  ; uid : (Ids.Fn.t[@sexp.opaque])
   }
 [@@deriving sexp_of]
 
@@ -196,7 +189,7 @@ and fact =
 
 and binding =
   { desc : desc
-  ; level : int (* Only newer facts apply *)
+  ; level : int
   ; mutable cache : ((fact list * desc) option[@sexp.opaque])
   }
 [@@deriving sexp_of]
@@ -206,6 +199,7 @@ and env =
   ; facts : fact list
   ; level : int
   ; kind : Kind.t
+  ; live : bool
   }
 
 and fun_ =
@@ -215,16 +209,16 @@ and fun_ =
       ; body : expr
       ; ty : value
       ; mode : Modes.t
-      ; family : (int[@sexp.opaque])
+      ; family : (Ids.Family.t[@sexp.opaque])
       ; loc : Lex.Location.t
       }
   | Binder of
       { var : Ident.t
       ; arg : Ident.t
-      ; body : expr Core.Int.Map.t
+      ; body : expr Hashcons.Tag.Map.t
       ; ty : value
       ; mode : Modes.t
-      ; family : (int[@sexp.opaque])
+      ; family : (Ids.Family.t[@sexp.opaque])
       ; loc : Lex.Location.t
       }
 [@@deriving sexp_of]
@@ -248,7 +242,7 @@ and tree =
 [@@deriving sexp_of]
 
 and target =
-  | Family of (int[@sexp.opaque])
+  | Family of (Ids.Family.t[@sexp.opaque])
   | Prim of Builtin0.Prim.t
 [@@deriving sexp_of]
 
@@ -276,15 +270,15 @@ and expr =
       ; body : expr
       ; ty : value
       ; mode : Modes.t
-      ; family : (int[@sexp.opaque])
+      ; family : (Ids.Family.t[@sexp.opaque])
       ; loc : Lex.Location.t
       }
   | Binder of
       { arg : Ident.t
-      ; body : expr Core.Int.Map.t
+      ; body : expr Hashcons.Tag.Map.t
       ; ty : value
       ; mode : Modes.t
-      ; family : (int[@sexp.opaque])
+      ; family : (Ids.Family.t[@sexp.opaque])
       ; loc : Lex.Location.t
       }
   | Apply of
@@ -419,7 +413,7 @@ let equal_dependent (x : dependent) (y : dependent) =
   match x, y with
   | T { ty = xty; _ }, T { ty = yty; _ } -> equal_value xty yty
   | Reduce { uid = xuid; _ }, Reduce { uid = yuid; _ }
-  | Typecheck { uid = xuid; _ }, Typecheck { uid = yuid; _ } -> xuid = yuid
+  | Typecheck { uid = xuid; _ }, Typecheck { uid = yuid; _ } -> Ids.Fn.equal xuid yuid
   | (T _ | Reduce _ | Typecheck _), _ -> false
 ;;
 
@@ -459,8 +453,8 @@ let equal_node (x : node) (y : node) =
   | Bool x, Bool y -> equal_vbool x y
   | Int x, Int y -> equal_vint x y
   | Type x, Type y -> equal_ty x y
-  | Closure x, Closure y -> x.uid = y.uid
-  | Binder x, Binder y -> x.uid = y.uid
+  | Closure x, Closure y -> Ids.Fn.equal x.uid y.uid
+  | Binder x, Binder y -> Ids.Fn.equal x.uid y.uid
   | Var x, Var y -> Ident.equal x y
   | Tuple x, Tuple y ->
     (match Nonempty_list.zip x y with
@@ -474,6 +468,7 @@ let equal_node (x : node) (y : node) =
   | Payload x, Payload y -> equal_value x.variant y.variant && Ident.Label.equal x.label y.label
   | External x, External y -> String.equal x.symbol y.symbol && equal_value x.ty y.ty
   | Prim x, Prim y -> Builtin0.Prim.equal x y
+  | Rec x, Rec y -> Ids.Fn.equal x y
   | Box x, Box y -> equal_value x y
   | Deref x, Deref y -> equal_value x y
   | Match x, Match y ->
@@ -502,7 +497,8 @@ let equal_node (x : node) (y : node) =
       | External _
       | Box _
       | Deref _
-      | Prim _ )
+      | Prim _
+      | Rec _ )
     , _ ) -> false
 ;;
 
@@ -536,8 +532,8 @@ let hash_fold_vint s (x : vint) =
 let hash_fold_dependent s (x : dependent) =
   match x with
   | T { ty; _ } -> hash_fold_int (hash_fold_value s ty) 0
-  | Reduce { uid; _ } -> hash_fold_int (hash_fold_int s uid) 1
-  | Typecheck { uid; _ } -> hash_fold_int (hash_fold_int s uid) 2
+  | Reduce { uid; _ } -> hash_fold_int (Ids.Fn.hash_fold_t s uid) 1
+  | Typecheck { uid; _ } -> hash_fold_int (Ids.Fn.hash_fold_t s uid) 2
 ;;
 
 let hash_fold_ty s (x : ty) =
@@ -576,8 +572,8 @@ let hash_fold_node s (x : node) =
   | Bool b -> hash_fold_int (hash_fold_vbool s b) 3
   | Int i -> hash_fold_int (hash_fold_vint s i) 4
   | Type ty -> hash_fold_int (hash_fold_ty s ty) 5
-  | Closure closure -> hash_fold_int (hash_fold_int s closure.uid) 6
-  | Binder binder -> hash_fold_int (hash_fold_int s binder.uid) 7
+  | Closure closure -> hash_fold_int (Ids.Fn.hash_fold_t s closure.uid) 6
+  | Binder binder -> hash_fold_int (Ids.Fn.hash_fold_t s binder.uid) 7
   | Var id -> hash_fold_int (Ident.hash_fold_t s id) 8
   | Tuple elts ->
     hash_fold_int (Nonempty_list.fold elts ~init:s ~f:(fun s elt -> hash_fold_value s elt)) 9
@@ -602,6 +598,7 @@ let hash_fold_node s (x : node) =
   | Prim prim -> hash_fold_int (Builtin0.Prim.hash_fold_t s prim) 17
   | Box payload -> hash_fold_int (hash_fold_value s payload) 18
   | Deref ref -> hash_fold_int (hash_fold_value s ref) 19
+  | Rec uid -> hash_fold_int (Ids.Fn.hash_fold_t s uid) 20
 ;;
 
 module Value0 = struct
@@ -632,6 +629,7 @@ module Value0 = struct
   let closure closure = intern (Closure closure)
   let binder binder = intern (Binder binder)
   let var id = intern (Var id)
+  let rec_ uid = intern (Rec uid)
   let prim prim = intern (Prim prim)
   let external_ ~symbol ~ty = intern (External { symbol; ty })
 
@@ -665,7 +663,8 @@ module Value0 = struct
     | Inject _
     | External _
     | Box _
-    | Prim _ -> raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (value : value)]
+    | Prim _
+    | Rec _ -> raise_s [%message "Bug: expected variant" (label : Ident.Label.t) (value : value)]
   ;;
 
   let inject ~ty ~label = intern (Inject { ty; label })
@@ -698,7 +697,8 @@ module Value0 = struct
     | Inject _
     | Constructor _
     | External _
-    | Prim _ -> raise_s [%message "Bug: expected ref" (ref : value)]
+    | Prim _
+    | Rec _ -> raise_s [%message "Bug: expected ref" (ref : value)]
   ;;
 
   let apply ~(fn : value) ~(arg : value) =
@@ -714,7 +714,8 @@ module Value0 = struct
         | Match _
         | External _
         | Deref _
-        | Prim _ )
+        | Prim _
+        | Rec _ )
       , _ ) -> intern (Apply { fn; arg })
     | (Unit | Bool _ | Int _ | Type _ | Tuple _ | Constructor _ | Box _), _ ->
       raise_s [%message "Bug: expected function" (fn : value) (arg : value)]
@@ -735,7 +736,8 @@ module Value0 = struct
     | Constructor _
     | External _
     | Box _
-    | Prim _ -> raise_s [%message "Bug: expected tuple" (index : int) (tuple : value)]
+    | Prim _
+    | Rec _ -> raise_s [%message "Bug: expected tuple" (index : int) (tuple : value)]
   ;;
 end
 
@@ -889,8 +891,6 @@ module Pattern = struct
        | _ -> Unknown)
   ;;
 
-  (* Binding paths of a source pattern known to match: pure structure, except
-     an or-pattern's paths follow the alternative the value selects. *)
   let rec bindings_at path (value : value) (pattern : Dst.Expr.pattern) =
     match pattern with
     | Var { id; _ } -> if Ident.is_anon id then [] else [ id, List.rev path ]
@@ -939,7 +939,7 @@ module Pattern = struct
       ; body : 'a
       }
 
-    let anon = Ident.create Ident.Raw.anon ~stamp:0
+    let anon = Ident.create Ident.Raw.anon ~stamp:(Ids.Stamp.of_int_exn 0)
   end
 
   let wildcard_worlds ~unfold ~ty ~scrutinee ~earlier ~loc =
@@ -1023,17 +1023,17 @@ module Closure = struct
     ; body : (expr Lazy.t[@sexp.opaque])
     ; body_dst : Dst.Expr.t
     ; env : (env[@sexp.opaque])
-    ; family : (int[@sexp.opaque])
-    ; uid : (int[@sexp.opaque])
+    ; family : (Ids.Family.t[@sexp.opaque])
+    ; uid : (Ids.Fn.t[@sexp.opaque])
     }
   [@@deriving sexp_of]
 
-  let equal x y = x.uid = y.uid
-  let hash t = t.uid
-  let hash_fold_t s t = hash_fold_int s t.uid
+  let equal x y = Ids.Fn.equal x.uid y.uid
+  let hash t = Ids.Fn.hash t.uid
+  let hash_fold_t s t = Ids.Fn.hash_fold_t s t.uid
 
-  let const ~arg ~ty ~body ~body_dst ~env ~family =
-    { arg; ty; body; body_dst; env; family; uid = uid () }
+  let const ?uid ~arg ~ty ~body ~body_dst ~env ~family () =
+    { arg; ty; body; body_dst; env; family; uid = Option.value uid ~default:(Ids.Fn.create ()) }
   ;;
 end
 
@@ -1043,15 +1043,18 @@ module Binder = struct
     ; ty : value
     ; body_dst : Dst.Expr.t
     ; env : (env[@sexp.opaque])
-    ; family : (int[@sexp.opaque])
-    ; uid : (int[@sexp.opaque])
+    ; family : (Ids.Family.t[@sexp.opaque])
+    ; uid : (Ids.Fn.t[@sexp.opaque])
     }
   [@@deriving sexp_of]
 
-  let equal x y = x.uid = y.uid
-  let hash t = t.uid
-  let hash_fold_t s t = hash_fold_int s t.uid
-  let const ~arg ~ty ~body_dst ~env ~family = { arg; ty; body_dst; env; family; uid = uid () }
+  let equal x y = Ids.Fn.equal x.uid y.uid
+  let hash t = Ids.Fn.hash t.uid
+  let hash_fold_t s t = Ids.Fn.hash_fold_t s t.uid
+
+  let const ?uid ~arg ~ty ~body_dst ~env ~family () =
+    { arg; ty; body_dst; env; family; uid = Option.value uid ~default:(Ids.Fn.create ()) }
+  ;;
 end
 
 module Bool = struct
@@ -1291,7 +1294,7 @@ module Value1 = struct
     then replacement
     else (
       match value.node with
-      | Bottom | Unit | Var _ | Closure _ | Binder _ | External _ | Prim _ -> value
+      | Bottom | Unit | Var _ | Closure _ | Binder _ | External _ | Prim _ | Rec _ -> value
       | Bool bool_value ->
         (match bool_value with
          | T _ -> value
@@ -1523,6 +1526,7 @@ module Value = struct
     | Box of t
     | Deref of t
     | Prim of Builtin0.Prim.t
+    | Rec of Ids.Fn.t
   [@@deriving sexp_of]
 
   include Value1
@@ -1580,7 +1584,8 @@ module Value = struct
       | Match _
       | External _
       | Box _
-      | Prim _ -> value, frames
+      | Prim _
+      | Rec _ -> value, frames
     ;;
 
     let unpeel leaf frames =
@@ -1607,7 +1612,7 @@ module Dependent = struct
         ; arg_mode : Modes.t
         ; ret_ty : Dst.Expr.t
         ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
-        ; uid : (int[@sexp.opaque])
+        ; uid : (Ids.Fn.t[@sexp.opaque])
         }
     | Typecheck of
         { env : (env[@sexp.opaque])
@@ -1616,7 +1621,7 @@ module Dependent = struct
         ; arg_mode : Modes.t
         ; body : Dst.Expr.t
         ; memo : ((value, value) Hashtbl.t[@sexp.opaque])
-        ; uid : (int[@sexp.opaque])
+        ; uid : (Ids.Fn.t[@sexp.opaque])
         }
   [@@deriving sexp_of]
 
@@ -1635,7 +1640,7 @@ module Dependent = struct
 
   and is_concrete_value' seen (v : value) =
     match v.node with
-    | Unit | Closure _ | Binder _ | External _ | Prim _ -> true
+    | Unit | Closure _ | Binder _ | External _ | Prim _ | Rec _ -> true
     | Bool b -> is_concrete_bool b
     | Int i -> is_concrete_int i
     | Type ty -> is_concrete_ty seen ty
@@ -1643,7 +1648,14 @@ module Dependent = struct
     | Inject { ty; _ } -> is_concrete_value seen ty
     | Constructor { payload; _ } -> Option.for_all payload ~f:(is_concrete_value seen)
     | Box payload -> is_concrete_value seen payload
-    | Bottom | Var _ | Apply _ | Proj _ | Payload _ | Match _ | Deref _ -> false
+    | Apply _ -> is_concrete_spine seen v
+    | Bottom | Var _ | Proj _ | Payload _ | Match _ | Deref _ -> false
+
+  and is_concrete_spine seen (v : value) =
+    match v.node with
+    | Apply { fn; arg } -> is_concrete_spine seen fn && is_concrete_value seen arg
+    | Binder _ | Closure _ | Rec _ -> true
+    | _ -> false
 
   and is_concrete_bool : vbool -> _ = function
     | T _ -> true
@@ -1661,12 +1673,7 @@ module Dependent = struct
     | Variant constructors ->
       Map.for_all constructors ~f:(fun payload ->
         Option.for_all payload ~f:(is_concrete_value seen))
-    | Ref payload -> is_concrete_ref_payload seen payload
-
-  and is_concrete_ref_payload seen (v : value) =
-    match v.node with
-    | Apply { fn; arg } -> is_concrete_ref_payload seen fn && is_concrete_value seen arg
-    | _ -> is_concrete_value seen v
+    | Ref payload -> is_concrete_value seen payload
 
   and is_concrete_dependent seen : dependent -> _ = function
     | T { ty; _ } -> is_concrete_value seen ty
@@ -1680,7 +1687,14 @@ module Dependent = struct
     then mono ty
     else
       Typecheck
-        { env; arg; arg_ty; arg_mode; body; memo = Hashtbl.create (module Value); uid = uid () }
+        { env
+        ; arg
+        ; arg_ty
+        ; arg_mode
+        ; body
+        ; memo = Hashtbl.create (module Value)
+        ; uid = Ids.Fn.create ()
+        }
   ;;
 
   let reduce ty ~env ~arg ~arg_ty ~arg_mode ~ret_ty =
@@ -1688,7 +1702,14 @@ module Dependent = struct
     then mono ty
     else
       Reduce
-        { env; arg; arg_ty; arg_mode; ret_ty; memo = Hashtbl.create (module Value); uid = uid () }
+        { env
+        ; arg
+        ; arg_ty
+        ; arg_mode
+        ; ret_ty
+        ; memo = Hashtbl.create (module Value)
+        ; uid = Ids.Fn.create ()
+        }
   ;;
 end
 
@@ -1700,16 +1721,16 @@ module Expr = struct
         ; body : expr
         ; ty : value
         ; mode : Modes.t
-        ; family : (int[@sexp.opaque])
+        ; family : (Ids.Family.t[@sexp.opaque])
         ; loc : Lex.Location.t
         }
     | Binder of
         { var : Ident.t
         ; arg : Ident.t
-        ; body : expr Core.Int.Map.t
+        ; body : expr Hashcons.Tag.Map.t
         ; ty : value
         ; mode : Modes.t
-        ; family : (int[@sexp.opaque])
+        ; family : (Ids.Family.t[@sexp.opaque])
         ; loc : Lex.Location.t
         }
   [@@deriving sexp_of]
@@ -1733,7 +1754,7 @@ module Expr = struct
   [@@deriving sexp_of]
 
   type nonrec target = target =
-    | Family of (int[@sexp.opaque])
+    | Family of (Ids.Family.t[@sexp.opaque])
     | Prim of Builtin0.Prim.t
   [@@deriving sexp_of]
 
@@ -1761,15 +1782,15 @@ module Expr = struct
         ; body : t
         ; ty : value
         ; mode : Modes.t
-        ; family : (int[@sexp.opaque])
+        ; family : (Ids.Family.t[@sexp.opaque])
         ; loc : Lex.Location.t
         }
     | Binder of
         { arg : Ident.t
-        ; body : expr Core.Int.Map.t
+        ; body : expr Hashcons.Tag.Map.t
         ; ty : value
         ; mode : Modes.t
-        ; family : (int[@sexp.opaque])
+        ; family : (Ids.Family.t[@sexp.opaque])
         ; loc : Lex.Location.t
         }
     | Apply of
@@ -2108,8 +2129,11 @@ module Env = struct
 
   module Kind = Kind
 
-  let initial = { bindings = Ident.Map.empty; facts = []; level = 0; kind = Abstract }
+  let initial = { bindings = Ident.Map.empty; facts = []; level = 0; kind = Abstract; live = true }
   let enter t kind = { t with kind = Kind.join t.kind kind }
+  let enter_body t = { t with live = false }
+  let demanded t = { t with live = true }
+  let live t = t.live
   let abstract t = Kind.compare t.kind Abstract = 0
   let reducing t = Kind.compare t.kind Reducing >= 0
   let instancing t = Kind.compare t.kind Instancing >= 0
@@ -2209,9 +2233,5 @@ module Top_level = struct
 end
 
 module Program = struct
-  type t =
-    { top_levels : Top_level.t list
-    ; stamp : int
-    }
-  [@@deriving sexp_of]
+  type t = { top_levels : Top_level.t list } [@@deriving sexp_of]
 end

@@ -65,6 +65,8 @@ module Error = struct
         }
     | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
+    | Erased_external of Ident.t * string
+    | Erased_dynamic_argument of Modes.t
     | Static_failure of Builtin.Error.t
     | Erased_application of
         { fn : Value.t
@@ -76,6 +78,7 @@ module Error = struct
         ; value : Value.t
         }
     | Unreachable_reached
+    | Infinite_size of Value.t
     | Misplaced_unreachable of Misplaced.t
     | Gave_up of t
   [@@deriving sexp_of]
@@ -138,6 +141,14 @@ module Fail = struct
     raise (Error { loc; here; reason = Static_external (id, name) })
   ;;
 
+  let erased_external ~loc here id name =
+    raise (Error { loc; here; reason = Erased_external (id, name) })
+  ;;
+
+  let erased_dynamic_argument ~loc here mode =
+    raise (Error { loc; here; reason = Erased_dynamic_argument mode })
+  ;;
+
   let unknown_builtin ~loc here id name =
     raise (Error { loc; here; reason = Unknown_builtin (id, name) })
   ;;
@@ -172,6 +183,8 @@ module Fail = struct
     raise (Error { loc; here; reason = Expected_variant { got; label } })
   ;;
 
+  let infinite_size here ~loc ty = raise (Error { loc; here; reason = Infinite_size ty })
+
   let unreachable here ~loc =
     Lazy.from_fun (fun () ->
       raise_s
@@ -184,66 +197,90 @@ module State = struct
     type t = Value.t * Value.t [@@deriving sexp_of, compare, hash]
   end
 
-  module Spec = struct
+  (* One step of specialization context: [family] applied to [key] *)
+  module Frame = struct
     type t =
-      { key : Value.t
-      ; family : int
+      { family : Ids.Family.t
+      ; key : Hashcons.Tag.t
+      }
+    [@@deriving sexp_of, compare, hash]
+  end
+
+  (* One monomorphization: the function [uid] applied to [key] *)
+  module Instance = struct
+    type t =
+      { uid : Ids.Fn.t
+      ; key : Value.t
+      }
+    [@@deriving sexp_of, compare, hash]
+  end
+
+  (* One binder: source location + specialization context *)
+  module Family = struct
+    type t =
+      { path : Frame.t list
+      ; loc : Lex.Location.t
       }
     [@@deriving sexp_of, compare, hash]
   end
 
   module Mono = struct
     type t =
-      { family : int
+      { family : Ids.Family.t
       ; body : Expr.t
       ; desc : Desc.t
       }
   end
 
-  module Instance = struct
+  module Name = struct
     type t =
-      { uid : int
-      ; key : Value.t
+      { var : Ident.t option
+      ; family : Ids.Family.t
+      ; mutable value : Value.t option
+      ; mutable waiters : (unit -> unit) list
       }
-    [@@deriving sexp_of, compare, hash]
   end
 
-  module Family = struct
+  module Status = struct
     type t =
-      { path : Spec.t list
-      ; loc : Lex.Location.t
-      }
-    [@@deriving sexp_of, compare, hash]
+      | Computed of Instance.t
+      | Deferred of Lex.Location.t * (unit -> Mono.t)
   end
 
   type t =
-    { mutable stamp : int
-    ; mutable depth : int
+    { mutable depth : int
     ; mutable judgment_fuel : int
-    ; mutable path : Spec.t list
+    ; mutable context : Frame.t list
+    ; mutable unsettled : Ids.Fn.Set.t
+    ; mutable unfolding : Ids.Fn.Set.t
+    ; mutable demand_depth : int
     ; leq : (Pair.t, bool) Hashtbl.t
     ; bisim : (Pair.t, unit) Hashtbl.t
     ; whnf : (Value.t, Value.t option) Hashtbl.t
-    ; families : (Family.t, int) Hashtbl.t
-    ; specializations : (Instance.t, Mono.t option) Hashtbl.t
-    ; groups : (int, Ident.t) Hashtbl.t
+    ; families : (Family.t, Ids.Family.t) Hashtbl.t
+    ; instances : (Instance.t, Mono.t) Hashtbl.t
+    ; monos : (Frame.t, Status.t) Hashtbl.t
+    ; names : (Ids.Fn.t, Name.t) Hashtbl.t
     }
 
   let recursion_limit = 1000
   let judgment_limit = 1000
   let bisim_limit = 16
 
-  let create ~stamp =
-    { stamp
-    ; depth = 0
+  let create () =
+    { depth = 0
     ; judgment_fuel = -1
-    ; path = []
+    ; context = []
+    ; unsettled = Ids.Fn.Set.empty
+    ; unfolding = Ids.Fn.Set.empty
+    ; demand_depth = 0
     ; leq = Hashtbl.create (module Pair)
     ; bisim = Hashtbl.create (module Pair)
     ; whnf = Hashtbl.create (module Value)
     ; families = Hashtbl.create (module Family)
-    ; specializations = Hashtbl.create (module Instance)
-    ; groups = Hashtbl.create (module Core.Int)
+    ; instances = Hashtbl.create (module Instance)
+    ; monos = Hashtbl.create (module Frame)
+    ; names = Hashtbl.create (module Ids.Fn)
     }
   ;;
 
@@ -279,68 +316,119 @@ module State = struct
      Exn.protect ~f ~finally:(fun () -> Hashtbl.remove t.bisim pair))
   ;;
 
-  let with_spec t spec ~f =
-    t.path <- spec :: t.path;
-    Exn.protect ~f ~finally:(fun () -> t.path <- List.tl_exn t.path)
+  let with_frame t frame ~f =
+    t.context <- frame :: t.context;
+    Exn.protect ~f ~finally:(fun () -> t.context <- List.tl_exn t.context)
   ;;
 
-  let fresh_ident t =
-    let stamp = t.stamp in
-    t.stamp <- t.stamp + 1;
-    Ident.create Ident.Raw.anon ~stamp
+  let settled_value t uid =
+    let value = (Hashtbl.find_exn t.names uid).Name.value in
+    if Option.is_none value then t.unsettled <- Set.add t.unsettled uid;
+    value
   ;;
 
-  let fresh_var t = Value.var (fresh_ident t)
+  let observing t ~f =
+    let unsettled = t.unsettled in
+    t.unsettled <- Ids.Fn.Set.empty;
+    match f () with
+    | result ->
+      let missed = t.unsettled in
+      t.unsettled <- Set.union unsettled missed;
+      result, missed
+    | exception exn ->
+      t.unsettled <- Set.union unsettled t.unsettled;
+      raise exn
+  ;;
+
+  let stable t ~f =
+    let result, missed = observing t ~f in
+    result, Set.is_empty missed
+  ;;
+
+  let with_unfolding t uid ~f =
+    let unfolding = t.unfolding in
+    t.unfolding <- Set.add unfolding uid;
+    Exn.protect ~f ~finally:(fun () -> t.unfolding <- unfolding)
+  ;;
+
+  let unfolding t uid = Set.mem t.unfolding uid
+
+  let wait t uid f =
+    let name = Hashtbl.find_exn t.names uid in
+    match name.Name.value with
+    | Some _ -> f ()
+    | None -> name.Name.waiters <- f :: name.Name.waiters
+  ;;
+
+  let settle_group t entries =
+    let woken =
+      List.concat_map entries ~f:(fun (uid, value) ->
+        let name = Hashtbl.find_exn t.names uid in
+        name.Name.value <- Some value;
+        let waiters = List.rev name.Name.waiters in
+        name.Name.waiters <- [];
+        waiters)
+    in
+    List.iter woken ~f:(fun f -> f ())
+  ;;
+
+  let register_group t entries =
+    List.iter entries ~f:(fun (var, uid, family, ({ mode; _ } : Desc.t)) ->
+      let var = if Modes.is_static mode && Modes.is_unerased mode then Some var else None in
+      Hashtbl.set t.names ~key:uid ~data:{ Name.var; family; value = None; waiters = [] })
+  ;;
+
+  let fn_family t uid = (Hashtbl.find_exn t.names uid).Name.family
 
   let family t ~loc =
-    let key = { Family.loc; path = List.rev t.path } in
-    Hashtbl.find_or_add t.families key ~default:(fun () -> Hashtbl.length t.families)
+    let key = { Family.loc; path = List.rev t.context } in
+    Hashtbl.find_or_add t.families key ~default:(fun () -> Ids.Family.create ())
   ;;
 
-  let in_progress t (instance : Instance.t) =
-    match Hashtbl.find t.specializations instance with
-    | Some None -> true
-    | Some (Some _) | None -> false
-  ;;
-
-  let specialize t instance ~f =
-    match Hashtbl.find t.specializations instance with
-    | Some (Some mono) -> mono
-    | (Some None | None) as entry ->
-      let owner = Option.is_none entry in
-      if owner then Hashtbl.set t.specializations ~key:instance ~data:None;
+  let specialize t instance ~loc ~f =
+    match Hashtbl.find t.instances instance with
+    | Some mono -> mono
+    | None ->
+      if t.demand_depth > recursion_limit then Fail.recursion_limit [%here] ~loc recursion_limit;
       let mono =
+        let depth = t.depth in
+        t.demand_depth <- t.demand_depth + 1;
+        t.depth <- 0;
         Exn.protect ~f ~finally:(fun () ->
-          if owner && Hashtbl.mem t.specializations instance
-          then Hashtbl.remove t.specializations instance)
+          t.depth <- depth;
+          t.demand_depth <- t.demand_depth - 1)
       in
-      Hashtbl.set t.specializations ~key:instance ~data:(Some mono);
+      Hashtbl.set t.instances ~key:instance ~data:mono;
+      Hashtbl.update
+        t.monos
+        { Frame.family = mono.family; key = Hashcons.tag instance.key }
+        ~f:(function
+          | Some (Status.Computed _ as computed) -> computed
+          | Some (Deferred _) | None -> Computed instance);
       mono
   ;;
 
-  let record_group t var ({ mode; static; _ } : Desc.t) =
-    if Lazy.is_val static && Modes.is_static mode && Modes.is_unerased mode
-    then (
-      match (Lazy.force static).node with
-      | Value.Closure { uid; _ } | Binder { uid; _ } -> Hashtbl.add_exn t.groups ~key:uid ~data:var
-      | _ -> ())
+  let defer t frame ~loc ~f =
+    let context = t.context in
+    let f () =
+      let saved = t.context in
+      t.context <- context;
+      Exn.protect ~f ~finally:(fun () -> t.context <- saved)
+    in
+    ignore (Hashtbl.add t.monos ~key:frame ~data:(Status.Deferred (loc, f)))
   ;;
 
-  let collect_monos t =
-    Hashtbl.fold
-      t.specializations
-      ~init:Core.Int.Map.empty
-      ~f:(fun ~key:{ uid = _; key } ~data acc ->
-        match data with
-        | None -> acc
-        | Some { Mono.family; body; desc = _ } ->
-          Map.update acc family ~f:(fun monos ->
-            let monos = Option.value monos ~default:Core.Int.Map.empty in
-            Map.update monos (Hashcons.tag key) ~f:(function
-              | None -> body
-              | Some existing -> existing)))
+  let demand_mono t ~family ~key ~depth =
+    match Hashtbl.find t.monos { Frame.family; key } with
+    | None -> None
+    | Some (Computed instance) -> Some (Hashtbl.find_exn t.instances instance).Mono.body
+    | Some (Deferred (loc, compute)) ->
+      if depth > recursion_limit then Fail.recursion_limit [%here] ~loc recursion_limit;
+      Some (compute ()).Mono.body
   ;;
 end
+
+let fresh_var () = Value.var (Ident.fresh Ident.Raw.anon)
 
 let weaken ~loc expr { Desc.ty = src_ty; mode = src_mode; static } ~ty:dst_ty ~mode:dst_mode =
   let expr : Expr.t =
@@ -395,6 +483,12 @@ let require_mode_annotation src annot =
   Modes.annotate src annot
 ;;
 
+let require_not_dynamic_erased ~loc (mode : Modes.t) =
+  match mode with
+  | { staticity = Dynamic; erasure = Erased } -> Fail.erased_dynamic_argument [%here] ~loc mode
+  | _ -> ()
+;;
+
 let require_static ~loc (desc : Desc.t) =
   require_mode ~loc desc.mode (Modes.top ~staticity:Static ())
 ;;
@@ -407,7 +501,9 @@ let require_dynamic_arrow ~loc var sym (ty : Value.t) =
   match ty.node with
   | Type (Arrow { arg_mode; ret_mode; _ } | Pi { arg_mode; ret_mode; _ }) ->
     if Modes.is_static arg_mode || Modes.is_static ret_mode
-    then Fail.static_external [%here] ~loc var sym
+    then Fail.static_external [%here] ~loc var sym;
+    if Modes.is_erased arg_mode || Modes.is_erased ret_mode
+    then Fail.erased_external [%here] ~loc var sym
   | _ -> Fail.static_external [%here] ~loc var sym
 ;;
 
@@ -455,7 +551,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
     ty
   | Reduce { env; arg; arg_ty; arg_mode; memo; ret_ty; uid = _ } ->
     let reduce kind =
-      let env = Env.enter env kind in
+      let env = Env.demanded (Env.enter env kind) in
       let env = Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val } in
       let ret_ty_desc = reduce state env ret_ty in
       Lazy.force ret_ty_desc.static
@@ -465,7 +561,7 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
       | None -> reduce (if Dependent.is_concrete arg_val then Instancing else Reducing))
   | Typecheck { env; arg; arg_ty; arg_mode; memo; body; uid = _ } ->
     let reduce kind =
-      let env = Env.enter env kind in
+      let env = Env.demanded (Env.enter env kind) in
       let env = Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val } in
       let body_desc = reduce state env body in
       body_desc.ty
@@ -474,16 +570,155 @@ and eval state (dep : Dependent.t) (arg_val : Value.t) : Value.t =
       | Some ty -> ty
       | None -> reduce (if Dependent.is_concrete arg_val then Instancing else Reducing))
 
+and whnf (state : State.t) (value : Value.t) : Value.t option =
+  match Hashtbl.find state.whnf value with
+  | Some result -> result
+  | None ->
+    let rec go ~progress value frames =
+      let head, frames = Value.Eliminator.peel value frames in
+      match head.node, frames with
+      | Match { scrutinee; arms }, frames ->
+        (match whnf state scrutinee with
+         | Some scrutinee -> go ~progress:true (Value.match_ ~scrutinee ~arms) frames
+         | None ->
+           (match frames with
+            | [] -> if progress then Some head else None
+            | _ :: _ ->
+              let arms =
+                Nonempty_list.map arms ~f:(fun (pattern, leaf) ->
+                  pattern, Value.Eliminator.unpeel leaf frames)
+              in
+              Some (Value.match_ ~scrutinee ~arms)))
+      | Rec uid, frames ->
+        (match State.settled_value state uid with
+         | Some value -> go ~progress:true value frames
+         | None ->
+           (match frames with
+            | [] -> if progress then Some head else None
+            | _ :: _ -> if progress then Some (Value.Eliminator.unpeel head frames) else None))
+      | _, [] -> if progress then Some head else None
+      | ( (Binder { arg; ty; env; body_dst; uid; _ } | Closure { arg; ty; env; body_dst; uid; _ })
+        , Apply arg_val :: frames ) ->
+        let loc = Dst.Expr.loc body_dst in
+        let kind : Env.Kind.t = if Dependent.is_concrete arg_val then Instancing else Reducing in
+        State.recur state ~loc ~f:(fun () ->
+          State.with_unfolding state uid ~f:(fun () ->
+            let env = Env.demanded (Env.enter env kind) in
+            let mode = { (Ty.arg_mode ty) with staticity = Static } in
+            let env = Env.bind env arg { ty = Ty.arg ty; mode; static = Lazy.from_val arg_val } in
+            go ~progress:true (Lazy.force (reduce state env body_dst).static) frames))
+      | Tuple elts, Proj index :: frames ->
+        go ~progress:true (Nonempty_list.nth_exn elts index) frames
+      | Box payload, Deref :: frames -> go ~progress:true payload frames
+      | Constructor { label = got; payload = Some payload }, Payload label :: frames
+        when Ident.Label.equal got label -> go ~progress:true payload frames
+      | ( ( Bottom
+          | Unit
+          | Bool _
+          | Int _
+          | Type _
+          | Closure _
+          | Binder _
+          | Var _
+          | Tuple _
+          | Inject _
+          | Constructor _
+          | Apply _
+          | Proj _
+          | Payload _
+          | External _
+          | Box _
+          | Deref _
+          | Prim _ )
+        , _ :: _ ) ->
+        (* Surface the partial reduction *)
+        if progress then Some (Value.Eliminator.unpeel head frames) else None
+    in
+    let result, stable = State.stable state ~f:(fun () -> go ~progress:false value []) in
+    if stable then Hashtbl.set state.whnf ~key:value ~data:result;
+    result
+
+and unfold state (v : Value.t) : Value.t =
+  match v.node with
+  | Apply _ | Proj _ | Payload _ | Match _ | Deref _ | Rec _ ->
+    let next = Option.value (whnf state v) ~default:v in
+    if phys_equal next v then v else unfold state next
+  | _ -> v
+
+and suspension_head (v : Value.t) =
+  match v.node with
+  | Apply { fn; _ } -> suspension_head fn
+  | Binder { uid; _ } | Closure { uid; _ } | Rec uid -> Some uid
+  | _ -> None
+
+and is_suspension (v : Value.t) = Option.is_some (suspension_head v)
+
+and unfolding_name state (v : Value.t) =
+  match v.node with
+  | Apply _ ->
+    (match suspension_head v with
+     | Some uid -> State.unfolding state uid
+     | None -> false)
+  | _ -> false
+
+and demand state (lazy_v : Value.t Lazy.t) : Value.t =
+  let value, missed = State.observing state ~f:(fun () -> unfold state (Lazy.force lazy_v)) in
+  (match Set.min_elt missed with
+   | Some uid ->
+     State.wait state uid (fun () -> ignore (demand state (Lazy.from_val value) : Value.t))
+   | None -> ());
+  value
+
+(* Primitives evaluate on values, so their arguments unfold through tuples. *)
+and unfold_args state (v : Value.t) : Value.t =
+  let v = unfold state v in
+  match v.node with
+  | Tuple elts -> Value.tuple (Nonempty_list.map elts ~f:(unfold_args state))
+  | _ -> v
+
+and resolve state ~resolved ~loc (v : Value.t) : Value.t =
+  let visiting = Hashtbl.create (module Value) in
+  let rec go (v : Value.t) : Value.t =
+    match Hashtbl.find resolved v with
+    | Some r -> r
+    | None ->
+      if Hashtbl.mem visiting v then Fail.infinite_size [%here] ~loc v;
+      Hashtbl.set visiting ~key:v ~data:();
+      let r = State.recur state ~loc ~f:(fun () -> descend (unfold state v)) in
+      Hashtbl.set resolved ~key:v ~data:r;
+      r
+  and descend (v : Value.t) : Value.t =
+    match v.node with
+    | Type (Tuple elts) -> Value.type_ (Tuple (Nonempty_list.map elts ~f:go))
+    | Type (Variant constructors) ->
+      Value.type_ (Variant (Map.map constructors ~f:(Option.map ~f:go)))
+    | Type (Arrow arrow) ->
+      Value.type_ (Arrow { arrow with arg_ty = go arrow.arg_ty; ret_ty = go arrow.ret_ty })
+    | Tuple elts -> Value.tuple (Nonempty_list.map elts ~f:go)
+    | Constructor { label; payload = Some payload } ->
+      Value.constructor ~label ~payload:(Some (go payload))
+    | Type (Unit | Bool | Int | Type | Ref _) | _ -> v
+  in
+  go v
+
 and leq_value state (a : Value.t) (b : Value.t) =
   State.with_judgement state ~f:(fun () ->
     match Hashtbl.find state.leq (a, b) with
     | Some verdict -> verdict
     | None ->
-      let verdict = leq_value' state a b in
-      if Hashtbl.length state.bisim = 0 then Hashtbl.set state.leq ~key:(a, b) ~data:verdict;
+      let verdict, stable = State.stable state ~f:(fun () -> leq_value' state a b) in
+      if stable && Hashtbl.length state.bisim = 0
+      then Hashtbl.set state.leq ~key:(a, b) ~data:verdict;
       verdict)
 
 and leq_value' state (a : Value.t) (b : Value.t) =
+  let resolved (v : Value.t) =
+    match v.node with
+    | Rec uid -> Option.value (State.settled_value state uid) ~default:v
+    | _ -> v
+  in
+  let a = resolved a
+  and b = resolved b in
   match a.node, b.node with
   | Bottom, _ -> true
   | _, Bottom -> false
@@ -514,8 +749,9 @@ and leq_value' state (a : Value.t) (b : Value.t) =
     when Ident.Label.equal a.label b.label && leq_value state a.variant b.variant -> true
   | Box a, Box b -> leq_value state a b
   | Deref a, Deref b when leq_value state a b -> true
-  | _, (Apply _ | Proj _ | Payload _ | Match _ | Deref _)
-  | (Apply _ | Proj _ | Payload _ | Match _ | Deref _), _ ->
+  | Rec a, Rec b when Ids.Fn.equal a b -> true
+  | _, (Apply _ | Proj _ | Payload _ | Match _ | Deref _ | Rec _)
+  | (Apply _ | Proj _ | Payload _ | Match _ | Deref _ | Rec _), _ ->
     (match State.judge state ~f:(fun () -> whnf state a) with
      | Some a -> leq_value state a b
      | None -> false)
@@ -567,75 +803,6 @@ and leq_arms state (a : Value.t) (b : Value.t) =
   | Match { scrutinee; arms } ->
     decompose scrutinee arms ~obligation:(fun ~fact leaf -> leq_value state (fact a) (fact leaf))
   | _ -> false
-
-and whnf (state : State.t) (value : Value.t) : Value.t option =
-  match Hashtbl.find state.whnf value with
-  | Some result -> result
-  | None ->
-    let rec go ~progress value frames =
-      let head, frames = Value.Eliminator.peel value frames in
-      match head.node, frames with
-      | Match { scrutinee; arms }, frames ->
-        (match whnf state scrutinee with
-         | Some scrutinee -> go ~progress:true (Value.match_ ~scrutinee ~arms) frames
-         | None ->
-           (match frames with
-            | [] -> if progress then Some head else None
-            | _ :: _ ->
-              let arms =
-                Nonempty_list.map arms ~f:(fun (pattern, leaf) ->
-                  pattern, Value.Eliminator.unpeel leaf frames)
-              in
-              Some (Value.match_ ~scrutinee ~arms)))
-      | _, [] -> if progress then Some head else None
-      | ( (Binder { arg; ty; env; body_dst; _ } | Closure { arg; ty; env; body_dst; _ })
-        , Apply arg_val :: frames ) ->
-        let loc = Dst.Expr.loc body_dst in
-        let kind : Env.Kind.t = if Dependent.is_concrete arg_val then Instancing else Reducing in
-        State.recur state ~loc ~f:(fun () ->
-          let env = Env.enter env kind in
-          let env =
-            Env.bind
-              env
-              arg
-              { ty = Ty.arg ty; mode = Ty.arg_mode ty; static = Lazy.from_val arg_val }
-          in
-          go ~progress:true (Lazy.force (reduce state env body_dst).static) frames)
-      | Tuple elts, Proj index :: frames ->
-        go ~progress:true (Nonempty_list.nth_exn elts index) frames
-      | Box payload, Deref :: frames -> go ~progress:true payload frames
-      | Constructor { label = got; payload = Some payload }, Payload label :: frames
-        when Ident.Label.equal got label -> go ~progress:true payload frames
-      | ( ( Bottom
-          | Unit
-          | Bool _
-          | Int _
-          | Type _
-          | Closure _
-          | Binder _
-          | Var _
-          | Tuple _
-          | Inject _
-          | Constructor _
-          | Apply _
-          | Proj _
-          | Payload _
-          | External _
-          | Box _
-          | Deref _
-          | Prim _ )
-        , _ :: _ ) ->
-        (* Surface the partial reduction *)
-        if progress then Some (Value.Eliminator.unpeel head frames) else None
-    in
-    let result = go ~progress:false value [] in
-    Hashtbl.set state.whnf ~key:value ~data:result;
-    result
-
-and unfold state (ty : Value.t) : Value.t =
-  match whnf state ty with
-  | Some ty -> ty
-  | None -> ty
 
 and join_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
   State.with_judgement state ~f:(fun () -> join_value' state a b)
@@ -721,7 +888,8 @@ and join_value' state (a : Value.t) (b : Value.t) : Value.t Option.t =
         | Payload _
         | Box _
         | Deref _
-        | Prim _ )
+        | Prim _
+        | Rec _ )
       , _ ) -> None)
 
 and meet_value state (a : Value.t) (b : Value.t) : Value.t Option.t =
@@ -808,7 +976,8 @@ and meet_value' state (a : Value.t) (b : Value.t) : Value.t Option.t =
         | Payload _
         | Box _
         | Deref _
-        | Prim _ )
+        | Prim _
+        | Rec _ )
       , _ ) -> None)
 
 and leq_bool state a b =
@@ -867,12 +1036,6 @@ and unify_int ~f (a : Int.t) (b : Int.t) : Value.t option =
 and join_int state a b = unify_int ~f:(join_value state) a b
 and meet_int state a b = unify_int ~f:(meet_value state) a b
 
-and is_suspension (v : Value.t) =
-  match v.node with
-  | Apply { fn; _ } -> is_suspension fn
-  | Binder _ | Closure _ -> true
-  | _ -> false
-
 and ref_content state (payload : Value.t) : Value.t option =
   if is_suspension payload then whnf state payload else Some payload
 
@@ -925,10 +1088,10 @@ and bisim_binder state (a : Value.t) (b : Value.t) =
     && equal_value state (Ty.arg p_ty) (Ty.arg q_ty)
     && State.assuming state (a, b) ~f:(fun () ->
       State.judge state ~f:(fun () ->
-        let arg_val = State.fresh_var state in
+        let arg_val = fresh_var () in
         let reduce_at (arg, ty, body_dst, env) =
           State.recur state ~loc:(Dst.Expr.loc body_dst) ~f:(fun () ->
-            let env = Env.enter env Reducing in
+            let env = Env.demanded (Env.enter env Reducing) in
             let mode = { (Ty.arg_mode ty) with staticity = Static } in
             let env = Env.bind env arg { ty = Ty.arg ty; mode; static = Lazy.from_val arg_val } in
             Lazy.force (reduce state env body_dst).static)
@@ -956,21 +1119,21 @@ and leq_ty state a b =
     && Modes.leq a_ret_mode b_ret_mode
     && geq_value state a_arg_ty b_arg_ty
     &&
-    let var = State.fresh_var state in
+    let var = fresh_var () in
     leq_value state (eval state a_ret_ty var) (eval state b_ret_ty var)
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
     Modes.geq a_arg_mode b_arg_mode
     && Modes.leq a_ret_mode b_ret_mode
     && geq_value state a_arg_ty b_arg_ty
-    && leq_value state a_ret_ty (eval state b_ret_ty (State.fresh_var state))
+    && leq_value state a_ret_ty (eval state b_ret_ty (fresh_var ()))
   | ( Pi { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
     Modes.geq a_arg_mode b_arg_mode
     && Modes.leq a_ret_mode b_ret_mode
     && geq_value state a_arg_ty b_arg_ty
-    && leq_value state (eval state a_ret_ty (State.fresh_var state)) b_ret_ty
+    && leq_value state (eval state a_ret_ty (fresh_var ())) b_ret_ty
   | Variant a_ctors, Variant b_ctors ->
     Map.length a_ctors = Map.length b_ctors
     && Map.for_alli a_ctors ~f:(fun ~key ~data:a_payload ->
@@ -1088,7 +1251,7 @@ and meet_ty state a b =
   | ( Arrow { arg_ty = a_arg_ty; arg_mode = a_arg_mode; ret_ty = a_ret_ty; ret_mode = a_ret_mode }
     , Pi { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } ) ->
     let%bind arg_ty = join_value state a_arg_ty b_arg_ty in
-    let%map ret_ty = meet_value state a_ret_ty (eval state b_ret_ty (State.fresh_var state)) in
+    let%map ret_ty = meet_value state a_ret_ty (eval state b_ret_ty (fresh_var ())) in
     Ty.Arrow
       { arg_ty
       ; arg_mode = Modes.join a_arg_mode b_arg_mode
@@ -1099,7 +1262,7 @@ and meet_ty state a b =
     , Arrow { arg_ty = b_arg_ty; arg_mode = b_arg_mode; ret_ty = b_ret_ty; ret_mode = b_ret_mode } )
     ->
     let%bind arg_ty = join_value state a_arg_ty b_arg_ty in
-    let%map ret_ty = meet_value state (eval state a_ret_ty (State.fresh_var state)) b_ret_ty in
+    let%map ret_ty = meet_value state (eval state a_ret_ty (fresh_var ())) b_ret_ty in
     Ty.Arrow
       { arg_ty
       ; arg_mode = Modes.join a_arg_mode b_arg_mode
@@ -1245,12 +1408,7 @@ and typecheck_variant state env ~constructors ~loc =
   Literal { value; ty; mode; loc }, { ty; mode; static = Lazy.from_val value }
 
 and typecheck_ref state env ~arg ~loc =
-  let _arg_expr, arg_desc =
-    match (arg : Dst.Expr.t) with
-    | Apply { fn; arg = inner; loc = app_loc } ->
-      typecheck_apply ~suspended:true state env ~fn ~arg:inner ~loc:app_loc
-    | _ -> typecheck state env arg
-  in
+  let _arg_expr, arg_desc = typecheck state env arg in
   let payload = require_static_type ~loc state arg_desc in
   let ty = Value.type_ Type in
   let mode = Modes.create ~staticity:Static ~erasure:Erased in
@@ -1270,6 +1428,7 @@ and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode =
   let arg_desc = reduce state env arg_ty in
   let arg_mode = require_mode_annotation (Modes.default ()) arg_mode in
   let ret_mode = require_mode_annotation (Modes.default ~staticity:Static ()) ret_mode in
+  require_not_dynamic_erased ~loc arg_mode;
   let arg_ty = require_static_type state ~loc arg_desc in
   match arg_mode.staticity with
   | Dynamic | Parametric ->
@@ -1278,10 +1437,7 @@ and typecheck_arrow state ~loc env ~arg_id ~arg_ty ~arg_mode ~ret_ty ~ret_mode =
     Value.type_ (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
   | Static ->
     let env =
-      Env.bind
-        env
-        arg_id
-        { ty = arg_ty; mode = arg_mode; static = Lazy.from_val (State.fresh_var state) }
+      Env.bind env arg_id { ty = arg_ty; mode = arg_mode; static = Lazy.from_val (fresh_var ()) }
     in
     let ret_desc = reduce state env ret_ty in
     let ty = require_static_type state ~loc ret_desc in
@@ -1301,15 +1457,13 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
         | None -> acc))
   in
   let env_rec = ref env in
-  let env =
-    Nonempty_list.fold
+  let members =
+    Nonempty_list.map
       funs
-      ~init:env
       ~f:
         (fun
-          acc
-          { Dst.Expr.var; arg; erased; arg_ty; arg_mode; ret_mode; ret_ty; body = body_dst; loc }
-        ->
+          { Dst.Expr.var; arg; erased; arg_ty; arg_mode; ret_mode; ret_ty; body = body_dst; loc } ->
+        let uid = Ids.Fn.create () in
         let family = State.family state ~loc in
         let ty = typecheck_arrow state ~loc env ~arg_id:arg ~arg_ty ~arg_mode ~ret_ty ~ret_mode in
         let fun_mode = Modes.join fun_mode (Modes.bottom ~erasure:erased ()) in
@@ -1319,7 +1473,7 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
             let fun_mode = Modes.return fun_mode ~ret:ret_mode in
             let static =
               Lazy.from_fun (fun () ->
-                Value.binder (Binder.const ~arg ~ty ~body_dst ~env:!env_rec ~family))
+                Value.binder (Binder.const ~uid ~arg ~ty ~body_dst ~env:!env_rec ~family ()))
             in
             { ty; mode = fun_mode; static }
           | Type (Arrow { arg_ty; ret_ty; ret_mode; _ }) ->
@@ -1334,7 +1488,7 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
                     let body, body_desc =
                       let env =
                         Env.bind
-                          !env_rec
+                          (Env.enter_body !env_rec)
                           arg
                           { ty = arg_ty; mode = arg_mode; static = Fail.unreachable [%here] ~loc }
                       in
@@ -1346,7 +1500,7 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
                     require_leq state ~loc body_desc.ty ret_ty;
                     body)
                 in
-                Value.closure (Closure.const ~arg ~ty ~body ~body_dst ~env:!env_rec ~family))
+                Value.closure (Closure.const ~uid ~arg ~ty ~body ~body_dst ~env:!env_rec ~family ()))
             in
             let arg_mode = { arg_mode with staticity = Dynamic } in
             { Desc.ty = Value.type_ (Arrow { arg_ty; arg_mode; ret_ty; ret_mode })
@@ -1355,14 +1509,19 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
             }
           | _ -> raise_s [%message "Bug: expected function type"]
         in
-        Env.bind acc var desc)
+        var, uid, family, desc)
   in
-  env_rec := env;
+  let env =
+    Nonempty_list.fold members ~init:env ~f:(fun acc (var, _, _, desc) -> Env.bind acc var desc)
+  in
+  env_rec
+  := Nonempty_list.fold members ~init:env ~f:(fun acc (var, uid, _, desc) ->
+       Env.bind acc var { desc with static = Lazy.from_val (Value.rec_ uid) });
+  State.register_group state (Nonempty_list.to_list members);
   let funs =
     Nonempty_list.filter_map funs ~f:(fun { var; loc; _ } : Expr.fun_ option ->
       let { Desc.ty; mode; static } = require_var ~loc env var in
       let value = Lazy.force static in
-      State.record_group state var { ty; mode; static };
       match ty.node, value.node with
       | Type (Arrow _), Closure { arg; ty; body; family; _ } ->
         let body = Lazy.force body in
@@ -1370,9 +1529,12 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
         then Some (Lambda { var; arg; body; ty; mode; family; loc })
         else None
       | Type (Pi { arg_ty; arg_mode; ret_mode; ret_ty }), Binder { arg; ty; body_dst; family; _ } ->
-        let arg_val = State.fresh_var state in
+        let arg_val = fresh_var () in
         let env =
-          Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
+          Env.bind
+            (Env.enter_body !env_rec)
+            arg
+            { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
         in
         let body_desc = reduce state env body_dst in
         if Modes.is_erased ret_mode then require_static ~loc body_desc;
@@ -1380,10 +1542,14 @@ and typecheck_funs state env (funs : Dst.Expr.fun_ Nonempty_list.t) =
         require_mode ~loc body_desc.mode ret_mode;
         require_leq state ~loc body_desc.ty (eval state ret_ty arg_val);
         if Modes.is_unerased mode
-        then Some (Binder { var; arg; body = Core.Int.Map.empty; ty; mode; family; loc })
+        then Some (Binder { var; arg; body = Hashcons.Tag.Map.empty; ty; mode; family; loc })
         else None
       | _ -> raise_s [%message "Bug: expected function type"])
   in
+  State.settle_group
+    state
+    (Nonempty_list.to_list members
+     |> List.map ~f:(fun (_, uid, _, (desc : Desc.t)) -> uid, Lazy.force desc.static));
   funs, env
 
 and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
@@ -1391,6 +1557,7 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
   let arg_ty_desc = reduce state env arg_ty in
   let arg_ty = require_static_type state ~loc arg_ty_desc in
   let arg_mode = require_mode_annotation (Modes.default ~staticity:Parametric ()) arg_mode in
+  require_not_dynamic_erased ~loc arg_mode;
   let fn_mode =
     Set.remove (Dst.Expr.free_vars body_dst) arg
     |> Set.fold ~init:(Modes.bottom ()) ~f:(fun acc id ->
@@ -1402,7 +1569,10 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
   | Dynamic | Parametric ->
     let body, body_desc =
       let env =
-        Env.bind env arg { ty = arg_ty; mode = arg_mode; static = Fail.unreachable [%here] ~loc }
+        Env.bind
+          (Env.enter_body env)
+          arg
+          { ty = arg_ty; mode = arg_mode; static = Fail.unreachable [%here] ~loc }
       in
       typecheck state env body_dst
     in
@@ -1414,7 +1584,8 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
     let fn_mode = Modes.return fn_mode ~ret:body_desc.mode in
     let static =
       Lazy.from_val
-        (Value.closure (Closure.const ~arg ~ty ~body:(Lazy.from_val body) ~body_dst ~env ~family))
+        (Value.closure
+           (Closure.const ~arg ~ty ~body:(Lazy.from_val body) ~body_dst ~env ~family ()))
     in
     let expr : Expr.t =
       if Modes.is_erased fn_mode
@@ -1426,9 +1597,9 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
     let body_desc =
       let env =
         Env.bind
-          env
+          (Env.enter_body env)
           arg
-          { ty = arg_ty; mode = arg_mode; static = Lazy.from_val (State.fresh_var state) }
+          { ty = arg_ty; mode = arg_mode; static = Lazy.from_val (fresh_var ()) }
       in
       reduce state env body_dst
     in
@@ -1438,16 +1609,16 @@ and typecheck_lambda state env ~arg ~arg_mode ~arg_ty ~body_dst ~loc =
       Value.type_ (Pi { arg_ty; arg_mode; ret_ty; ret_mode = body_desc.mode })
     in
     let fn_mode = Modes.return fn_mode ~ret:body_desc.mode in
-    let static = Lazy.from_val (Value.binder (Binder.const ~arg ~ty ~body_dst ~env ~family)) in
+    let static = Lazy.from_val (Value.binder (Binder.const ~arg ~ty ~body_dst ~env ~family ())) in
     let expr : Expr.t =
       if Modes.is_erased fn_mode
       then Erased { ty; mode = fn_mode; loc }
-      else Binder { arg; ty; body = Core.Int.Map.empty; mode = fn_mode; family; loc }
+      else Binder { arg; ty; body = Hashcons.Tag.Map.empty; mode = fn_mode; family; loc }
     in
     expr, { ty; mode = fn_mode; static }
 
 and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mode ~arg_val =
-  State.specialize state { uid = binder.uid; key = arg_val } ~f:(fun () ->
+  State.specialize state { uid = binder.uid; key = arg_val } ~loc ~f:(fun () ->
     let env =
       Env.bind
         binder.env
@@ -1455,8 +1626,10 @@ and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mod
         { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
     in
     let body, body_desc =
-      State.with_spec state { family = binder.family; key = arg_val } ~f:(fun () ->
-        typecheck state (Env.enter env Instancing) binder.body_dst)
+      State.with_frame
+        state
+        { family = binder.family; key = Hashcons.tag arg_val }
+        ~f:(fun () -> typecheck state (Env.enter (Env.demanded env) Instancing) binder.body_dst)
     in
     let body =
       if Modes.is_erased arg_mode
@@ -1474,15 +1647,36 @@ and specialize state ~loc (binder : Binder.t) ~arg_ty ~arg_mode ~ret_ty ~ret_mod
     let body, desc = weaken ~loc body body_desc ~ty:ret_ty ~mode:ret_mode in
     { State.Mono.family = binder.family; body; desc })
 
-and typecheck_apply ?(suspended = false) state env ~fn ~arg ~loc =
+and demand_name state ~loc (v : Value.t) : Value.t =
+  match v.node with
+  | Apply { fn; arg } when Dependent.is_concrete arg ->
+    let resolved =
+      let fn = demand_name state ~loc fn in
+      match fn.node with
+      | Rec uid when not (State.unfolding state uid) -> State.settled_value state uid
+      | _ -> Some fn
+    in
+    (match resolved with
+     | Some { node = Binder binder; _ } ->
+       (match binder.ty.node with
+        | Type (Pi { arg_ty; arg_mode; ret_ty; ret_mode }) ->
+          let ty =
+            State.with_frame
+              state
+              { family = binder.family; key = Hashcons.tag arg }
+              ~f:(fun () -> eval state ret_ty arg)
+          in
+          let mono =
+            specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val:arg
+          in
+          Lazy.force mono.desc.static
+        | _ -> v)
+     | Some _ | None -> v)
+  | _ -> v
+
+and typecheck_apply state env ~fn ~arg ~loc =
   let open Lazy.Let_syntax in
-  let fn, fn_desc =
-    (* Suspension is spine-deep *)
-    match (fn : Dst.Expr.t) with
-    | Apply { fn = spine_fn; arg = spine_arg; loc = spine_loc } when suspended ->
-      typecheck_apply ~suspended:true state env ~fn:spine_fn ~arg:spine_arg ~loc:spine_loc
-    | _ -> typecheck state env fn
-  in
+  let fn, fn_desc = typecheck state env fn in
   let arg, arg_desc = typecheck state env arg in
   let fn_desc = { fn_desc with ty = unfold state fn_desc.ty } in
   match fn_desc.ty.node with
@@ -1491,14 +1685,29 @@ and typecheck_apply ?(suspended = false) state env ~fn ~arg ~loc =
     require_mode ~loc arg_desc.mode arg_mode;
     require_leq state ~loc arg_desc.ty arg_ty;
     let mode = resolve_app_mode ~loc fn_desc ret_mode in
-    let fn_val = Lazy.force fn_desc.static in
-    let arg_val = Lazy.force arg_desc.static in
+    let arg_val =
+      let v = Lazy.force arg_desc.static in
+      match v.node with
+      | Rec _ -> v
+      | _ -> if unfolding_name state v then v else unfold state v
+    in
     let keyable = Dependent.is_concrete arg_val in
+    let fn_val =
+      let v = Lazy.force fn_desc.static in
+      if keyable && Modes.is_unerased mode then demand_name state ~loc v else v
+    in
     let ty =
       match fn_val.node with
-      | Binder binder when keyable ->
-        State.with_spec state { family = binder.family; key = arg_val } ~f:(fun () ->
-          eval state ret_ty arg_val)
+      | Binder { family; _ } when keyable ->
+        State.with_frame
+          state
+          { family; key = Hashcons.tag arg_val }
+          ~f:(fun () -> eval state ret_ty arg_val)
+      | Rec uid when keyable ->
+        State.with_frame
+          state
+          { family = State.fn_family state uid; key = Hashcons.tag arg_val }
+          ~f:(fun () -> eval state ret_ty arg_val)
       | _ -> eval state ret_ty arg_val
     in
     let stuck () =
@@ -1506,31 +1715,80 @@ and typecheck_apply ?(suspended = false) state env ~fn ~arg ~loc =
       then Lazy.from_val (Value.apply ~fn:fn_val ~arg:arg_val)
       else Fail.unreachable [%here] ~loc
     in
+    let arg =
+      if Modes.is_erased arg_mode
+      then Expr.Erased { ty = arg_desc.ty; mode = { arg_desc.mode with erasure = Erased }; loc }
+      else arg
+    in
     let emit static expr =
       let desc = { Desc.ty; mode; static } in
       if Modes.is_erased mode then Expr.Erased { ty; mode; loc }, desc else expr, desc
     in
-    (match fn_val.node, keyable with
-     | Binder _, _ when suspended -> emit (stuck ()) (Apply { fn; arg; ty; mode; loc })
-     | Binder _, false -> emit (stuck ()) (Apply { fn; arg; ty; mode; loc })
-     | Binder binder, true ->
-       if State.in_progress state { uid = binder.uid; key = arg_val } && Value.is_fn_type ty
-       then
-         emit
-           (stuck ())
-           (Specialize { fn; arg; target = Family binder.family; key = Some arg_val; ty; mode; loc })
-       else (
+    (match fn_val.node with
+     | Binder binder ->
+       if not keyable
+       then emit (stuck ()) (Apply { fn; arg; ty; mode; loc })
+       else if Env.live env
+       then (
          let mono = specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val in
          emit
            mono.desc.static
            (Specialize { fn; arg; target = Family binder.family; key = Some arg_val; ty; mode; loc }))
-     | Closure closure, _ ->
+       else (
+         State.defer
+           state
+           { family = binder.family; key = Hashcons.tag arg_val }
+           ~loc
+           ~f:(fun () ->
+             specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val);
+         emit
+           (stuck ())
+           (Specialize { fn; arg; target = Family binder.family; key = Some arg_val; ty; mode; loc }))
+     | Rec uid ->
+       if Modes.is_erased mode || not keyable
+       then emit (stuck ()) (Apply { fn; arg; ty; mode; loc })
+       else (
+         let family = State.fn_family state uid in
+         let resolve_binder () =
+           match State.settled_value state uid with
+           | Some { node = Binder binder; _ } -> Some binder
+           | Some _ | None -> None
+         in
+         match resolve_binder () with
+         | Some binder when Env.live env ->
+           let mono =
+             specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val
+           in
+           emit
+             mono.desc.static
+             (Specialize { fn; arg; target = Family family; key = Some arg_val; ty; mode; loc })
+         | Some _ | None ->
+           State.defer
+             state
+             { family; key = Hashcons.tag arg_val }
+             ~loc
+             ~f:(fun () ->
+               match resolve_binder () with
+               | Some binder ->
+                 specialize state ~loc binder ~arg_ty ~arg_mode ~ret_ty:ty ~ret_mode ~arg_val
+               | None ->
+                 raise_s [%message "Bug: demanded an unsettled recursive name" (uid : Ids.Fn.t)]);
+           if
+             Option.is_none (State.settled_value state uid)
+             && (not (Value.is_fn_type ty))
+             && Modes.is_static ret_mode
+             && Modes.is_unerased mode
+           then ignore (demand state (stuck ()) : Value.t);
+           emit
+             (stuck ())
+             (Specialize { fn; arg; target = Family family; key = Some arg_val; ty; mode; loc }))
+     | Closure closure ->
        let static =
          if Modes.is_static ret_mode
          then (
            let env =
              Env.bind
-               closure.env
+               (Env.demanded closure.env)
                closure.arg
                { ty = arg_ty; mode = arg_mode; static = Lazy.from_val arg_val }
            in
@@ -1540,12 +1798,12 @@ and typecheck_apply ?(suspended = false) state env ~fn ~arg ~loc =
        emit
          static
          (Specialize { fn; arg; ty; target = Family closure.family; key = None; mode; loc })
-     | Prim prim, _ ->
+     | Prim prim ->
        let static =
          if Modes.is_static ret_mode
          then
            Lazy.from_fun (fun () ->
-             try Builtin.eval prim arg_val with
+             try Builtin.eval prim (unfold_args state arg_val) with
              | Builtin.Error err -> Fail.static_failure [%here] ~loc err)
          else Fail.unreachable [%here] ~loc
        in
@@ -1558,12 +1816,11 @@ and typecheck_apply ?(suspended = false) state env ~fn ~arg ~loc =
            ignore (Lazy.force static : Value.t);
            Erased { ty; mode; loc }, desc
          | Unerase _ ->
-           (* Unerase reifies the value *)
            let mode = { mode with erasure = Unerased } in
            Literal { value = Lazy.force static; ty; mode; loc }, { desc with mode }
          | _ -> Erased { ty; mode; loc }, desc)
        else Specialize { fn; arg; ty; target = Prim prim; key = None; mode; loc }, desc
-     | _, _ -> emit (stuck ()) (Apply { fn; arg; ty; mode; loc }))
+     | _ -> emit (stuck ()) (Apply { fn; arg; ty; mode; loc }))
   | Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode }) ->
     require_mode ~loc arg_desc.mode arg_mode;
     require_leq state ~loc arg_desc.ty arg_ty;
@@ -1577,13 +1834,19 @@ and typecheck_apply ?(suspended = false) state env ~fn ~arg ~loc =
         let%bind fn = fn_desc.static in
         match fn.node with
         | Closure closure ->
-          let env = Env.bind closure.env closure.arg arg_desc in
+          let env = Env.bind (Env.demanded closure.env) closure.arg arg_desc in
           let desc = reduce state env closure.body_dst in
           desc.static
         | Prim prim ->
           Lazy.map arg_desc.static ~f:(fun arg ->
-            try Builtin.eval prim arg with
+            try Builtin.eval prim (unfold_args state arg) with
             | Builtin.Error err -> Fail.static_failure [%here] ~loc err)
+        | Rec uid ->
+          Lazy.map arg_desc.static ~f:(fun arg ->
+            let stuck = Value.apply ~fn ~arg in
+            if Option.is_none (State.settled_value state uid)
+            then ignore (demand state (Lazy.from_val stuck) : Value.t);
+            stuck)
         | _ -> Lazy.map arg_desc.static ~f:(fun arg -> Value.apply ~fn ~arg))
       else Fail.unreachable [%here] ~loc
     in
@@ -1601,7 +1864,7 @@ and typecheck_if state env ~cond ~then_ ~else_ ~erased ~loc =
   match (erased : Modes.Erasure.t) with
   | Erased ->
     require_static ~loc cond_desc;
-    let cond_val = Lazy.force cond_desc.static in
+    let cond_val = demand state cond_desc.static in
     (match cond_val.node with
      | Bool (T true) when not (Env.abstract env) ->
        if Env.reducing env then require_reachable then_;
@@ -1613,8 +1876,9 @@ and typecheck_if state env ~cond ~then_ ~else_ ~erased ~loc =
      | Bool (T false) -> Fail.dead_branch [%here] ~loc Then cond_val
      | _ ->
        let learn b = Env.learn env ~target:cond_val ~replacement:(Value.of_literal (Bool b)) in
-       let then_, then_desc = typecheck state (learn true) then_ in
-       let else_, else_desc = typecheck state (learn false) else_ in
+       let branch b body = typecheck state (Env.enter_body (learn b)) body in
+       let then_, then_desc = branch true then_ in
+       let else_, else_desc = branch false else_ in
        let mode = Modes.cond ~cond:cond_desc.mode [ then_desc.mode; else_desc.mode ] in
        let static =
          if Modes.is_dynamic mode
@@ -1701,7 +1965,7 @@ and typecheck_match_dynamic state env ~scrutinee ~scrutinee_desc ~arms ~loc =
     then Fail.unreachable [%here] ~loc
     else
       Lazy.from_fun (fun () ->
-        let scrutinee = Lazy.force scrutinee_desc.static in
+        let scrutinee = demand state scrutinee_desc.static in
         let statics = Nonempty_list.map descs ~f:(fun (desc : Desc.t) -> desc.static) in
         match Pattern.selects scrutinee patterns with
         | Known (index, _) -> Lazy.force (Nonempty_list.nth_exn statics index)
@@ -1719,13 +1983,13 @@ and typecheck_match_dynamic state env ~scrutinee ~scrutinee_desc ~arms ~loc =
   expr, { Desc.ty; mode; static }
 
 and typecheck_match_static state env ~scrutinee ~scrutinee_desc ~arms ~erasure ~loc =
-  let scrutinee_val = Lazy.force scrutinee_desc.static in
+  let scrutinee_val = demand state scrutinee_desc.static in
   let typecheck_arm ~(desc : Desc.t) ({ pattern; positive; speculative; body } : _ Pattern.World.t) =
     let bindings =
       pattern_bindings state ~desc pattern
       |> Map.map ~f:(fun (desc : Desc.t) -> { desc with mode = { desc.mode with erasure } })
     in
-    let env = if speculative then Env.enter env Speculative else env in
+    let env = if speculative then Env.enter_body (Env.enter env Speculative) else env in
     let env =
       Env.learn
         env
@@ -1772,7 +2036,7 @@ and typecheck_match_static state env ~scrutinee ~scrutinee_desc ~arms ~erasure ~
       match (erasure : Modes.Erasure.t), bindings with
       | Erased, _ | Unerased, [] -> body
       | Unerased, _ :: _ ->
-        Expr.rebind scrutinee ~id:(State.fresh_ident state) ~f:(fun scrutinee ->
+        Expr.rebind scrutinee ~id:(Ident.fresh Ident.Raw.anon) ~f:(fun scrutinee ->
           List.fold_right bindings ~init:body ~f:(fun (id, path, _) rest ->
             let bind, _ = project_scrut ~loc state scrutinee scrutinee_desc path in
             Expr.Let { var = id; bind; rest; ty = body_desc.ty; mode = body_desc.mode; loc }))
@@ -2006,7 +2270,7 @@ and compile_match state ~loc ~ty ?scrutinee patterns =
   { compiled with missing }
 
 and build_match state ~loc ~static ~scrutinee ~scrutinee_desc ~cases ~compiled ~ty ~mode =
-  Expr.rebind scrutinee ~id:(State.fresh_ident state) ~f:(fun scrutinee ->
+  Expr.rebind scrutinee ~id:(Ident.fresh Ident.Raw.anon) ~f:(fun scrutinee ->
     let project path = project_scrut ~loc state scrutinee scrutinee_desc (Vec.to_list path) in
     let rec build_switch (tree : Match.Tree.t) : Expr.tree =
       match tree with
@@ -2175,18 +2439,17 @@ let fold_top_levels state env dst tls =
 ;;
 
 let typecheck_exn (dst : Dst.Program.t) : Program.t =
-  let state = State.create ~stamp:dst.stamp in
+  let state = State.create () in
   let env = Env.initial in
   let program = List.rev (fst (fold_top_levels state env dst.top_levels [])) in
-  let groups = Core.Int.Map.of_hashtbl_exn state.groups in
-  (* Check reify doesn't expand the monomorphization store. *)
-  let specialization_count = Hashtbl.length state.specializations in
   let top_levels =
-    Reify.program ~monos:(State.collect_monos state) ~groups ~unfold:(unfold state) program
+    let fun_bindings =
+      Ids.Fn.Map.of_hashtbl_exn state.names |> Map.filter_map ~f:(fun { State.Name.var; _ } -> var)
+    in
+    let resolve = resolve state ~resolved:(Hashtbl.create (module Value)) in
+    Reify.program ~monomorphized:(State.demand_mono state) ~fun_bindings ~resolve program
   in
-  if Hashtbl.length state.specializations <> specialization_count
-  then raise_s [%message "Bug: specializations created during reification"];
-  { top_levels; stamp = state.stamp }
+  { top_levels }
 ;;
 
 let typecheck tst =
@@ -2199,7 +2462,10 @@ module For_testing = struct
 
   exception Gave_up = Gave_up
 
-  let create_state () = State.create ~stamp:1_000_000
+  let create_state () = State.create ()
+  let register_group = State.register_group
+  let settle_group = State.settle_group
+  let wait = State.wait
   let leq_value = leq_value
   let join_value = join_value
   let meet_value = meet_value

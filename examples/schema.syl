@@ -1,0 +1,104 @@
+fun schema (erased _ : unit) : erased type =
+  variant {
+    num,
+    pair : &(schema () ^ schema ()),
+  }
+;;
+
+let schema = schema ();;
+
+fun denote (static erased s : schema) : erased type =
+  match erased s {
+    .num -> int,
+    .pair &(a, b) -> denote a ^ denote b,
+  }
+;;
+
+let sch = schema.pair box (schema.num, schema.pair box (schema.num, schema.num));;
+
+let v = (1, (2, 3)) : denote sch;;
+
+fun total (static erased s : schema) : (denote s -> dynamic int) =
+  fn (x : denote s) ->
+    match erased s {
+      .num -> x,
+      .pair &(a, b) -> match x { (l, r) -> total a l + total b r },
+    }
+;;
+
+let _ = print_int (total sch v);;
+
+fun leaves (static s : schema) : static int =
+  match static s {
+    .num -> 1,
+    .pair &(a, b) -> leaves a + leaves b,
+  }
+;;
+
+let _ = assert erased (leaves sch == 3);;
+
+let _ = print_int (leaves sch);;
+
+fun balanced (static d : int) : schema =
+  if erased d == 0 then schema.num else let sub = balanced (d - 1) in schema.pair box (sub, sub)
+;;
+
+let _ = assert erased (leaves (balanced 3) == 8);;
+
+fun fill (static erased s : schema) : (int -> denote s) =
+  fn (n : int) ->
+    match erased s {
+      .num -> n,
+      .pair &(a, b) -> (fill a n, fill b n),
+    }
+;;
+
+let _ = print_int (total (balanced 3) (fill (balanced 3) 5));;
+
+fun list (erased t : type) : erased type =
+  variant {
+    nil,
+    cons : t ^ &(list t),
+  }
+;;
+
+fun rose (erased t : type) : erased type =
+  variant {
+    leaf : t,
+    branch : &(list (rose t)),
+  }
+;;
+
+fun sum_rose (r : rose int) : dynamic int =
+  match r {
+    .leaf n -> n,
+    .branch &items -> sum_list items,
+  }
+and sum_list (l : list (rose int)) : dynamic int =
+  match l {
+    .nil -> 0,
+    .cons (r, &rest) -> sum_rose r + sum_list rest,
+  }
+;;
+
+let leaf1 = (rose int).leaf 1;;
+
+let leaf2 = (rose int).leaf 2;;
+
+let inner = (rose int).branch box ((list (rose int)).cons (leaf2, box ((list (rose int)).nil)));;
+
+let forest =
+  (list (rose int)).cons (leaf1, box ((list (rose int)).cons (inner, box ((list (rose int)).nil))))
+;;
+
+let _ = print_int (sum_rose ((rose int).branch box forest));;
+
+(* The same data can be interpreted at runtime *)
+fun runtime_leaves (s : schema) : dynamic int =
+  match s {
+    .num -> 1,
+    .pair &(a, b) -> runtime_leaves a + runtime_leaves b,
+  }
+;;
+
+let _ = print_int (runtime_leaves sch);;

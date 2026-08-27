@@ -38,6 +38,23 @@ let _ = print_int (sum xs);;
   [%expect {| 3 |}]
 ;;
 
+let%expect_test "one allocation can hold multiple recursive children" =
+  go
+    {|
+fun pair (erased t : type) : erased type = t ^ t;;
+fun tree (erased t : type) : erased type =
+  variant { leaf : t, node : &(pair (tree t)) }
+;;
+fun sum (dynamic x : tree int) : dynamic int =
+  match x { .leaf n -> n, .node &(left, right) -> sum left + sum right }
+;;
+let t = (tree int).node
+  (box ((tree int).leaf 1, (tree int).node (box ((tree int).leaf 2, (tree int).leaf 3))));;
+let _ = print_int (sum t);;
+|};
+  [%expect {| 6 |}]
+;;
+
 let%expect_test "ref round trip" =
   go
     {|
@@ -253,4 +270,72 @@ let quad = box (box (((1, 2), (3, 4)))) : perfect int 2;;
 let _ = print_int (match quad { &(&(((a, b), (c, d)))) -> a + b + c + d });;
 |};
   [%expect {| 10 |}]
+;;
+
+let%expect_test "guardedness spellings agree at runtime" =
+  go
+    {|
+fun tree (erased t : type) : erased type =
+  let self = tree t in
+  variant { leaf : t, node : &(self ^ self) }
+;;
+fun sum (dynamic x : tree int) : dynamic int =
+  match x { .leaf n -> n, .node &(a, b) -> sum a + sum b }
+;;
+let t = (tree int).node (box ((tree int).leaf 1, (tree int).node (box ((tree int).leaf 2, (tree int).leaf 3))));;
+let _ = print_int (sum t);;
+|};
+  [%expect {| 6 |}]
+;;
+
+let%expect_test "a nested variant former under one ref round-trips" =
+  go
+    {|
+fun tree (erased t : type) : erased type =
+  variant { leaf : t, node : &(variant { one : tree t, two : tree t ^ tree t }) }
+;;
+fun sum (dynamic x : tree int) : dynamic int =
+  match x {
+    .leaf n -> n,
+    .node (&inner) -> match inner { .one t -> sum t, .two (a, b) -> sum a + sum b },
+  }
+;;
+let t = (tree int).node (box ((variant { one : tree int, two : tree int ^ tree int }).two ((tree int).leaf 1, (tree int).leaf 2)));;
+let _ = print_int (sum t);;
+|};
+  [%expect {| 3 |}]
+;;
+
+let%expect_test "demanded recursive erased computation reaches runtime" =
+  go
+    {|
+fun count (static n : int) : erased int = if erased (n == 0) then 0 else count (n - 1);;
+fun use (static n : int) : dynamic unit =
+  match erased (count n) { 0 -> print_int 7, _ -> print_int 8 };;
+let _ = use 3;;
+|};
+  [%expect {| 7 |}]
+;;
+
+let%expect_test "quoting descends through folded content types" =
+  go
+    {|
+fun pairs (erased _ : unit) : erased type = variant { num : int, pair : &(pairs () ^ pairs ()) };;
+let p = (pairs ()).pair box ((pairs ()).num 1, (pairs ()).num 2);;
+fun sum (s : pairs ()) : dynamic int = match s { .num n -> n, .pair &(a, b) -> sum a + sum b };;
+let _ = print_int (sum p);;
+|};
+  [%expect {| 3 |}]
+;;
+
+(* Pi lowers to an opaque environment, so an erased parameter's type needs no
+   finite layout even when the lambda itself is emitted. *)
+let%expect_test "an erased parameter of infinite layout stays opaque" =
+  go
+    {|
+fun bad (erased t : type) : erased type = variant { nil, cons : bad t };;
+let f = fn (static erased x : bad int) -> 6;;
+let _ = print_int (f ((bad int).nil));;
+|};
+  [%expect {| 6 |}]
 ;;

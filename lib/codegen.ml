@@ -18,26 +18,12 @@ using syl_int = int64_t;
 using syl_env = char*;
 using syl_ref = char*;
 
-template<typename Arg, typename Ret>
-struct syl_closure {
-  Ret(*fn)(Arg, syl_env);
+struct syl_fn {
+  void* fn;
   syl_env env;
 
   operator syl_env() { return env; }
-  Ret operator()(Arg arg) { return fn(arg, env); }
 };
-
-template<typename Ret>
-struct syl_closure<syl_unit,Ret> {
-  Ret(*fn)(syl_env);
-  syl_env env;
-
-  operator syl_env() { return env; }
-  Ret operator()() { return fn(env); }
-};
-
-template<typename Ret>
-using syl_thunk = syl_closure<syl_unit, Ret>;
 
 template<typename...> struct syl_tuple;
 
@@ -160,7 +146,7 @@ module State = struct
   ;;
 end
 
-let print_key (key : int) = "ᵏ" ^ Int.to_string key
+let print_key key = "ᵏ" ^ Int.to_string (Hashcons.Tag.to_int key)
 
 let print_path (path : Path.t) =
   List.concat_map path ~f:(function
@@ -179,7 +165,7 @@ let rec print_ty (ty : Ty.t) =
   | Int -> "syl_int"
   | Type -> "syl_type"
   | Env -> "syl_env"
-  | Closure { arg_ty; ret_ty } -> sprintf "syl_closure<%s,%s>" (print_ty arg_ty) (print_ty ret_ty)
+  | Fn -> "syl_fn"
   | Tuple _ when Ty.is_zero_size ty -> "syl_tuple_void"
   | Tuple elts ->
     let args =
@@ -218,13 +204,22 @@ let print_expr_nonzero (expr : Expr.t) =
     in
     Printf.sprintf "syl_capture(%s)" (String.concat_array ~sep:", " paths)
   | Make_env_rec { length; _ } -> Printf.sprintf "syl_env_rec(%d)" length
-  | Make_closure { body; env; ty; _ } ->
+  | Make_closure { body; env; _ } ->
     let env = Option.value_map env ~f:print_path ~default:"NULL" in
-    Printf.sprintf "%s{%s, %s}" (print_ty ty) (print_path body) env
-  | Apply_closure { fn; arg; arg_ty; _ } ->
+    Printf.sprintf "syl_fn{(void*)%s, %s}" (print_path body) env
+  | Make_binder { env; _ } -> Printf.sprintf "syl_fn{(void*)0, %s}" (print_path env)
+  | Apply_closure { fn; arg; arg_ty; ty; _ } ->
     if Ty.is_zero_size arg_ty
-    then Printf.sprintf "%s()" (print_path fn)
-    else Printf.sprintf "%s(%s)" (print_path fn) (print_path arg)
+    then
+      Printf.sprintf "((%s(*)(syl_env))%s.fn)(%s.env)" (print_ty ty) (print_path fn) (print_path fn)
+    else
+      Printf.sprintf
+        "((%s(*)(%s, syl_env))%s.fn)(%s, %s.env)"
+        (print_ty ty)
+        (print_ty arg_ty)
+        (print_path fn)
+        (print_path arg)
+        (print_path fn)
   | Extcall { symbol; arg; arg_ty; _ } ->
     if Ty.is_zero_size arg_ty
     then Printf.sprintf "%s()" symbol
@@ -277,10 +272,18 @@ let print_expr_zero (expr : Expr.t) =
         if Ty.is_zero_size ty then None else Some (print_path path))
     in
     Printf.sprintf "syl_fill_env(%s, %s)" (print_path path) (String.concat_array ~sep:", " paths)
-  | Apply_closure { fn; arg; arg_ty; _ } ->
+  | Apply_closure { fn; arg; arg_ty; ty; _ } ->
     if Ty.is_zero_size arg_ty
-    then Printf.sprintf "%s()" (print_path fn)
-    else Printf.sprintf "%s(%s)" (print_path fn) (print_path arg)
+    then
+      Printf.sprintf "((%s(*)(syl_env))%s.fn)(%s.env)" (print_ty ty) (print_path fn) (print_path fn)
+    else
+      Printf.sprintf
+        "((%s(*)(%s, syl_env))%s.fn)(%s, %s.env)"
+        (print_ty ty)
+        (print_ty arg_ty)
+        (print_path fn)
+        (print_path arg)
+        (print_path fn)
   | Apply_thunk { fn; env; _ } -> Printf.sprintf "%s(%s)" (print_path fn) (print_path env)
   | Apply_proc { fn; arg; arg_ty; env; _ } ->
     if Ty.is_zero_size arg_ty
@@ -294,6 +297,7 @@ let print_expr_zero (expr : Expr.t) =
   | Make_env _
   | Make_env_rec _
   | Make_closure _
+  | Make_binder _
   | Make_variant _
   | Make_ref _
   | Tag_test _ -> raise_s [%message "Bug: expected zero-size" (expr : Expr.t)]

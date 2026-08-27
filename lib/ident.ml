@@ -93,7 +93,7 @@ module Label = struct
 end
 
 module T = struct
-  type t = Raw.t * (int[@sexp.opaque]) [@@deriving sexp, compare, equal, hash]
+  type t = Raw.t * (Ids.Stamp.t[@sexp.opaque]) [@@deriving sexp, compare, equal, hash]
 end
 
 include T
@@ -101,6 +101,8 @@ include Hashable.Make (T)
 include Comparable.Make (T)
 
 let create raw ~stamp = raw, stamp
+let fresh raw = raw, Ids.Stamp.create ()
+let unbound raw = raw, Ids.Stamp.of_int_exn (-1)
 
 let is_anon : t -> bool = function
   | Anon, _ -> true
@@ -108,9 +110,9 @@ let is_anon : t -> bool = function
 ;;
 
 let print () (raw, stamp) =
-  match stamp with
+  match Ids.Stamp.to_int_exn stamp with
   | 0 -> Raw.print () raw
-  | _ -> Raw.print () raw ^ "ˢ" ^ Int.to_string stamp
+  | stamp -> Raw.print () raw ^ "ˢ" ^ Int.to_string stamp
 ;;
 
 let name () ((raw, stamp) : t) =
@@ -134,7 +136,7 @@ let name () ((raw, stamp) : t) =
     | Binop Gte -> "opˢgte"
     | Id id -> id
   in
-  match stamp with
+  match Ids.Stamp.to_int_exn stamp with
   | 0 -> name
-  | _ -> name ^ "ˢ" ^ Int.to_string stamp
+  | stamp -> name ^ "ˢ" ^ Int.to_string stamp
 ;;

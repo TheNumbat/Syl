@@ -64,6 +64,8 @@ module Error : sig
         }
     | Unknown_builtin of Ident.t * string
     | Static_external of Ident.t * string
+    | Erased_external of Ident.t * string
+    | Erased_dynamic_argument of Modes.t
     | Static_failure of Builtin.Error.t
     | Erased_application of
         { fn : Value.t
@@ -75,6 +77,7 @@ module Error : sig
         ; value : Value.t
         }
     | Unreachable_reached
+    | Infinite_size of Tst.Value.t
     | Misplaced_unreachable of Misplaced.t
     | Gave_up of t
   [@@deriving sexp_of]
@@ -89,6 +92,9 @@ module For_testing : sig
   exception Gave_up
 
   val create_state : unit -> state
+  val register_group : state -> (Ident.t * Ids.Fn.t * Ids.Family.t * Tst.Desc.t) list -> unit
+  val settle_group : state -> (Ids.Fn.t * Value.t) list -> unit
+  val wait : state -> Ids.Fn.t -> (unit -> unit) -> unit
   val leq_value : state -> Value.t -> Value.t -> bool
   val join_value : state -> Value.t -> Value.t -> Value.t option
   val meet_value : state -> Value.t -> Value.t -> Value.t option

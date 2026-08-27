@@ -743,12 +743,12 @@ fun f (x : int) : int =
   }
 ;;
 |};
-  [%expect {| ((loc ((line 3) (column 11))) (reason (Recursion_limit 1000))) |}]
+  [%expect {| ((loc ((line 3) (column 16))) (reason (Recursion_limit 1000))) |}]
 ;;
 
 let%expect_test "if erased on a self-referential static is an error" =
   go {| fun f (x : int) : bool = let e = (f 1) @ erased in if erased e then x == 1 else x != 1;; |};
-  [%expect {| ((loc ((line 1) (column 35))) (reason (Recursion_limit 1000))) |}]
+  [%expect {| ((loc ((line 1) (column 40))) (reason (Recursion_limit 1000))) |}]
 ;;
 
 let%expect_test "match static pattern arity mismatch is a clean error" =
@@ -1034,7 +1034,9 @@ let%test_unit "missing witnesses cover every unmatched value" =
          (Nonempty_list.of_list_exn
             [ Value.type_ Bool; Value.type_ Int; Value.type_ (Ty.Ref (Value.type_ Int)) ]))
   in
-  let wild : Dst.Expr.pattern = Var { id = Ident.create Ident.Raw.anon ~stamp:0; loc } in
+  let wild : Dst.Expr.pattern =
+    Var { id = Ident.create Ident.Raw.anon ~stamp:(Ids.Stamp.create ()); loc }
+  in
   let bool_pat =
     union
       [ return wild

@@ -933,3 +933,45 @@ let _ = f true (fn (v : int) -> v);;
 |};
   [%expect {| |}]
 ;;
+
+(* A dynamic erased argument is self-contradictory — passed at runtime, never
+   existing at runtime — so the former rejects it. A bare [erased] annotation
+   resolves static and forms a Pi, so no arrow can carry an erased argument
+   at all, and argument erasure stays contravariant vacuously. *)
+let%expect_test "a dynamic erased parameter is rejected" =
+  go {|let f = fn (dynamic erased x : int) -> 6;;|};
+  [%expect
+    {|
+    ((loc ((line 1) (column 8)))
+     (reason (Erased_dynamic_argument ((staticity Dynamic) (erasure Erased)))))
+    |}]
+;;
+
+let%expect_test "a dynamic erased arrow type is rejected" =
+  go {|let t = dynamic erased int -> dynamic int;;|};
+  [%expect
+    {|
+    ((loc ((line 1) (column 23)))
+     (reason (Erased_dynamic_argument ((staticity Dynamic) (erasure Erased)))))
+    |}]
+;;
+
+(* An external's arguments and result are real C values: erased spellings die
+   as the static Pi they form, or as ghosts on the return. *)
+let%expect_test "an external cannot take an erased argument" =
+  go {|external foo : erased int -> dynamic int = foo;;|};
+  [%expect
+    {|
+    ((loc ((line 1) (column 0)))
+     (reason (Static_external ((Id foo) <opaque>) foo)))
+    |}]
+;;
+
+let%expect_test "an external cannot return an erased value" =
+  go {|external foo : int -> dynamic erased int = foo;;|};
+  [%expect
+    {|
+    ((loc ((line 1) (column 0)))
+     (reason (Erased_external ((Id foo) <opaque>) foo)))
+    |}]
+;;

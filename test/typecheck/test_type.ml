@@ -3389,10 +3389,8 @@ let _ = f 42;;
   |};
   [%expect
     {|
-    ((loc ((line 2) (column 41)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
+    ((loc ((line 2) (column 8)))
+     (reason (Erased_dynamic_argument ((staticity Dynamic) (erasure Erased)))))
     |}]
 ;;
 
@@ -3404,10 +3402,8 @@ let _ = f 42;;
   |};
   [%expect
     {|
-    ((loc ((line 2) (column 41)))
-     (reason
-      (Mode_mismatch (got ((staticity Dynamic) (erasure Erased)))
-       (need ((staticity Dynamic) (erasure Unerased))))))
+    ((loc ((line 2) (column 4)))
+     (reason (Erased_dynamic_argument ((staticity Dynamic) (erasure Erased)))))
     |}]
 ;;
 

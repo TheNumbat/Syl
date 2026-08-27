@@ -112,8 +112,14 @@ let compile_to_exe file output =
     let cmd = sprintf "clang++ -O2 -o %s %s" (Filename.quote output) (Filename.quote c_file) in
     (match Core_unix.system cmd with
      | Ok () -> ()
-     | Error (`Exit_non_zero exit_code) -> print_s [%message "Clang failed" (exit_code : int)]
-     | Error (`Signal signal) -> print_s [%message "Clang killed" (signal : Signal.t)]);
+     | Error (`Exit_non_zero exit_code) ->
+       print_s [%message "Clang failed" (exit_code : int)];
+       Core_unix.unlink c_file;
+       Stdlib.exit 1
+     | Error (`Signal signal) ->
+       print_s [%message "Clang killed" (signal : Signal.t)];
+       Core_unix.unlink c_file;
+       Stdlib.exit 1);
     Core_unix.unlink c_file)
 ;;
 
@@ -140,8 +146,12 @@ let run =
        Core_unix.unlink exe;
        match status with
        | Ok () -> ()
-       | Error (`Exit_non_zero exit_code) -> print_s [%message "Program failed" (exit_code : int)]
-       | Error (`Signal signal) -> print_s [%message "Program killed" (signal : Signal.t)])
+       | Error (`Exit_non_zero exit_code) ->
+         print_s [%message "Program failed" (exit_code : int)];
+         Stdlib.exit (if exit_code >= 1 && exit_code <= 255 then exit_code else 1)
+       | Error (`Signal signal) ->
+         print_s [%message "Program killed" (signal : Signal.t)];
+         Stdlib.exit 1)
 ;;
 
 let json_escape =
