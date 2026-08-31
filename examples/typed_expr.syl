@@ -33,7 +33,7 @@ fun expr (erased s : sort) : erased type =
   }
 ;;
 
-fun eval (erased s : sort) : expr s -> dynamic value s =
+fun eval (erased s : sort) : expr s -> value s =
   fn (e : expr s) ->
     match erased s {
       .int ->
