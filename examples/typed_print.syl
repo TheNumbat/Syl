@@ -32,6 +32,6 @@ let _ = render int_then_bool 42 true;;
 
 let _ = render bool_then_two_ints false 20 22;;
 
-let _ = render int_then_bool : int -> (bool -> unit);;
+let _ = render int_then_bool : int -> bool -> unit;;
 
-let _ = render bool_then_two_ints : bool -> (int -> (int -> unit));;
+let _ = render bool_then_two_ints : bool -> int -> int -> unit;;
