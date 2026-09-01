@@ -92,9 +92,6 @@ module For_testing : sig
   exception Gave_up
 
   val create_state : unit -> state
-  val register_group : state -> (Ident.t * Ids.Fn.t * Ids.Family.t * Tst.Desc.t) list -> unit
-  val settle_group : state -> (Ids.Fn.t * Value.t) list -> unit
-  val wait : state -> Ids.Fn.t -> (unit -> unit) -> unit
   val leq_value : state -> Value.t -> Value.t -> bool
   val join_value : state -> Value.t -> Value.t -> Value.t option
   val meet_value : state -> Value.t -> Value.t -> Value.t option

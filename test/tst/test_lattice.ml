@@ -442,6 +442,209 @@ let%test_unit "an ordered pair's join and meet are its sides" =
   | m -> raise_s [%message "meet with bottom is not bottom" (m : Value.t option)]
 ;;
 
+let%test_unit "arrow bounds preserve return-mode covariance" =
+  let state = Typecheck.For_testing.create_state () in
+  let low = Modes.bottom () in
+  let high = Modes.create ~staticity:Parametric ~erasure:Unerased in
+  let a = arrow ~arg_mode:low ~ret_mode:low in
+  let b = arrow ~arg_mode:high ~ret_mode:high in
+  let leq = Typecheck.For_testing.leq_value state in
+  assert (not (leq a b));
+  assert (not (leq b a));
+  (match Typecheck.For_testing.join_value state a b with
+   | Some { node = Type (Arrow { ret_mode; _ }); _ } when Modes.equal ret_mode high -> ()
+   | result -> raise_s [%message "arrow join return mode" (result : Value.t option)]);
+  match Typecheck.For_testing.meet_value state a b with
+  | Some { node = Type (Arrow { ret_mode; _ }); _ } when Modes.equal ret_mode low -> ()
+  | result -> raise_s [%message "arrow meet return mode" (result : Value.t option)]
+;;
+
+let%test_unit "arrow bounds preserve type variance" =
+  let state = Typecheck.For_testing.create_state () in
+  let mode = Modes.default () in
+  let x = fresh_var () in
+  let make arg_ty ret_ty =
+    Value.type_ (Ty.Arrow { arg_ty; arg_mode = mode; ret_ty; ret_mode = mode })
+  in
+  let a = make Value.bottom Value.bottom in
+  let b = make x x in
+  let leq = Typecheck.For_testing.leq_value state in
+  assert (not (leq a b));
+  assert (not (leq b a));
+  (match Typecheck.For_testing.join_value state a b with
+   | Some { node = Type (Arrow { arg_ty; ret_ty; _ }); _ }
+     when Value.equal arg_ty Value.bottom && Value.equal ret_ty x -> ()
+   | result -> raise_s [%message "arrow join type variance" (result : Value.t option)]);
+  match Typecheck.For_testing.meet_value state a b with
+  | Some { node = Type (Arrow { arg_ty; ret_ty; _ }); _ }
+    when Value.equal arg_ty x && Value.equal ret_ty Value.bottom -> ()
+  | result -> raise_s [%message "arrow meet type variance" (result : Value.t option)]
+;;
+
+let%test_unit "tuple type bounds are pointwise covariant" =
+  let state = Typecheck.For_testing.create_state () in
+  let low = Modes.bottom () in
+  let high = Modes.create ~staticity:Parametric ~erasure:Unerased in
+  let field_a = arrow ~arg_mode:low ~ret_mode:low in
+  let field_b = arrow ~arg_mode:high ~ret_mode:high in
+  let tuple field = Value.type_ (Ty.Tuple (Nonempty_list.singleton field)) in
+  let a = tuple field_a in
+  let b = tuple field_b in
+  let check name ~arg_mode ~ret_mode (result : Value.t option) =
+    match result with
+    | Some { node = Type (Tuple fields); _ } ->
+      let (field :: rest) = fields in
+      (match field.node, rest with
+       | Type (Arrow { arg_mode = got_arg; ret_mode = got_ret; _ }), []
+         when Modes.equal got_arg arg_mode && Modes.equal got_ret ret_mode -> ()
+       | _ ->
+         raise_s
+           [%message
+             "tuple type bound polarity" (name : string) (field : Value.t) (rest : Value.t list)])
+    | result ->
+      raise_s [%message "tuple type bound polarity" (name : string) (result : Value.t option)]
+  in
+  check "join" ~arg_mode:low ~ret_mode:high (Typecheck.For_testing.join_value state a b);
+  check "meet" ~arg_mode:high ~ret_mode:low (Typecheck.For_testing.meet_value state a b)
+;;
+
+let%test_unit "variant payload bounds are pointwise covariant" =
+  let state = Typecheck.For_testing.create_state () in
+  let low = Modes.bottom () in
+  let high = Modes.create ~staticity:Parametric ~erasure:Unerased in
+  let payload_a = arrow ~arg_mode:low ~ret_mode:low in
+  let payload_b = arrow ~arg_mode:high ~ret_mode:high in
+  let variant payload =
+    Value.type_ (Ty.Variant (Ident.Label.Map.singleton label_a (Some payload)))
+  in
+  let check name ~arg_mode ~ret_mode (result : Value.t option) =
+    match result with
+    | Some { node = Type (Variant constructors); _ } ->
+      (match Map.find_exn constructors label_a with
+       | Some { node = Type (Arrow { arg_mode = got_arg; ret_mode = got_ret; _ }); _ }
+         when Modes.equal got_arg arg_mode && Modes.equal got_ret ret_mode -> ()
+       | payload ->
+         raise_s
+           [%message "variant payload bound polarity" (name : string) (payload : Value.t option)])
+    | result ->
+      raise_s [%message "variant type bound polarity" (name : string) (result : Value.t option)]
+  in
+  check
+    "join"
+    ~arg_mode:low
+    ~ret_mode:high
+    (Typecheck.For_testing.join_value state (variant payload_a) (variant payload_b));
+  check
+    "meet"
+    ~arg_mode:high
+    ~ret_mode:low
+    (Typecheck.For_testing.meet_value state (variant payload_a) (variant payload_b))
+;;
+
+let%test_unit "Pi argument bounds are contravariant" =
+  let state = Typecheck.For_testing.create_state () in
+  let low = Modes.bottom () in
+  let high = Modes.create ~staticity:Parametric ~erasure:Unerased in
+  let arg_a = arrow ~arg_mode:low ~ret_mode:low in
+  let arg_b = arrow ~arg_mode:high ~ret_mode:high in
+  let mode = Modes.default () in
+  let pi arg_ty =
+    Value.type_
+      (Ty.Pi { arg_ty; arg_mode = mode; ret_ty = Dependent.mono (Value.type_ Int); ret_mode = mode })
+  in
+  let check name ~arg_mode ~ret_mode (result : Value.t option) =
+    match result with
+    | Some { node = Type (Pi { arg_ty; _ }); _ } ->
+      (match arg_ty.node with
+       | Type (Arrow { arg_mode = got_arg; ret_mode = got_ret; _ })
+         when Modes.equal got_arg arg_mode && Modes.equal got_ret ret_mode -> ()
+       | _ -> raise_s [%message "Pi argument bound polarity" (name : string) (arg_ty : Value.t)])
+    | result ->
+      raise_s [%message "Pi type bound polarity" (name : string) (result : Value.t option)]
+  in
+  check
+    "join"
+    ~arg_mode:high
+    ~ret_mode:low
+    (Typecheck.For_testing.join_value state (pi arg_a) (pi arg_b));
+  check
+    "meet"
+    ~arg_mode:low
+    ~ret_mode:high
+    (Typecheck.For_testing.meet_value state (pi arg_a) (pi arg_b))
+;;
+
+let%test_unit "Pi bounds preserve mode variance and covariant returns" =
+  let state = Typecheck.For_testing.create_state () in
+  let low = Modes.bottom () in
+  let high = Modes.create ~staticity:Parametric ~erasure:Unerased in
+  let ret = fresh_var () in
+  let pi ~arg_mode ~ret_mode ret_ty =
+    Value.type_
+      (Ty.Pi { arg_ty = Value.type_ Int; arg_mode; ret_ty = Dependent.mono ret_ty; ret_mode })
+  in
+  let a = pi ~arg_mode:low ~ret_mode:low Value.bottom in
+  let b = pi ~arg_mode:high ~ret_mode:high ret in
+  let check name ~arg_mode ~ret_mode ~ret_ty (result : Value.t option) =
+    match result with
+    | Some
+        { node =
+            Type (Pi { arg_mode = got_arg; ret_mode = got_ret; ret_ty = T { ty = got_ty; _ }; _ })
+        ; _
+        }
+      when Modes.equal got_arg arg_mode && Modes.equal got_ret ret_mode && Value.equal got_ty ret_ty
+      -> ()
+    | result -> raise_s [%message "Pi bound variance" (name : string) (result : Value.t option)]
+  in
+  check "join" ~arg_mode:low ~ret_mode:high ~ret_ty:ret (Typecheck.For_testing.join_value state a b);
+  check
+    "meet"
+    ~arg_mode:high
+    ~ret_mode:low
+    ~ret_ty:Value.bottom
+    (Typecheck.For_testing.meet_value state a b)
+;;
+
+let%test_unit "mixed Arrow and Pi bounds preserve variance" =
+  let state = Typecheck.For_testing.create_state () in
+  let low = Modes.bottom () in
+  let high = Modes.create ~staticity:Parametric ~erasure:Unerased in
+  let arg_a = arrow ~arg_mode:low ~ret_mode:low in
+  let arg_b = arrow ~arg_mode:high ~ret_mode:high in
+  let ret = fresh_var () in
+  let arrow_ty =
+    Value.type_ (Ty.Arrow { arg_ty = arg_a; arg_mode = low; ret_ty = Value.bottom; ret_mode = low })
+  in
+  let pi_ty =
+    Value.type_
+      (Ty.Pi { arg_ty = arg_b; arg_mode = high; ret_ty = Dependent.mono ret; ret_mode = high })
+  in
+  let check_arg name ~arg_mode ~ret_mode (arg_ty : Value.t) =
+    match arg_ty.node with
+    | Type (Arrow { arg_mode = got_arg; ret_mode = got_ret; _ })
+      when Modes.equal got_arg arg_mode && Modes.equal got_ret ret_mode -> ()
+    | _ -> raise_s [%message "mixed function argument polarity" (name : string) (arg_ty : Value.t)]
+  in
+  let check_join name (result : Value.t option) =
+    match result with
+    | Some { node = Type (Pi { arg_ty; arg_mode; ret_ty = T { ty; _ }; ret_mode }); _ }
+      when Modes.equal arg_mode low && Modes.equal ret_mode high && Value.equal ty ret ->
+      check_arg name ~arg_mode:high ~ret_mode:low arg_ty
+    | result -> raise_s [%message "mixed function join" (name : string) (result : Value.t option)]
+  in
+  let check_meet name (result : Value.t option) =
+    match result with
+    | Some { node = Type (Arrow { arg_ty; arg_mode; ret_ty; ret_mode }); _ }
+      when Modes.equal arg_mode high && Modes.equal ret_mode low && Value.equal ret_ty Value.bottom
+      -> check_arg name ~arg_mode:low ~ret_mode:high arg_ty
+    | result -> raise_s [%message "mixed function meet" (name : string) (result : Value.t option)]
+  in
+  check_join "Arrow/Pi" (Typecheck.For_testing.join_value state arrow_ty pi_ty);
+  check_join "Pi/Arrow" (Typecheck.For_testing.join_value state pi_ty arrow_ty);
+  check_meet "Arrow/Pi" (Typecheck.For_testing.meet_value state arrow_ty pi_ty);
+  check_meet "Pi/Arrow" (Typecheck.For_testing.meet_value state pi_ty arrow_ty)
+;;
+
 (* Mode antichains make the pair genuinely unordered, so neither the ordered
    pick nor the aligned structural row applies: only the conditional
    representative can exhibit the bound, and [leq]'s arm rules must verify it.
@@ -499,4 +702,152 @@ let%test_unit "arm decomposition assumes the arm's pattern" =
   if not (leq conditional c) then raise_s [%message "a-side fact missing" (conditional : Value.t)];
   let conditional = Value.if_ ~cond:c ~then_:(Bool.const true) ~else_:c in
   if not (leq c conditional) then raise_s [%message "b-side fact missing" (conditional : Value.t)]
+;;
+
+let%test_unit "scalar operators omitted by the generator are reflexive" =
+  let state = Typecheck.For_testing.create_state () in
+  let x = fresh_var () in
+  let y = fresh_var () in
+  let values =
+    [ Bool.neq x y; Bool.lte x y; Bool.gt x y; Bool.gte x y; Int.div x y; Int.mod_ x y ]
+  in
+  List.iter values ~f:(fun value ->
+    if not (Typecheck.For_testing.leq_value state value value)
+    then raise_s [%message "scalar node is not reflexive" (value : Value.t)])
+;;
+
+(* [partial] is strictly below [n]: in the zero world it equals [n], and in
+   the wildcard world it is bottom.  Crossing the two operands forces the
+   structural join rows instead of either ordered fast path. *)
+let%test_unit "scalar joins preserve the operator" =
+  let state = Typecheck.For_testing.create_state () in
+  let n = fresh_var () in
+  let partial =
+    Value.match_
+      ~scrutinee:n
+      ~arms:
+        (Nonempty_list.create
+           (Pattern.Canon.Literal (Dst.Literal.Int 0L), Int.const 0L)
+           [ Pattern.Canon.Wild, Value.bottom ])
+  in
+  let join a b = Typecheck.For_testing.join_value state a b in
+  let expect_binary name make =
+    let expected = make n n in
+    match join (make partial n) (make n partial) with
+    | Some result when Value.equal result expected -> ()
+    | result ->
+      raise_s
+        [%message
+          "binary join changed operator"
+            (name : string)
+            (expected : Value.t)
+            (result : Value.t option)]
+  in
+  List.iter
+    [ "and", Bool.and_
+    ; "or", Bool.or_
+    ; "eq", Bool.eq
+    ; "neq", Bool.neq
+    ; "lt", Bool.lt
+    ; "lte", Bool.lte
+    ; "gt", Bool.gt
+    ; "gte", Bool.gte
+    ; "add", Int.add
+    ; "sub", Int.sub
+    ; "mul", Int.mul
+    ; "div", Int.div
+    ; "mod", Int.mod_
+    ]
+    ~f:(fun (name, make) -> expect_binary name make);
+  let left = Value.tuple (Nonempty_list.create partial [ n ]) in
+  let right = Value.tuple (Nonempty_list.create n [ partial ]) in
+  let joined = Value.tuple (Nonempty_list.create n [ n ]) in
+  let expect_unary name make =
+    let expected = make joined in
+    match join (make left) (make right) with
+    | Some result when Value.equal result expected -> ()
+    | result ->
+      raise_s
+        [%message
+          "unary join changed operator"
+            (name : string)
+            (expected : Value.t)
+            (result : Value.t option)]
+  in
+  expect_unary "not" Bool.not_;
+  expect_unary "neg" Int.neg
+;;
+
+let%test_unit "neutral constructors keep their identities" =
+  let state = Typecheck.For_testing.create_state () in
+  let leq = Typecheck.For_testing.leq_value state in
+  let distinct name a b =
+    if leq a b || leq b a
+    then
+      raise_s
+        [%message "distinct neutrals compare equal" (name : string) (a : Value.t) (b : Value.t)]
+  in
+  distinct "primitive" (Value.prim (Builtin.Prim.Int Add)) (Value.prim (Builtin.Prim.Int Sub));
+  let external_ty = arrow ~arg_mode:(Modes.default ()) ~ret_mode:(Modes.default ()) in
+  distinct
+    "external"
+    (Value.external_ ~symbol:"external_a" ~ty:external_ty)
+    (Value.external_ ~symbol:"external_b" ~ty:external_ty);
+  let variant_ty =
+    Value.type_ (Ty.Variant (Ident.Label.Map.of_alist_exn [ label_a, None; label_b, None ]))
+  in
+  distinct
+    "injection"
+    (Value.inject ~ty:variant_ty ~label:label_a)
+    (Value.inject ~ty:variant_ty ~label:label_b);
+  distinct
+    "constructor"
+    (Value.constructor ~label:label_a ~payload:None)
+    (Value.constructor ~label:label_b ~payload:None)
+;;
+
+let%test_unit "match neutrals keep their arm patterns" =
+  let state = Typecheck.For_testing.create_state () in
+  let scrutinee = fresh_var () in
+  let match_ literal =
+    Value.match_
+      ~scrutinee
+      ~arms:
+        (Nonempty_list.create
+           (Pattern.Canon.Literal (Dst.Literal.Bool literal), Int.const 0L)
+           [ Pattern.Canon.Wild, Int.const 1L ])
+  in
+  let on_true = match_ true in
+  let on_false = match_ false in
+  let leq = Typecheck.For_testing.leq_value state in
+  if leq on_true on_false || leq on_false on_true
+  then
+    raise_s [%message "different match arms compare equal" (on_true : Value.t) (on_false : Value.t)]
+;;
+
+let%test_unit "variant neutrals with different labels have no structural bound" =
+  let state = Typecheck.For_testing.create_state () in
+  let expect_none name = function
+    | None -> ()
+    | Some result -> raise_s [%message "labels were merged" (name : string) (result : Value.t)]
+  in
+  let variant_ty =
+    Value.type_ (Ty.Variant (Ident.Label.Map.of_alist_exn [ label_a, None; label_b, None ]))
+  in
+  let inject_a = Value.inject ~ty:variant_ty ~label:label_a in
+  let inject_b = Value.inject ~ty:variant_ty ~label:label_b in
+  expect_none "injection join" (Typecheck.For_testing.join_value state inject_a inject_b);
+  expect_none "injection meet" (Typecheck.For_testing.meet_value state inject_a inject_b);
+  let constructor_a = Value.constructor ~label:label_a ~payload:None in
+  let constructor_b = Value.constructor ~label:label_b ~payload:None in
+  expect_none
+    "constructor join"
+    (Typecheck.For_testing.join_value state constructor_a constructor_b);
+  expect_none
+    "constructor meet"
+    (Typecheck.For_testing.meet_value state constructor_a constructor_b);
+  let scrutinee = fresh_var () in
+  let payload_a = Value.payload scrutinee ~label:label_a in
+  let payload_b = Value.payload scrutinee ~label:label_b in
+  expect_none "payload meet" (Typecheck.For_testing.meet_value state payload_a payload_b)
 ;;

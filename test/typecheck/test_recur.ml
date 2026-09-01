@@ -1010,28 +1010,6 @@ fun f (static n : int) : int =
   [%expect {| ((loc ((line 4) (column 19))) (reason (Recursion_limit 1000))) |}]
 ;;
 
-let%expect_test "a waiter runs at settlement, or immediately if already settled" =
-  let state = Typecheck.For_testing.create_state () in
-  let uid = Ids.Fn.create () in
-  Typecheck.For_testing.register_group
-    state
-    [ Ident.fresh Ident.Raw.anon, uid, Ids.Family.create (), Tst.Desc.of_type Tst.Ty.Int ];
-  let woken = ref false in
-  Typecheck.For_testing.wait state uid (fun () -> woken := true);
-  print_s [%sexp (!woken : bool)];
-  Typecheck.For_testing.settle_group state [ uid, Tst.Value.unit ];
-  print_s [%sexp (!woken : bool)];
-  let late = ref false in
-  Typecheck.For_testing.wait state uid (fun () -> late := true);
-  print_s [%sexp (!late : bool)];
-  [%expect
-    {|
-    false
-    true
-    true
-    |}]
-;;
-
 let%expect_test "a group-sibling demand resolves through the settle-time waiter" =
   (* [g 1] is demanded by the erased scrutinee while the group is still
      elaborating: the demand goes stuck on the unsettled name and waits on

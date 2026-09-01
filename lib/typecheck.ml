@@ -2479,9 +2479,6 @@ module For_testing = struct
   exception Gave_up = Gave_up
 
   let create_state () = State.create ()
-  let register_group = State.register_group
-  let settle_group = State.settle_group
-  let wait = State.wait
   let leq_value = leq_value
   let join_value = join_value
   let meet_value = meet_value

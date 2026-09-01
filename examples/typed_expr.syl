@@ -12,41 +12,37 @@ fun value (erased s : sort) : erased type =
   }
 ;;
 
-fun int_expr (erased _ : unit) : erased type =
-  variant {
-    int_lit : int,
-    add : &(int_expr ()) ^ &(int_expr ()),
-    if_ : &(bool_expr ()) ^ &(int_expr ()) ^ &(int_expr ()),
-  }
-and bool_expr (erased _ : unit) : erased type =
-  variant {
-    bool_lit : bool,
-    eq : &(int_expr ()) ^ &(int_expr ()),
-    not : &(bool_expr ()),
-  }
-;;
-
 fun expr (erased s : sort) : erased type =
   match erased s {
-    .int -> int_expr (),
-    .bool -> bool_expr (),
+    .int ->
+      variant {
+        int_lit : int,
+        add : &(expr sort.int ^ expr sort.int),
+        if_ : &(expr sort.bool ^ expr sort.int ^ expr sort.int),
+      },
+    .bool ->
+      variant {
+        bool_lit : bool,
+        eq : &(expr sort.int ^ expr sort.int),
+        not : &(expr sort.bool),
+      },
   }
 ;;
 
-fun eval (erased s : sort) : expr s -> dynamic value s =
+fun eval (erased s : sort) : expr s -> value s =
   fn (e : expr s) ->
     match erased s {
       .int ->
         match e {
           .int_lit n -> n,
-          .add (&left, &right) -> eval sort.int left + eval sort.int right,
-          .if_ (&condition, &yes, &no) ->
+          .add &(left, right) -> eval sort.int left + eval sort.int right,
+          .if_ &(condition, yes, no) ->
             if eval sort.bool condition then eval sort.int yes else eval sort.int no,
         },
       .bool ->
         match e {
           .bool_lit b -> b,
-          .eq (&left, &right) -> eval sort.int left == eval sort.int right,
+          .eq &(left, right) -> eval sort.int left == eval sort.int right,
           .not &inner -> !(eval sort.bool inner),
         },
     }
@@ -58,9 +54,10 @@ let bool_lit = (expr sort.bool).bool_lit;;
 
 let answer =
   (expr sort.int).if_
-    (box ((expr sort.bool).eq (box (int_lit 20), box (int_lit (2 * 10)))),
-     box ((expr sort.int).add (box (int_lit 40), box (int_lit 2))),
-     box (int_lit 0))
+    box
+      (((expr sort.bool).eq box ((int_lit 20), (int_lit (2 * 10)))),
+       ((expr sort.int).add box ((int_lit 40), (int_lit 2))),
+       (int_lit 0))
 ;;
 
 let _ = print_int (eval sort.int answer);;
