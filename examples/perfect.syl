@@ -37,8 +37,8 @@ fun full (erased td : type ^ nat) : elem td -> perfect td =
     }
 ;;
 
-fun sum (erased td : type ^ nat) : (elem td -> dynamic int) -> perfect td -> dynamic int =
-  fn (f : elem td -> dynamic int) ->
+fun sum (erased td : type ^ nat) : (elem td -> int) -> perfect td -> int =
+  fn (f : elem td -> int) ->
     fn (p : perfect td) ->
       match erased td {
         (t, .z) -> f p,
@@ -56,7 +56,7 @@ let _ = print_int (sum (int, two) (fn (x : int) -> x) quad);;
 
 let _ = print_int (sum (int, three) (fn (x : int) -> x) (full (int, three) 1));;
 
-fun ssum (erased td : type ^ nat) : (static (elem td -> int) -> static (perfect td) -> static int) =
+fun ssum (erased td : type ^ nat) : static (elem td -> int) -> static (perfect td) -> int =
   fn (static f : elem td -> int) ->
     fn (static p : perfect td) ->
       match erased td {
@@ -65,7 +65,7 @@ fun ssum (erased td : type ^ nat) : (static (elem td -> int) -> static (perfect 
       }
 ;;
 
-fun pow2 (static n : nat) : static int =
+fun pow2 (static n : nat) : int =
   match static n {
     .z -> 1,
     .s &m -> 2 * pow2 m,

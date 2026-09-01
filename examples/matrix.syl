@@ -1,6 +1,4 @@
-(* Dimension-safe matrix-vector multiplication. Rows and columns are erased
-   indices: they constrain the program, but no sizes or bounds checks survive
-   at runtime. *)
+(* Dimension-indexed matrix-vector multiplication *)
 fun nat (erased _ : unit) : erased type =
   variant {
     z,
