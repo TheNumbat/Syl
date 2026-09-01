@@ -11,8 +11,8 @@ let format = format ();;
 fun printer (erased f : format) : erased type =
   match erased f {
     .end -> unit,
-    .int &rest -> int -> dynamic printer rest,
-    .bool &rest -> bool -> dynamic printer rest,
+    .int &rest -> int -> printer rest,
+    .bool &rest -> bool -> printer rest,
   }
 ;;
 
@@ -32,6 +32,6 @@ let _ = render int_then_bool 42 true;;
 
 let _ = render bool_then_two_ints false 20 22;;
 
-let _ = render int_then_bool : int -> dynamic (bool -> dynamic unit);;
+let _ = render int_then_bool : int -> (bool -> unit);;
 
-let _ = render bool_then_two_ints : bool -> dynamic (int -> dynamic (int -> dynamic unit));;
+let _ = render bool_then_two_ints : bool -> (int -> (int -> unit));;
