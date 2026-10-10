@@ -54,7 +54,7 @@ fun vec (erased t : type) : erased (static nat -> erased type) =
     }
 ;;
 
-fun mk_vec (erased t : type) : (static nat \ n -> t -> vec t n) =
+fun mk_vec (erased t : type) : (static nat as n -> t -> vec t n) =
   fn (static n : nat) ->
     fn (x : t) ->
       match static n {
@@ -69,8 +69,8 @@ let _ =
 ;;
 
 fun append
-  (erased t : type) : (static nat \ n
-                         -> static nat \ m
+  (erased t : type) : (static nat as n
+                         -> static nat as m
                          -> vec t n
                          -> vec t m
                          -> vec t (add (n, m))) =

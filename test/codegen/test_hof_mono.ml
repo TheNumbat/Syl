@@ -372,7 +372,7 @@ let%expect_test "polymorphic identity binder passed as static arg" =
   go
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
-let use_at_int = fn (static p : static erased type \ t -> t -> t) -> p int 42;;
+let use_at_int = fn (static p : static erased type as t -> t -> t) -> p int 42;;
 let _ = print_int (use_at_int id);;
 |};
   [%expect {| 42 |}]
@@ -382,7 +382,7 @@ let%expect_test "polymorphic binder applied at multiple types in receiver" =
   go
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
-fun use_thrice (static p : static erased type \ t -> t -> t) : dynamic unit =
+fun use_thrice (static p : static erased type as t -> t -> t) : dynamic unit =
   let _ = print_int (p int 1) in
   let _ = print_bool (p bool true) in
   let _ = print_int (p int 2) in
@@ -402,7 +402,7 @@ let%expect_test "effect inside polymorphic binder body fires per type instantiat
   go
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> let _ = print_int 99 in x;;
-let use = fn (static p : static erased type \ t -> t -> t) ->
+let use = fn (static p : static erased type as t -> t -> t) ->
   let _ = print_int (p int 1) in
   print_bool (p bool false);;
 let _ = use id;;
@@ -421,7 +421,7 @@ let%expect_test "two distinct binders with same shape → distinct monomorphizat
     {|
 let succ = fn (static erased t : type) -> fn (x : t) -> x;;
 let pred = fn (static erased t : type) -> fn (x : t) -> x;;
-let use_at_int = fn (static p : static erased type \ t -> t -> t) ->
+let use_at_int = fn (static p : static erased type as t -> t -> t) ->
   let _ = print_int (p int 100) in
   print_int (p int 200);;
 let _ = use_at_int succ;;

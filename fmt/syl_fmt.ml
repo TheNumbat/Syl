@@ -257,7 +257,7 @@ and fmt_arrow (cfg : Config.t) (expr : Cst.Expr.t) =
       when List.is_empty expr.before && List.is_empty expr.after ->
       let binding =
         match arg_id with
-        | Some id -> text " \\ " ^^ fmt_ident id
+        | Some id -> text " as " ^^ fmt_ident id
         | None -> nil
       in
       let segment = fmt_modes arg_mode ^^ fmt_expr cfg arg ^^ binding in

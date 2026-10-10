@@ -364,7 +364,7 @@ let%expect_test "if on int with pack arms" =
   go
     {|
 let _ =
-  fun f (x : int) : static (static int \ x -> if x == 0 then unit else int) =
+  fun f (x : int) : static (static int as x -> if x == 0 then unit else int) =
   if x == 0 then
     (fn (static x : int) -> if erased x == 0 then () else x)
   else
@@ -433,7 +433,7 @@ let%expect_test "fun with pack return" =
   go
     {|
 let _ =
-  fun f (x : int) : static (static int \ x -> if x == 0 then unit else int) =
+  fun f (x : int) : static (static int as x -> if x == 0 then unit else int) =
     (fn (static x : int) -> if erased x == 0 then () else x)
   in
   let _ = f 5 in

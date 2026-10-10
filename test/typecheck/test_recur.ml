@@ -534,7 +534,7 @@ fun vec (erased t : type) : erased (static nat -> erased type) =
       .s &m -> variant { cons : t ^ vec t m },
     }
 ;;
-fun mk (erased t : type) : (static nat \ n -> t -> vec t n) =
+fun mk (erased t : type) : (static nat as n -> t -> vec t n) =
   fn (static n : nat) ->
     fn (x : t) ->
       match static n {
@@ -579,7 +579,7 @@ fun vec (erased t : type) : erased (static nat -> erased type) =
   fn (static n : nat) ->
     match static n { .z -> variant { nil }, .s &m -> variant { cons : t ^ vec t m } };;
 fun append
-  (erased t : type) : (static nat \ n -> static nat \ m
+  (erased t : type) : (static nat as n -> static nat as m
                          -> vec t n -> vec t m -> vec t (add (n, m))) =
   fn (static n : nat) -> fn (static m : nat) ->
     fn (v1 : vec t n) -> fn (v2 : vec t m) ->
@@ -605,7 +605,7 @@ fun add (static nm : nat ^ nat) : static nat =
 fun vec (erased t : type) : erased (static nat -> erased type) =
   fn (static n : nat) ->
     match static n { .z -> variant { nil }, .s &m -> variant { cons : t ^ vec t m } };;
-fun w (erased t : type) : (static nat \ n -> static nat \ m -> vec t n -> vec t m -> vec t (add (n, m))) =
+fun w (erased t : type) : (static nat as n -> static nat as m -> vec t n -> vec t m -> vec t (add (n, m))) =
   fn (static n : nat) -> fn (static m : nat) -> fn (v1 : vec t n) -> fn (v2 : vec t m) ->
     match static n { .z -> v2, .s &k -> match v1 { .cons (x, xs) -> w t k m xs v2 } }
 ;;
@@ -754,7 +754,7 @@ fun w (erased t : type) : (static nat \ n -> static nat \ m -> vec t n -> vec t 
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty
              (Arrow
-              (arg (Var (id ((Id nat) <opaque>)) (loc ((line 9) (column 52)))))
+              (arg (Var (id ((Id nat) <opaque>)) (loc ((line 9) (column 53)))))
               (arg_id ((Id m) <opaque>))
               (arg_mode ((staticity (Static)) (erasure ())))
               (ret
@@ -764,12 +764,12 @@ fun w (erased t : type) : (static nat \ n -> static nat \ m -> vec t n -> vec t 
                   (fn
                    (Apply
                     (fn
-                     (Var (id ((Id vec) <opaque>)) (loc ((line 9) (column 63)))))
+                     (Var (id ((Id vec) <opaque>)) (loc ((line 9) (column 65)))))
                     (arg
-                     (Var (id ((Id t) <opaque>)) (loc ((line 9) (column 67)))))
-                    (loc ((line 9) (column 63)))))
-                  (arg (Var (id ((Id n) <opaque>)) (loc ((line 9) (column 69)))))
-                  (loc ((line 9) (column 63)))))
+                     (Var (id ((Id t) <opaque>)) (loc ((line 9) (column 69)))))
+                    (loc ((line 9) (column 65)))))
+                  (arg (Var (id ((Id n) <opaque>)) (loc ((line 9) (column 71)))))
+                  (loc ((line 9) (column 65)))))
                 (arg_id (Anon <opaque>)) (arg_mode ((staticity ()) (erasure ())))
                 (ret
                  (Arrow
@@ -779,13 +779,13 @@ fun w (erased t : type) : (static nat \ n -> static nat \ m -> vec t n -> vec t 
                      (Apply
                       (fn
                        (Var (id ((Id vec) <opaque>))
-                        (loc ((line 9) (column 74)))))
+                        (loc ((line 9) (column 76)))))
                       (arg
-                       (Var (id ((Id t) <opaque>)) (loc ((line 9) (column 78)))))
-                      (loc ((line 9) (column 74)))))
+                       (Var (id ((Id t) <opaque>)) (loc ((line 9) (column 80)))))
+                      (loc ((line 9) (column 76)))))
                     (arg
-                     (Var (id ((Id m) <opaque>)) (loc ((line 9) (column 80)))))
-                    (loc ((line 9) (column 74)))))
+                     (Var (id ((Id m) <opaque>)) (loc ((line 9) (column 82)))))
+                    (loc ((line 9) (column 76)))))
                   (arg_id (Anon <opaque>))
                   (arg_mode ((staticity ()) (erasure ())))
                   (ret
@@ -794,29 +794,29 @@ fun w (erased t : type) : (static nat \ n -> static nat \ m -> vec t n -> vec t 
                      (Apply
                       (fn
                        (Var (id ((Id vec) <opaque>))
-                        (loc ((line 9) (column 85)))))
+                        (loc ((line 9) (column 87)))))
                       (arg
-                       (Var (id ((Id t) <opaque>)) (loc ((line 9) (column 89)))))
-                      (loc ((line 9) (column 85)))))
+                       (Var (id ((Id t) <opaque>)) (loc ((line 9) (column 91)))))
+                      (loc ((line 9) (column 87)))))
                     (arg
                      (Apply
                       (fn
                        (Var (id ((Id add) <opaque>))
-                        (loc ((line 9) (column 92)))))
+                        (loc ((line 9) (column 94)))))
                       (arg
                        (Make_tuple
                         (elts
                          ((Var (id ((Id n) <opaque>))
-                           (loc ((line 9) (column 97))))
+                           (loc ((line 9) (column 99))))
                           (Var (id ((Id m) <opaque>))
-                           (loc ((line 9) (column 100))))))
-                        (loc ((line 9) (column 97)))))
-                      (loc ((line 9) (column 92)))))
-                    (loc ((line 9) (column 85)))))
+                           (loc ((line 9) (column 102))))))
+                        (loc ((line 9) (column 99)))))
+                      (loc ((line 9) (column 94)))))
+                    (loc ((line 9) (column 87)))))
                   (ret_mode ((staticity ()) (erasure ())))
-                  (loc ((line 9) (column 63)))))
+                  (loc ((line 9) (column 65)))))
                 (ret_mode ((staticity ()) (erasure ())))
-                (loc ((line 9) (column 52)))))
+                (loc ((line 9) (column 53)))))
               (ret_mode ((staticity ()) (erasure ())))
               (loc ((line 9) (column 34)))))
             (memo <opaque>) (uid <opaque>)))

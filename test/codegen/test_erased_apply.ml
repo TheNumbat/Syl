@@ -111,7 +111,7 @@ let%expect_test "late mono of a quoted binder under an erased type key" =
   go
     {|
 fun erased pick (static u : unit) : erased type = int;;
-let use = fn (static p : static erased type \ s -> s -> s) -> p (pick ()) 1;;
+let use = fn (static p : static erased type as s -> s -> s) -> p (pick ()) 1;;
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = print_int (use id_t);;
 let _ = print_int (id_t (pick ()) 5);;

@@ -1936,7 +1936,7 @@ let%expect_test "fuzz: rank-2 polymorphism via static erased pi" =
   go
     {|
 let apply_at_int =
-  fn (static f : static erased type \ t -> t -> t) -> f int 5;;
+  fn (static f : static erased type as t -> t -> t) -> f int 5;;
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = print_int (apply_at_int id);;
 |};
@@ -1947,7 +1947,7 @@ let%expect_test "fuzz: rank-2 polymorphism applied at two types" =
   go
     {|
 let apply_two =
-  fn (static f : static erased type \ t -> t -> t) ->
+  fn (static f : static erased type as t -> t -> t) ->
     let _ = print_int (f int 5) in
     print_bool (f bool true);;
 let id = fn (static erased t : type) -> fn (x : t) -> x;;

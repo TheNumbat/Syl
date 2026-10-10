@@ -165,8 +165,13 @@ let%expect_test "arrow" =
 ;;
 
 let%expect_test "dependent arrow" =
-  fmt "let _ = static erased type \\ t -> t -> t;;";
-  [%expect {| let _ = static erased type \ t -> t -> t;; |}]
+  fmt "let _ = static erased type as t -> t -> t;;";
+  [%expect {| let _ = static erased type as t -> t -> t;; |}]
+;;
+
+let%expect_test "chained dependent arrows" =
+  fmt "let _ = static erased type as t -> static t as x -> erased (t as y -> t);;";
+  [%expect {| let _ = static erased type as t -> static t as x -> erased (t as y -> t);; |}]
 ;;
 
 let%expect_test "type annotation" =
@@ -410,9 +415,9 @@ let%expect_test "comment before arrow" =
   [%expect {| let _ = a (* c *) -> b;; |}]
 ;;
 
-let%expect_test "comment before backslash" =
-  fmt "let _ = int (* c *) \\ x -> x;;";
-  [%expect {| let _ = int (* c *) \ x -> x;; |}]
+let%expect_test "comment before as" =
+  fmt "let _ = int (* c *) as x -> x;;";
+  [%expect {| let _ = int (* c *) as x -> x;; |}]
 ;;
 
 let%expect_test "comment between app args" =
@@ -1006,11 +1011,11 @@ let%expect_test "deeply nested application" =
 ;;
 
 let%expect_test "dependent arrow breaks" =
-  fmt ~width:25 "let _ = static erased type \\ t -> t -> t;;";
+  fmt ~width:25 "let _ = static erased type as t -> t -> t;;";
   [%expect
     {|
     let _ =
-      static erased type \ t
+      static erased type as t
         -> t
         -> t
     ;;

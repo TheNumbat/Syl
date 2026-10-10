@@ -122,7 +122,7 @@ let%expect_test "kind check through a stuck type-of-type" =
   go
     {|
 fun ty_of (static n : int) : erased type = type;;
-fun g (static n : int) : static erased (ty_of n) \ t -> static int =
+fun g (static n : int) : static erased (ty_of n) as t -> static int =
   fn (static erased t : ty_of n) -> let erased v = t.mk in 0;;
 |};
   [%expect

@@ -3,6 +3,17 @@ open! Syl
 
 let go = Common.parse_and_format
 
+let%expect_test "dependent arrow requires a binder and arrow" =
+  go "let _ = type as -> type;;";
+  [%expect {| ((loc ((line 1) (column 16))) (reason (Unexpected (Op Arrow)))) |}];
+  go "let _ = type as t;;";
+  [%expect {| ((loc ((line 1) (column 17))) (reason (Unexpected Double_semicolon))) |}];
+  go "let as = type;;";
+  [%expect {| ((loc ((line 1) (column 4))) (reason (Unexpected As))) |}];
+  go {|let _ = type \ t -> t;;|};
+  [%expect {| ((loc ((line 1) (column 13))) (reason (Unexpected (Unknown "\\")))) |}]
+;;
+
 let%expect_test "arrow" =
   go "let _ = t -> static t -> t;;";
   [%expect {| let _ = t -> static t -> t;; |}];
@@ -19,8 +30,8 @@ let%expect_test "arrow" =
 ;;
 
 let%expect_test "arrow" =
-  go "let _ = (int : type) \\ name -> static (erased type -> static name);;";
-  [%expect {| let _ = (int : type) \ name -> static (erased type -> static name);; |}]
+  go "let _ = (int : type) as name -> static (erased type -> static name);;";
+  [%expect {| let _ = (int : type) as name -> static (erased type -> static name);; |}]
 ;;
 
 let%expect_test "fun return modes" =

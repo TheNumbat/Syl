@@ -8,7 +8,6 @@ module Op : sig
     | Plus
     | Star
     | Slash
-    | Backslash
     | Percent
     | And
     | Amp
@@ -37,6 +36,7 @@ module Kind : sig
     | In : unit t
     | Fun : unit t
     | And : unit t
+    | As : unit t
     | Static : unit t
     | Dynamic : unit t
     | Erased : unit t
@@ -78,6 +78,7 @@ module Token : sig
     | In
     | Fun
     | And
+    | As
     | Static
     | Dynamic
     | Erased

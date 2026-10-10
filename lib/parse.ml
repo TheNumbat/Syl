@@ -75,7 +75,7 @@ let op_to_ident : Lex.Op.t -> Ident.t option = function
   | Lte -> Some Ident.(binop Lte)
   | Gt -> Some Ident.(binop Gt)
   | Gte -> Some Ident.(binop Gte)
-  | Tilde | Backslash | Arrow | Caret | Comma | Amp -> None
+  | Tilde | Arrow | Caret | Comma | Amp -> None
 ;;
 
 let expect_ident t =
@@ -170,7 +170,7 @@ and expr_arrow t : Expr.t =
   let arg = trailing t (expr_comma t) in
   let arg_id =
     match Tokenizer.peek t.tokens with
-    | Op Backslash ->
+    | As ->
       Tokenizer.skip t.tokens;
       Some (expect_ident t)
     | _ -> None
@@ -187,7 +187,8 @@ and expr_arrow t : Expr.t =
       | expr -> expr, modes
     in
     with_loc ~loc:arg.loc (Arrow { arg; arg_id; arg_mode; ret; ret_mode })
-  | _ ->
+  | tok ->
+    if Option.is_some arg_id then Fail.unexpected [%here] ~loc tok;
     if Modes.Maybe.(equal arg_mode none) then arg else Fail.unexpected_modes [%here] ~loc arg_mode
 
 and expr_comma t : Expr.t =

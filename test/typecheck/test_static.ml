@@ -71,7 +71,7 @@ let _ = assert erased (f 0 1 == 1);;
 let%expect_test "fun pi return, bare" =
   go
     {|
-fun g (static n : int) : erased type \ t -> t -> t =
+fun g (static n : int) : erased type as t -> t -> t =
   fn (erased t : type) -> fn (x : t) -> x;;
 let _ = assert erased (g 0 int 1 == 1);;
 |};

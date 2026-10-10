@@ -463,7 +463,7 @@ let%expect_test "leq Pi/Pi dependent return: ret_mode covariant" =
   go
     {|
 let id = fn (static t : type) -> fn (x : t) -> x;;
-let _ = id : static type \ t -> erased t -> t;;
+let _ = id : static type as t -> erased t -> t;;
 |};
   [%expect
     {|
@@ -494,10 +494,10 @@ let _ = id : static type \ t -> erased t -> t;;
             (arg_mode ((staticity Static) (erasure Unerased)))
             (ret_ty
              (Arrow
-              (arg (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 39)))))
+              (arg (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 40)))))
               (arg_id (Anon <opaque>))
               (arg_mode ((staticity ()) (erasure (Erased))))
-              (ret (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 44)))))
+              (ret (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 45)))))
               (ret_mode ((staticity ()) (erasure ())))
               (loc ((line 3) (column 20)))))
             (memo <opaque>) (uid <opaque>)))
@@ -509,7 +509,7 @@ let%expect_test "leq Pi/Pi dependent return: ret_mode covariant" =
   go
     {|
 let id = fn (static t : type) -> fn (x : t) -> x;;
-let _ = id : static type \ t -> erased (t -> t);;
+let _ = id : static type as t -> erased (t -> t);;
 |};
   [%expect {| |}]
 ;;
@@ -556,8 +556,8 @@ let _ = f : static (static erased int -> int) -> int;;
 let%expect_test "leq Pi/Pi function-type arg: arg contravariant" =
   go
     {|
-let f = fn (static g : static type \ t -> t) -> ();;
-let _ = f : static (static erased type \ t -> t) -> unit;;
+let f = fn (static g : static type as t -> t) -> ();;
+let _ = f : static (static erased type as t -> t) -> unit;;
 |};
   [%expect {| |}]
 ;;
@@ -565,8 +565,8 @@ let _ = f : static (static erased type \ t -> t) -> unit;;
 let%expect_test "leq Pi/Pi function-type ret" =
   go
     {|
-let f = fn (static g : static type \ t -> erased t) -> ();;
-let _ = f : static (static erased type \ t -> dynamic t) -> unit;;
+let f = fn (static g : static type as t -> erased t) -> ();;
+let _ = f : static (static erased type as t -> dynamic t) -> unit;;
 |};
   [%expect
     {|
@@ -583,7 +583,7 @@ let _ = f : static (static erased type \ t -> dynamic t) -> unit;;
              (ret_ty
               (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
                (arg_mode ((staticity Static) (erasure Unerased)))
-               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 49)))))
+               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 2) (column 50)))))
                (memo <opaque>) (uid <opaque>)))
              (ret_mode ((staticity Static) (erasure Erased))))))
           (arg_mode ((staticity Static) (erasure Unerased)))
@@ -599,7 +599,7 @@ let _ = f : static (static erased type \ t -> dynamic t) -> unit;;
              (ret_ty
               (Reduce (env <opaque>) (arg ((Id t) <opaque>)) (arg_ty (Type Type))
                (arg_mode ((staticity Static) (erasure Erased)))
-               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 54)))))
+               (ret_ty (Var (id ((Id t) <opaque>)) (loc ((line 3) (column 55)))))
                (memo <opaque>) (uid <opaque>)))
              (ret_mode ((staticity Dynamic) (erasure Unerased))))))
           (arg_mode ((staticity Static) (erasure Unerased)))
@@ -630,7 +630,7 @@ let%expect_test "leq Pi/Pi function-type arg returning type" =
   go
     {|
 let wrap = fn (static f : static int -> static type) -> fn (x : f 0) -> x;;
-let _ = wrap : static (static int -> static type) \ f -> f 0 -> f 0;;
+let _ = wrap : static (static int -> static type) as f -> f 0 -> f 0;;
 |};
   [%expect {| |}]
 ;;
@@ -915,7 +915,7 @@ let%expect_test "leq keeps partial unfolding that re-sticks on an abstract head"
     {|
 fun id2 (static erased t : type) : erased type = t;;
 let coerce =
-  fn (static erased g : static erased type \ u -> erased type) ->
+  fn (static erased g : static erased type as u -> erased type) ->
     fn (x : g int) -> (x : id2 (g int));;
 |};
   [%expect {| |}]

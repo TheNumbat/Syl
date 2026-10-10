@@ -255,10 +255,10 @@ let _ = fn (static b : bool) ->
   [%expect {| |}]
 ;;
 
-let%expect_test "dependent arrow type with backslash binder" =
+let%expect_test "dependent arrow type with as binder" =
   go
     {|
-let f = fn (static g : static int \ x -> int) -> g 0;;
+let f = fn (static g : static int as x -> int) -> g 0;;
 |};
   [%expect {| |}]
 ;;
@@ -266,7 +266,7 @@ let f = fn (static g : static int \ x -> int) -> g 0;;
 let%expect_test "dependent arrow applied to matching function" =
   go
     {|
-let apply_type = fn (static f : static erased type \ t -> t -> t) -> f int;;
+let apply_type = fn (static f : static erased type as t -> t -> t) -> f int;;
 let _ = apply_type (fn (static erased t : type) -> fn (x : t) -> x);;
 |};
   [%expect {| |}]
@@ -276,7 +276,7 @@ let%expect_test "dependent arrow with return type depending on arg" =
   go
     {|
 let mk_int = fn (static x : int) -> int;;
-let f = fn (static g : static int \ x -> mk_int x) -> g 0;;
+let f = fn (static g : static int as x -> mk_int x) -> g 0;;
 |};
   [%expect {| |}]
 ;;
@@ -610,7 +610,7 @@ let _ = g true;;
 let%expect_test "symbolic arrow type as static arg" =
   go
     {|
-let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
+let choose = fn (static f : static int as x -> if x == 0 then int else bool) -> f 0;;
 let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]
@@ -1249,11 +1249,11 @@ let _ = f true 42;;
 let%expect_test "unreachable in dependent arrow return type — not concrete during definition" =
   go
     {|
-let f = fn (static g : static bool \ x -> if x then int else unreachable) -> g true;;
+let f = fn (static g : static bool as x -> if x then int else unreachable) -> g true;;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 61)))
+    ((loc ((line 2) (column 62)))
      (reason (Misplaced_unreachable Not_under_static_branch)))
     |}]
 ;;
@@ -1261,7 +1261,7 @@ let f = fn (static g : static bool \ x -> if x then int else unreachable) -> g t
 let%expect_test "unreachable in dependent arrow return type with if erased — not concrete" =
   go
     {|
-let f = fn (static g : static bool \ x -> if erased x then int else unreachable) -> g true;;
+let f = fn (static g : static bool as x -> if erased x then int else unreachable) -> g true;;
 |};
   [%expect {| |}]
 ;;
@@ -1269,7 +1269,7 @@ let f = fn (static g : static bool \ x -> if erased x then int else unreachable)
 let%expect_test "unreachable in dependent arrow return type — fires during dependent eval on apply" =
   go
     {|
-let f = fn (static g : static bool \ x -> if erased x then int else unreachable) -> g true;;
+let f = fn (static g : static bool as x -> if erased x then int else unreachable) -> g true;;
 let _ = f (fn (static x : bool) -> if erased x then 42 else unreachable);;
 |};
   [%expect {| |}]
@@ -1348,11 +1348,11 @@ let _ = outer false;;
 let%expect_test "unreachable in dependent arrow return type — non-erased if survives definition" =
   go
     {|
-let f = fn (static g : static bool \ x -> if x then int else unreachable) -> ();;
+let f = fn (static g : static bool as x -> if x then int else unreachable) -> ();;
 |};
   [%expect
     {|
-    ((loc ((line 2) (column 61)))
+    ((loc ((line 2) (column 62)))
      (reason (Misplaced_unreachable Not_under_static_branch)))
     |}]
 ;;
@@ -1360,7 +1360,7 @@ let f = fn (static g : static bool \ x -> if x then int else unreachable) -> ();
 let%expect_test "unreachable in dependent arrow return type — non-erased if survives definition" =
   go
     {|
-let f = static bool \ x -> if erased x then if x then int else unreachable else unreachable;;
+let f = static bool as x -> if erased x then if x then int else unreachable else unreachable;;
 |};
   [%expect {| |}]
 ;;

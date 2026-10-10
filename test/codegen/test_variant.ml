@@ -343,7 +343,7 @@ let%expect_test "polymorphic payload" =
   go
     {|
 let id = fn (static erased t : type) -> fn (x : t) -> x;;
-let pv = variant { nothing, poly : static erased type \ t -> t -> t };;
+let pv = variant { nothing, poly : static erased type as t -> t -> t };;
 let v = pv.poly id;;
 let _ = print_int (match v { .poly f -> f int (43 @ dynamic), .nothing -> 0 });;
 |};

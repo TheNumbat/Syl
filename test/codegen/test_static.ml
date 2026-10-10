@@ -217,7 +217,7 @@ let _ = double 5;;
 let%expect_test "symbolic arrow type as static arg" =
   go
     {|
-let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
+let choose = fn (static f : static int as x -> if x == 0 then int else bool) -> f 0;;
 let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]

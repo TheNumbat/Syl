@@ -41,7 +41,7 @@ fun dot (static n : nat) : vec int n -> vec int n -> int =
 ;;
 
 fun mat_vec
-  (static rows : nat) : (static nat \ columns
+  (static rows : nat) : (static nat as columns
                            -> matrix int rows columns
                            -> vec int columns
                            -> vec int rows) =

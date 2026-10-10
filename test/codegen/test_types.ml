@@ -249,7 +249,7 @@ let%expect_test "nested if erased with different types per level" =
   go
     {|
 fun f (static x : int) : static
-  (static int \ y ->
+  (static int as y ->
    if x == 0
    then if y == 0 then int else bool
    else if y == 0 then unit else int)
@@ -277,7 +277,7 @@ let%expect_test "nested if erased with different types per level" =
   go
     {|
 fun f (static x : int) : static
-  (static int \ y ->
+  (static int as y ->
    if x == 0
    then if y == 0 then int else bool
    else if y == 0 then unit else int)
@@ -326,7 +326,7 @@ let%expect_test "leq Pi/Pi function-type arg returning type" =
   go
     {|
 let wrap = fn (static erased f : static int -> static erased type) -> fn (x : f 0) -> x;;
-let wrap2 = wrap : static erased (static int -> static erased type) \ f -> f 0 -> f 0;;
+let wrap2 = wrap : static erased (static int -> static erased type) as f -> f 0 -> f 0;;
 let _ = wrap2 (fn (static x : int) -> int);;
 |};
   [%expect {| |}]

@@ -32,7 +32,6 @@ module Op = struct
     | Plus
     | Star
     | Slash
-    | Backslash
     | Percent
     | And
     | Amp
@@ -61,6 +60,7 @@ module Kind = struct
     | In : unit t
     | Fun : unit t
     | And : unit t
+    | As : unit t
     | Static : unit t
     | Dynamic : unit t
     | Erased : unit t
@@ -102,6 +102,7 @@ module Token = struct
     | In
     | Fun
     | And
+    | As
     | Static
     | Dynamic
     | Erased
@@ -142,6 +143,7 @@ module Token = struct
     | In, In -> Some ()
     | Fun, Fun -> Some ()
     | And, And -> Some ()
+    | As, As -> Some ()
     | Static, Static -> Some ()
     | Dynamic, Dynamic -> Some ()
     | Erased, Erased -> Some ()
@@ -179,6 +181,7 @@ module Token = struct
         | In
         | Fun
         | And
+        | As
         | Static
         | Dynamic
         | Erased
@@ -220,6 +223,7 @@ module Token = struct
     | In -> "in"
     | Fun -> "fun"
     | And -> "and"
+    | As -> "as"
     | Static -> "static"
     | Dynamic -> "dynamic"
     | Erased -> "erased"
@@ -248,7 +252,6 @@ module Token = struct
     | Op Plus -> "+"
     | Op Star -> "*"
     | Op Slash -> "/"
-    | Op Backslash -> "\\"
     | Op Percent -> "%"
     | Op And -> "&&"
     | Op Amp -> "&"
@@ -283,6 +286,7 @@ module Token = struct
     | In, _
     | Fun, _
     | And, _
+    | As, _
     | Static, _
     | Dynamic, _
     | Erased, _
@@ -401,6 +405,7 @@ module Tokenizer = struct
     | "in" -> In
     | "fun" -> Fun
     | "and" -> And
+    | "as" -> As
     | "static" -> Static
     | "dynamic" -> Dynamic
     | "erased" -> Erased
@@ -562,7 +567,6 @@ module Tokenizer = struct
     | Some '+' -> single t (Op Plus)
     | Some '*' -> single t (Op Star)
     | Some '/' -> single t (Op Slash)
-    | Some '\\' -> single t (Op Backslash)
     | Some '%' -> single t (Op Percent)
     | Some '^' -> single t (Op Caret)
     | Some '~' ->

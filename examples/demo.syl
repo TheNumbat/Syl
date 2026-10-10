@@ -181,7 +181,7 @@ let _ = 0 : if true then int else bool;;
 let _ = 1 : (fn (static erased x : type) -> x) int;;
 
 (* Polymorphic functions have dependent types *)
-let poly_ident = static erased type \ t -> static (t -> t);;
+let poly_ident = static erased type as t -> static (t -> t);;
 
 let _ = identity : poly_ident;;
 
@@ -210,7 +210,7 @@ let needs_true = fn (static b : bool) -> if erased b then 0 else unreachable;;
 (* Dependent functions can have branching types *)
 let choose = fn (static x : bool) -> if erased x then 0 else false;;
 
-let _ = choose : static bool \ x -> if x then int else bool;;
+let _ = choose : static bool as x -> if x then int else bool;;
 
 let _ = choose true : int;;
 
@@ -223,14 +223,14 @@ let f = fn (static x : int) -> if erased x * 2 < 0 then 0 else false;;
 
 let g = fn (static x : int) -> if erased x * (1 + 1) < (4 - mk_four ()) then 0 else false;;
 
-let _ = f : static int \ a -> if a * 2 < 0 then int else bool;;
+let _ = f : static int as a -> if a * 2 < 0 then int else bool;;
 
-let _ = g : static int \ b -> if b * 2 < 0 then int else bool;;
+let _ = g : static int as b -> if b * 2 < 0 then int else bool;;
 
 let _ = if true then f else g;;
 
 (* Branching values can also be used as annotations *)
-let _ = f : static int \ c -> if erased c * 2 < 0 then int else bool;;
+let _ = f : static int as c -> if erased c * 2 < 0 then int else bool;;
 
 (* Dependent functions can have application types *)
 fun mk_ident
@@ -238,7 +238,7 @@ fun mk_ident
   fn (x : pick_t ()) -> x
 ;;
 
-let _ = mk_ident : static erased (static unit -> static erased type) \ f -> static (f () -> f ());;
+let _ = mk_ident : static erased (static unit -> static erased type) as f -> static (f () -> f ());;
 
 let _ = mk_ident (fn (static _ : unit) -> int) 0;;
 

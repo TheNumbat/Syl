@@ -557,7 +557,7 @@ let%expect_test "specialization result of baked static function parameter" =
   go
     {|
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
-let ret_p = fn (static p : static erased type \ s -> s -> s) -> p;;
+let ret_p = fn (static p : static erased type as s -> s -> s) -> p;;
 let _ = print_int (ret_p id_t int 5);;
 |};
   [%expect {| 5 |}]
@@ -567,7 +567,7 @@ let%expect_test "chained specialization inside re-evaluated binder mono" =
   go
     {|
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
-let ret_p = fn (static p : static erased type \ s -> s -> s) -> p;;
+let ret_p = fn (static p : static erased type as s -> s -> s) -> p;;
 let f = fn (b : bool) -> fn (static erased u : type) -> fn (v : u) -> ret_p id_t u v;;
 let g = f true;;
 let _ = print_int (g int 5);;
@@ -580,7 +580,7 @@ let%expect_test "value both baked into a mono and specialized via its definition
     {|
 let f = fn (x : int) -> fn (static erased t : type) -> fn (v : t) -> v;;
 let g = f 0;;
-let use = fn (static p : static erased type \ s -> s -> s) -> p int 1;;
+let use = fn (static p : static erased type as s -> s -> s) -> p int 1;;
 let _ = print_int (use g);;
 let _ = print_int (g int 5);;
 |};
@@ -594,7 +594,7 @@ let _ = print_int (g int 5);;
 let%expect_test "quoted binder flows through a tuple result and a match pattern" =
   go
     {|
-let ret_pair = fn (static p : static erased type \ s -> s -> s) -> (p, 0);;
+let ret_pair = fn (static p : static erased type as s -> s -> s) -> (p, 0);;
 
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
 
@@ -608,7 +608,7 @@ let%expect_test "local binding reused instead of rematerializing into a mono" =
     {|
 let result =
   let local_id = fn (static erased t : type) -> fn (x : t) -> x in
-  let use = fn (static p : static erased type \ s -> s -> s) -> p int 7 in
+  let use = fn (static p : static erased type as s -> s -> s) -> p int 7 in
   use local_id;;
 let _ = print_int result;;
 |};
@@ -618,8 +618,8 @@ let _ = print_int result;;
 let%expect_test "one value baked into two monos shares one materialization" =
   go
     {|
-let use_int = fn (static p : static erased type \ s -> s -> s) -> p int 1;;
-let use_bool = fn (static p : static erased type \ s -> s -> s) -> p bool true;;
+let use_int = fn (static p : static erased type as s -> s -> s) -> p int 1;;
+let use_bool = fn (static p : static erased type as s -> s -> s) -> p bool true;;
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = print_int (use_int id_t);;
 let _ = print_bool (use_bool id_t);;
@@ -688,8 +688,8 @@ let _ = print_int c;;
 let%expect_test "specialization results chained across two helpers" =
   go
     {|
-let ret_p = fn (static p : static erased type \ s -> s -> s) -> p;;
-let ret_ret = fn (static q : static erased type \ s -> s -> s) -> ret_p q;;
+let ret_p = fn (static p : static erased type as s -> s -> s) -> p;;
+let ret_ret = fn (static q : static erased type as s -> s -> s) -> ret_p q;;
 let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
 let _ = print_int (ret_ret id_t int 9);;
 |};
@@ -702,7 +702,7 @@ let%expect_test "definition-site dispatch before the value is baked into a mono"
 let f = fn (x : int) -> fn (static erased t : type) -> fn (v : t) -> v;;
 let g = f 0;;
 let _ = print_int (g int 5);;
-let use = fn (static p : static erased type \ s -> s -> s) -> p int 1;;
+let use = fn (static p : static erased type as s -> s -> s) -> p int 1;;
 let _ = print_int (use g);;
 |};
   [%expect
@@ -738,7 +738,7 @@ let id_t = fn (static erased t : type) -> fn (x : t) -> x;;
 let pair = (id_t, 41);;
 
 let use =
-  fn (static p : (static erased type \ s -> s -> s) ^ int) -> match p { (f, n) -> f int n }
+  fn (static p : (static erased type as s -> s -> s) ^ int) -> match p { (f, n) -> f int n }
 ;;
 
 let _ = print_int (use pair);;
@@ -750,7 +750,7 @@ let%expect_test "two projections of one static tuple component both specialize" 
   go
     {|
 let use =
-  fn (static p : (static erased type \ s -> s -> s) ^ int) ->
+  fn (static p : (static erased type as s -> s -> s) ^ int) ->
     match p { (f, _) -> (match p { (g, n) -> f int (g int n) }) }
 ;;
 

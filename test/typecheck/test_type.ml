@@ -2106,7 +2106,7 @@ let%expect_test "dependent arrow" =
   go
     {|
 let mk_int = fn (static x : int) -> int;;
-let apply_int = fn (static f : static int \ x -> mk_int x) -> 2;;
+let apply_int = fn (static f : static int as x -> mk_int x) -> 2;;
 |};
   [%expect {| |}]
 ;;
@@ -2115,7 +2115,7 @@ let%expect_test "dependent arrow" =
   go
     {|
 let mk_int = fn (static x : int) -> int;;
-let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
+let apply_int = fn (static f : static int as x -> unit -> mk_int x) -> f 2;;
 |};
   [%expect {| |}]
 ;;
@@ -2123,7 +2123,7 @@ let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
 let%expect_test "dependent arrow" =
   go
     {|
-let apply_int = fn (static f : static erased type \ t -> t -> t) -> f int;;
+let apply_int = fn (static f : static erased type as t -> t -> t) -> f int;;
 let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
 |};
   [%expect {| |}]
@@ -2132,7 +2132,7 @@ let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
 let%expect_test "dependent arrow" =
   go
     {|
-let apply = fn (static f : static erased type \ t -> t -> t) -> fn (static erased t2 : type) -> f t2;;
+let apply = fn (static f : static erased type as t -> t -> t) -> fn (static erased t2 : type) -> f t2;;
 let f = apply (fn (static erased t : type) -> fn (x : t) -> x);;
 let g = f int;;
 let h = f bool;;
@@ -2325,7 +2325,7 @@ let _ = if true then f 0 else g 1;;
 let%expect_test "symbolic arrow type" =
   go
     {|
-let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
+let choose = fn (static f : static int as x -> if x == 0 then int else bool) -> f 0;;
 let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]
@@ -2642,7 +2642,7 @@ let f = x -> int;;
 let%expect_test "arrow" =
   go
     {|
-let f = static type \ t -> (t @ dynamic);;
+let f = static type as t -> (t @ dynamic);;
 |};
   [%expect
     {|
@@ -2656,7 +2656,7 @@ let f = static type \ t -> (t @ dynamic);;
 let%expect_test "arrow" =
   go
     {|
-let f = static int \ t -> t;;
+let f = static int as t -> t;;
 |};
   [%expect
     {|

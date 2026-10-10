@@ -108,8 +108,8 @@ let%expect_test "variant breaks across lines" =
 let%expect_test "arrow payload needs no parens" =
   go "let wrap = variant { wrap : int -> bool };;";
   [%expect {| let wrap = variant { wrap : int -> bool };; |}];
-  go "let wrap = variant { wrap : static erased type \\ x -> x -> x };;";
-  [%expect {| let wrap = variant { wrap : static erased type \ x -> x -> x };; |}]
+  go "let wrap = variant { wrap : static erased type as x -> x -> x };;";
+  [%expect {| let wrap = variant { wrap : static erased type as x -> x -> x };; |}]
 ;;
 
 let%expect_test "constructor expressions" =

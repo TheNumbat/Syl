@@ -151,7 +151,7 @@ let%expect_test "dependent arrow" =
   go
     {|
 let mk_int = fn (static x : int) -> int;;
-let apply_int = fn (static f : static int \ x -> mk_int x) -> 2;;
+let apply_int = fn (static f : static int as x -> mk_int x) -> 2;;
 |};
   [%expect {| |}]
 ;;
@@ -160,7 +160,7 @@ let%expect_test "dependent arrow" =
   go
     {|
 let mk_int = fn (static x : int) -> int;;
-let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
+let apply_int = fn (static f : static int as x -> unit -> mk_int x) -> f 2;;
 |};
   [%expect {| |}]
 ;;
@@ -168,7 +168,7 @@ let apply_int = fn (static f : static int \ x -> unit -> mk_int x) -> f 2;;
 let%expect_test "dependent arrow" =
   go
     {|
-let apply_int = fn (static f : static erased type \ t -> t -> t) -> f int;;
+let apply_int = fn (static f : static erased type as t -> t -> t) -> f int;;
 let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
 |};
   [%expect {| |}]
@@ -177,7 +177,7 @@ let _ = apply_int (fn (static erased t : type) -> fn (x : t) -> x);;
 let%expect_test "dependent arrow" =
   go
     {|
-let apply = fn (static f : static erased type \ t -> t -> t) -> fn (static erased t2 : type) -> f t2;;
+let apply = fn (static f : static erased type as t -> t -> t) -> fn (static erased t2 : type) -> f t2;;
 let f = apply (fn (static erased t : type) -> fn (x : t) -> x);;
 let g = f int;;
 let h = f bool;;
@@ -298,7 +298,7 @@ let _ = f 2;;
 let%expect_test "dependent abstraction" =
   go
     {|
-let choose = fn (static f : static int \ x -> if x == 0 then int else bool) -> f 0;;
+let choose = fn (static f : static int as x -> if x == 0 then int else bool) -> f 0;;
 let _ = choose (fn (static x : int) -> if erased x == 0 then 0 else true);;
 |};
   [%expect {| |}]
@@ -316,10 +316,10 @@ let _ = h true;;
   [%expect {| |}]
 ;;
 
-let%expect_test "dependent arrow type with backslash binder" =
+let%expect_test "dependent arrow type with as binder" =
   go
     {|
-let f = fn (static g : static int \ x -> int) -> g 0;;
+let f = fn (static g : static int as x -> int) -> g 0;;
 |};
   [%expect {| |}]
 ;;
@@ -328,7 +328,7 @@ let%expect_test "dependent arrow with return type depending on arg" =
   go
     {|
 let mk_int = fn (static x : int) -> int;;
-let f = fn (static g : static int \ x -> mk_int x) -> g 0;;
+let f = fn (static g : static int as x -> mk_int x) -> g 0;;
 |};
   [%expect {| |}]
 ;;
@@ -514,7 +514,7 @@ fun vec (erased t : type) : erased (static nat -> erased type) =
       .s &m -> variant { cons : t ^ vec t m },
     }
 ;;
-fun mk (erased t : type) : (static nat \ n -> t -> vec t n) =
+fun mk (erased t : type) : (static nat as n -> t -> vec t n) =
   fn (static n : nat) ->
     fn (x : t) ->
       match static n {
@@ -546,12 +546,12 @@ fun add (static nm : nat ^ nat) : static nat =
 fun vec (erased t : type) : erased (static nat -> erased type) =
   fn (static n : nat) ->
     match static n { .z -> variant { nil }, .s &m -> variant { cons : t ^ vec t m } };;
-fun mk (erased t : type) : (static nat \ n -> t -> vec t n) =
+fun mk (erased t : type) : (static nat as n -> t -> vec t n) =
   fn (static n : nat) ->
     fn (x : t) ->
       match static n { .z -> (vec t n).nil, .s &m -> (vec t n).cons (x, mk t m x) };;
 fun append
-  (erased t : type) : (static nat \ n -> static nat \ m
+  (erased t : type) : (static nat as n -> static nat as m
                          -> vec t n -> vec t m -> vec t (add (n, m))) =
   fn (static n : nat) -> fn (static m : nat) ->
     fn (v1 : vec t n) -> fn (v2 : vec t m) ->

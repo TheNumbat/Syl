@@ -3,6 +3,20 @@ open! Syl
 
 let go = Common.tokenize
 
+let%expect_test "as keyword and identifier boundaries" =
+  go "as as_type as1 assert As .as";
+  [%expect
+    {|
+    (token As)
+    (token (Ident as_type))
+    (token (Ident as1))
+    (token Assert)
+    (token (Ident As))
+    (token (Label as))
+    (token Eof)
+    |}]
+;;
+
 let%expect_test _ =
   go "if then else ;;; fn -+*/&&||! let = () true and fun @ false -> : hello h_eL_O_o";
   [%expect

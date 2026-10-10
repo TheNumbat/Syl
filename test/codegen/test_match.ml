@@ -14,7 +14,7 @@ let f = fn (static x : int) -> if erased x == 0 then 1 else true;;
 let%expect_test "dependent arrow applied to matching function" =
   go
     {|
-let apply_type = fn (static f : static erased type \ t -> t -> t) -> f int;;
+let apply_type = fn (static f : static erased type as t -> t -> t) -> f int;;
 let _ = apply_type (fn (static erased t : type) -> fn (x : t) -> x);;
 |};
   [%expect {| |}]
