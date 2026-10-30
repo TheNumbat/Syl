@@ -29,6 +29,28 @@ let _ = print_int (f 1);;
   [%expect {| 42 |}]
 ;;
 
+let%expect_test "match static keeps scrutinee effects without named bindings" =
+  go
+    {|
+let _ = print_int (match static (let _ = print_int 1 in 5) { _ -> 10 });;
+let _ = print_int (match static (let _ = print_int 2 in 5) { x -> 20 });;
+let _ = print_int (match static (let _ = print_int 3 in (5, 6)) { (_, _) -> 30 });;
+let f = fn (static n : int) -> match static (let _ = print_int n in n) { _ -> n + 1 };;
+let _ = print_int (f 4);;
+|};
+  [%expect
+    {|
+    1
+    10
+    2
+    20
+    3
+    30
+    4
+    5
+    |}]
+;;
+
 let%expect_test "match static monomorphizes per key" =
   go
     {|

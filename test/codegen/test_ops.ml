@@ -216,19 +216,29 @@ let _ = print_int (7 % zero);;
   [%expect {| ("Program killed" (signal sigabrt)) |}]
 ;;
 
-let%expect_test "runtime int_min div/mod by -1 wraps" =
+let%expect_test "runtime int_min division by -1 wraps" =
   go
     {|
 let min = (0 - 9223372036854775807 - 1);;
 let neg_one = (0 - 1);;
 let _ = print_int (min / neg_one);;
-let _ = print_int (min % neg_one);;
 |};
-  [%expect
+  [%expect {| -9223372036854775808 |}]
+;;
+
+let%expect_test "runtime modulo by a negative divisor aborts" =
+  go_killed
     {|
-    -9223372036854775808
-    0
-    |}]
+let neg_one = (0 - 1);;
+let _ = print_int (7 % neg_one);;
+|};
+  [%expect {| ("Program killed" (signal sigabrt)) |}];
+  go_killed
+    {|
+let min = 0 - 9223372036854775807 - 1;;
+let _ = print_int (5 % min);;
+|};
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
 ;;
 
 let%expect_test "static int_min division by -1 wraps" =
@@ -259,21 +269,24 @@ let _ = print_int (- min);;
     |}]
 ;;
 
-let%expect_test "runtime modulo by int_min" =
+let%expect_test "runtime modulo is in [0, divisor)" =
   go
     {|
 let min = 0 - 9223372036854775807 - 1;;
-let _ = print_int ((0 - 5) % min);;
-let _ = print_int (5 % min);;
-let _ = print_int (0 % min);;
-let _ = print_int (-1 % min);;
+let max = 9223372036854775807;;
+let _ = print_int ((0 - 5) % 3);;
+let _ = print_int (5 % 3);;
+let _ = print_int (min % max);;
+let _ = print_int (max % max);;
+let _ = print_int (-1 % max);;
 |};
   [%expect
     {|
-    9223372036854775803
-    5
+    1
+    2
+    9223372036854775806
     0
-    9223372036854775807
+    9223372036854775806
     |}]
 ;;
 

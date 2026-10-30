@@ -2049,9 +2049,9 @@ and typecheck_match_static state env ~scrutinee ~scrutinee_desc ~arms ~erasure ~
     if Env.reducing env then require_reachable body_dst;
     let body, body_desc = typecheck state env body_dst in
     let expr =
-      match (erasure : Modes.Erasure.t), bindings with
-      | Erased, _ | Unerased, [] -> body
-      | Unerased, _ :: _ ->
+      match (erasure : Modes.Erasure.t) with
+      | Erased -> body
+      | Unerased ->
         Expr.rebind scrutinee ~id:(Ident.fresh Ident.Raw.anon) ~f:(fun scrutinee ->
           List.fold_right bindings ~init:body ~f:(fun (id, path, _) rest ->
             let bind, _ = project_scrut ~loc state scrutinee scrutinee_desc path in

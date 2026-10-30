@@ -3,6 +3,123 @@ open! Syl
 
 let go ?print ?(check = `Run) input = Common.codegen ?print ~check input
 
+let%expect_test "ordinary lambda weakened to a monomorphic pi" =
+  go
+    {|
+let f = (fn (x : int) -> x) : static int -> int;;
+let _ = print_int (f 42);;
+let _ = print_int (f 7);;
+let named = (fn (x : int) -> x + 1) : static int as x -> int;;
+let apply = fn (static g : static int -> int) -> g 41;;
+let _ = print_int (apply named);;
+|};
+  [%expect
+    {|
+    42
+    7
+    42
+    |}]
+;;
+
+let%expect_test "monomorphic pi annotation preserves closure captures and effects" =
+  go
+    {|
+let c = let _ = print_int 7 in 10;;
+let f =
+  (fn (x : int) -> let _ = print_int x in x + c) : static int -> int
+;;
+let _ = print_int (f 32);;
+let _ = print_int (f 3);;
+|};
+  [%expect
+    {|
+    7
+    32
+    42
+    3
+    13
+    |}]
+;;
+
+let%expect_test "monomorphic pi annotation with a closure result" =
+  go
+    {|
+let f = (fn (x : int) -> fn (y : int) -> x + y) : static int -> (int -> int);;
+let g = f 10;;
+let _ = print_int (g (32 @ dynamic));;
+|};
+  [%expect {| 42 |}]
+;;
+
+let%expect_test "monomorphic pi annotation in a partial specialization" =
+  go
+    {|
+let div_by = fn (static d : int) ->
+  if erased d != 0
+  then ((fn (x : int) -> x / d) : static int -> int)
+  else unreachable
+;;
+let _ = print_int (div_by 2 10);;
+let _ = print_int (div_by 5 10);;
+|};
+  [%expect
+    {|
+    5
+    2
+    |}]
+;;
+
+let%expect_test "monomorphic pi closure materializes its runtime argument type" =
+  Common.typecheck
+    {|
+fun loop (_ : unit) : erased type = loop ();;
+let f = ((fn (dynamic _ : loop ()) -> 7) : static (loop ()) -> int);;
+|};
+  [%expect {| ((loc ((line 2) (column 36))) (reason (Recursion_limit 1000))) |}];
+  Common.typecheck
+    {|
+fun loop (_ : unit) : erased type = loop ();;
+let p = (((fn (dynamic _ : loop ()) -> 7) : static (loop ()) -> int), 7);;
+|};
+  [%expect {| ((loc ((line 2) (column 36))) (reason (Recursion_limit 1000))) |}]
+;;
+
+let%expect_test "erased closures and binders retain suspended interfaces" =
+  go
+    {|
+fun loop (_ : unit) : erased type = loop ();;
+let ghost = ((fn (dynamic _ : loop ()) -> 7) : static (loop ()) -> int) @ erased;;
+let binder = fn (static _ : loop ()) -> 7;;
+let maker = fn (static _ : unit) -> fn (dynamic _ : loop ()) -> 7;;
+let unused = maker () @ erased;;
+let _ = print_int 7;;
+|};
+  [%expect {| 7 |}]
+;;
+
+let%expect_test "monomorphic pi annotation with computed argument and result types" =
+  go
+    {|
+fun integer (_ : unit) : erased type = int;;
+let f = ((fn (x : integer ()) -> x) : static (integer ()) -> integer ());;
+let _ = print_int (f 42);;
+|};
+  [%expect {| 42 |}]
+;;
+
+let%expect_test "ordinary closure rejects a genuinely dependent return family" =
+  let input =
+    {|
+let f = ((fn (x : int) -> x) : static int as x -> if x == 0 then int else bool);;
+|}
+  in
+  (match Typecheck.typecheck (Common.desugar input) with
+   | Error { reason = Type_mismatch _; _ } -> print_endline "dependent return rejected"
+   | Error error -> Common.print_typecheck_error error
+   | Ok _ -> print_endline "unexpectedly accepted");
+  [%expect {| dependent return rejected |}]
+;;
+
 let%expect_test "dependent closure arg" =
   go
     {|

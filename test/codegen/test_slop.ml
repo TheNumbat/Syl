@@ -1675,8 +1675,18 @@ let _ = print_int ((-4) % (3 @ dynamic));;
     |}]
 ;;
 
-(* Negative divisor is reported as a Negative_modulus error during typecheck;
-   see test/typecheck/test_fuzz.ml. *)
+(* A negative divisor is a Negative_modulus error when statically demanded (see
+   test/typecheck/test_type.ml) and aborts at runtime. *)
+let%expect_test "fuzz: runtime % by a dynamic negative divisor aborts" =
+  (try
+     go
+       {|
+let _ = print_int (5 % ((-3) @ dynamic));;
+|}
+   with
+   | exn -> print_s (Exn.sexp_of_t exn));
+  [%expect {| ("Program killed" (signal sigabrt)) |}]
+;;
 
 (* ----------------------------------------------------------------------------
    Section 3: BUG - Compile-time div of min by -1 returns min (well-defined

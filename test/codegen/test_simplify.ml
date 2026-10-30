@@ -291,14 +291,12 @@ let%expect_test "runtime wrapping at int_min matches static wrapping" =
 fun opaque (x : int) : dynamic int = x;;
 let min = 0 - 9223372036854775807 - 1;;
 let _ = print_int (opaque min / opaque (-1));;
-let _ = print_int (opaque min % opaque (-1));;
 let _ = print_int (opaque min * opaque (-1));;
 let _ = print_int (0 - opaque min);;
 |};
   [%expect
     {|
     -9223372036854775808
-    0
     -9223372036854775808
     -9223372036854775808
     |}]

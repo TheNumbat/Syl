@@ -37,7 +37,8 @@ let rec simplify_ty (ty : Tst.Value.t) : Ty.t =
 
 let simplify_arrow (ty : Tst.Value.t) : Ty.t * Ty.t =
   match ty.node with
-  | Type (Arrow { arg_ty; ret_ty; _ }) -> simplify_ty arg_ty, simplify_ty ret_ty
+  | Type (Arrow { arg_ty; ret_ty; _ }) | Type (Pi { arg_ty; ret_ty = T { ty = ret_ty; _ }; _ }) ->
+    simplify_ty arg_ty, simplify_ty ret_ty
   | _ -> raise_s [%message "Bug: expected arrow" (ty : Tst.Value.t)]
 ;;
 

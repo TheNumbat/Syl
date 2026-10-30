@@ -77,6 +77,19 @@ let ref_content_ty t ~loc (ty : Value.t) =
     raise_s [%message "Bug: boxed value at a non-ref type" (ty : Value.t) (loc : Lex.Location.t)]
 ;;
 
+let resolve_closure_ty t ~loc (ty : Value.t) =
+  let ty = t.resolve ~loc ty in
+  match ty.node with
+  | Type (Pi ({ ret_ty = T { ty = ret_ty; _ }; _ } as pi)) ->
+    Value.type_
+      (Pi
+         { pi with
+           arg_ty = t.resolve ~loc pi.arg_ty
+         ; ret_ty = Dependent.mono (t.resolve ~loc ret_ty)
+         })
+  | _ -> ty
+;;
+
 let rec reify_expr t bound (expr : Expr.t) : Expr.t =
   if Modes.is_erased (Expr.mode expr)
   then expr
@@ -112,7 +125,8 @@ and reify_expr' t bound (expr : Expr.t) : Expr.t =
       ; else_ = reify_expr t bound x.else_
       }
   | Let x -> Let { x with bind = reify_expr t bound x.bind; rest = reify_expr t bound x.rest }
-  | Lambda x -> Lambda { x with body = reify_expr t bound x.body }
+  | Lambda x ->
+    Lambda { x with body = reify_expr t bound x.body; ty = resolve_closure_ty t ~loc:x.loc x.ty }
   | Binder x -> Binder { x with body = reify_monos t bound (family_monos t x.family) }
   | Fun x ->
     Fun
@@ -141,7 +155,11 @@ and reify_tree t bound (tree : Expr.tree) : Expr.tree =
 and reify_fun t bound (fun_ : Expr.fun_) : Expr.fun_ =
   match fun_ with
   | Lambda x ->
-    Lambda { x with body = reify_expr t bound x.body; ty = t.resolve ~loc:(Expr.loc x.body) x.ty }
+    Lambda
+      { x with
+        body = reify_expr t bound x.body
+      ; ty = resolve_closure_ty t ~loc:(Expr.loc x.body) x.ty
+      }
   | Binder x -> Binder { x with body = reify_monos t bound (family_monos t x.family) }
 
 and reify_monos t bound monos = Map.map monos ~f:(reify_expr t bound)
@@ -227,7 +245,14 @@ and quote_function t bound ~loc (desc : Desc.t) ~uid ~env ~quote =
 and quote_closure t bound ~loc ~mode (closure : Closure.t) : Expr.t =
   let body = reify_expr t bound (Lazy.force closure.body) in
   let expr : Expr.t =
-    Lambda { arg = closure.arg; body; ty = closure.ty; mode; family = closure.family; loc }
+    Lambda
+      { arg = closure.arg
+      ; body
+      ; ty = resolve_closure_ty t ~loc closure.ty
+      ; mode
+      ; family = closure.family
+      ; loc
+      }
   in
   close_missing t bound closure.env expr
 
@@ -263,7 +288,7 @@ and quote_fun_group t bound env ~loc root : Expr.t =
              { var
              ; arg = closure.arg
              ; body = reify_expr t bound (Lazy.force closure.body)
-             ; ty = closure.ty
+             ; ty = resolve_closure_ty t ~loc closure.ty
              ; mode = desc.mode
              ; family = closure.family
              ; loc
